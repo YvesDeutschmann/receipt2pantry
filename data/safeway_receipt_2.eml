@@ -1,0 +1,2772 @@
+Delivered-To: yves.deutschmann@gmail.com
+Received: by 2002:a05:6358:b40f:b0:20e:d452:3485 with SMTP id pc15csp2125275rwc;
+        Tue, 9 Sep 2025 22:39:15 -0700 (PDT)
+X-Google-Smtp-Source: AGHT+IHgBEUYTQxz1hb/xEVb5ZsPEBr7PoGvrEcAJD1BMoUFFPuzU/MM8me59zi/7I5CGYJszB3Z
+X-Received: by 2002:a05:622a:5e18:b0:4b6:1a8d:9ed3 with SMTP id d75a77b69052e-4b61a8d9f25mr40262161cf.58.1757482754798;
+        Tue, 09 Sep 2025 22:39:14 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1757482754; cv=none;
+        d=google.com; s=arc-20240605;
+        b=WijQ5R7pkH8+C10aCg3oopHcQz+kNMoEb7vLwY1vzn4ie/dhzZbCGvQp3fa/6/kmrq
+         PFgHCqkOTdSSH5MjF3o89fNWXYEo8lmN5VpE04SebHbi4CQ9yYVlbVNL6E2TpCjPv0a5
+         iJHnF5MwkTc+YRCkLsRXy6DCbMXQzS6RJSp4uEtf2sWbResmKQWZN1HTAds8weSO29sw
+         5VkuWDRNRhzssSciGeSMMqNoshxjntf4ygqMcBfb1NQ/ibvCpKJl0UkDgts+wb93cjtD
+         iPtvnWIqC2rcRvuhBOR5YQQEgdAGwLo3aUnxbYznBosjt6BTsssBYJvxJLlkKmEbnn2d
+         +IGQ==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;
+        h=feedback-id:message-id:reply-to:mime-version:list-help:date:subject
+         :to:from:dkim-signature:dkim-signature;
+        bh=LGV+QACWLKrifsF7zrexXSzCC5bfpIm0gAyuWp8VcQI=;
+        fh=RctTdd9GJH/IMN8+wnTLaIlVAfME7lHs+RvOm4M5Sus=;
+        b=F4nJ4NRIm0QpugsvCG8mdu+etmNdyYBAbtyZ11MVt/ATrdHW82pn24MgMu7mpEWXC0
+         JwPrA34bDCCifEfHmJ926KoyXfHVfEPLgzTxMapisIGH0Y50xQuChGEqt/GgUCdQAEVi
+         mX7i0CEvT1pzBzNOU8GKZ6PlBxWSBRXxFoINeGG930gZ3RVQwY64VsJMVOxxaotAF0nt
+         7TIRBewFcvRHmQzkBVcyN0sh/smXUCmhZpIflht1wjreJ6qKdasLaqRGPDkO1bSDP0lX
+         3NjD5wjQ617dctmy718oTYZMXxw/BVXOENAqntU0teuHJjtNUyrYkgh0ZeLPieyka9sa
+         ZTNg==;
+        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@p.safeway.com header.s=11dkim1 header.b=wM5fJupW;
+       dkim=pass header.i=@s11.y.mc.salesforce.com header.s=fbldkim11 header.b=IRsi2GX7;
+       spf=pass (google.com: domain of bounce-18_html-76975831-77620-514031179-31352@bounce.go.albertsonscompanies.com designates 128.245.68.226 as permitted sender) smtp.mailfrom=bounce-18_HTML-76975831-77620-514031179-31352@bounce.go.albertsonscompanies.com;
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=p.safeway.com
+Return-Path: <bounce-18_HTML-76975831-77620-514031179-31352@bounce.go.albertsonscompanies.com>
+Received: from mta2.go.albertsonscompanies.com (mta2.go.albertsonscompanies.com. [128.245.68.226])
+        by mx.google.com with ESMTPS id d75a77b69052e-4b61bbdb2b3si13750051cf.556.2025.09.09.22.39.14
+        for <yves.deutschmann@gmail.com>
+        (version=TLS1_2 cipher=ECDHE-ECDSA-AES128-GCM-SHA256 bits=128/128);
+        Tue, 09 Sep 2025 22:39:14 -0700 (PDT)
+Received-SPF: pass (google.com: domain of bounce-18_html-76975831-77620-514031179-31352@bounce.go.albertsonscompanies.com designates 128.245.68.226 as permitted sender) client-ip=128.245.68.226;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@p.safeway.com header.s=11dkim1 header.b=wM5fJupW;
+       dkim=pass header.i=@s11.y.mc.salesforce.com header.s=fbldkim11 header.b=IRsi2GX7;
+       spf=pass (google.com: domain of bounce-18_html-76975831-77620-514031179-31352@bounce.go.albertsonscompanies.com designates 128.245.68.226 as permitted sender) smtp.mailfrom=bounce-18_HTML-76975831-77620-514031179-31352@bounce.go.albertsonscompanies.com;
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=p.safeway.com
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; s=11dkim1; d=p.safeway.com;
+ h=From:To:Subject:Date:List-Help:MIME-Version:Reply-To:Message-ID:Content-Type;
+ i=safeway@p.safeway.com;
+ bh=LGV+QACWLKrifsF7zrexXSzCC5bfpIm0gAyuWp8VcQI=;
+ b=wM5fJupW3j0LtF+NKWZoO7tx9/6qAi5xx9jPHTO0gM8yY2jidZq/E2oJ4sxKVvEK32fOD/La/FqB
+   FcDBl6cxkKTE423OXC9dbInluAEbACdDu0q0HFbRmJq/5AW2nORmWqqORZrcQSYmHvRNqfwV6VNF
+   wEg5CIAMShkLImptJAuqUOYwEqvz8CNO7a6X/SHUKGq2Ib+NvNB9Et35EMrnqUM/c3rKJHzSOmnf
+   beqW6KPDn2aexjkXt/s4C2D4U5YhjbSBrkNZMUlAjhex96CTOwiLTzp4qW1eV/25xwo1KPrmyF0F
+   FJimXe6alKBnF/cEnKDz3WN5EgYzCwLu8LdMOw==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; s=fbldkim11; d=s11.y.mc.salesforce.com;
+ h=From:To:Subject:Date:List-Help:MIME-Version:Reply-To:Message-ID:Content-Type;
+ bh=LGV+QACWLKrifsF7zrexXSzCC5bfpIm0gAyuWp8VcQI=;
+ b=IRsi2GX78E7v8aeaoN9TGIDlI8Nm/4iSpnSHAbdD9tdvI4RigU/vuTKSrPOn3QGvAsIP6+ul24YT
+   kITHyrSZHL1txoH93KMJgsdNos8LFbQGhpPEfZfWspulzVGXVxc9tGzJyuiywBYsD2lBYNerS7lk
+   nH1LP/BpeBtmjdOAwiT4YO9PF58LNwcF3yLOUbLD9jb46v2qTMn1wGJRhUdOrzIPqqMHMge1jDBs
+   /92KHTfzPuBAh3Nx6EwWkOHKRxyCZBOuWWDIC60VUAx4uQWbqzLxg5A+fGhUA+VeHeX8XE21lmBL
+   8GVpo2sNMXex3mGp2WAZg4th5dNhJs/xoz/z4Q==
+Received: by mta2.go.albertsonscompanies.com id ho47g42fmd4c for <yves.deutschmann@gmail.com>; Wed, 10 Sep 2025 05:39:14 +0000 (envelope-from <bounce-18_HTML-76975831-77620-514031179-31352@bounce.go.albertsonscompanies.com>)
+From: "Safeway" <safeway@p.safeway.com>
+To: <yves.deutschmann@gmail.com>
+Subject: Your Receipt From Safeway
+Date: Tue, 09 Sep 2025 23:39:13 -0600
+List-Help: <https://click.go.albertsonscompanies.com/subscription_center.aspx?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJtaWQiOiI1MTQwMzExNzkiLCJzIjoiNzY5NzU4MzEiLCJsaWQiOiIxOCIsImoiOiI3NzYyMCIsImpiIjoiMzEzNTIiLCJkIjoiMTEwMDQ5In0.5cq08IHVUq98ENlUuZfgdWMbCCLW8RpAd7DhMQbSHhw>
+MIME-Version: 1.0
+x-messageKey: 7b235100-8e08-11f0-88bd-4fe2318c53ff
+X-Delivery: Transactional
+X-SFMC-Stack: 11
+x-job: 514031179_77620
+Reply-To: "Safeway" <reply-fef91377736604-18_HTML-76975831-514031179-31352@go.albertsonscompanies.com>
+Message-ID: <71ad46da-4c35-43b4-b6cb-3d78bff9dddf@atl1s11mta1102.xt.local>
+Feedback-ID: 514031179:77620:128.245.68.226:sfmktgcld
+Content-Type: multipart/alternative;
+	boundary="Ciwe7vc11oQa=_?:"
+
+This is a multi-part message in MIME format.
+
+--Ciwe7vc11oQa=_?:
+Content-Type: text/plain;
+	charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+
+ 
+
+
+
+
+
+
+
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2ed3812774f5870d85d0d6c5d4f0cc175542f030afc4f16ab7bd6f6f0a23f26cc699f7618bfa90ad0f0c1f016b705bef88fa002232f3951d97 
+ 
+
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2eeada6bafcaa4c35a2dcc56974239a596c57ae1b5ee5c2193f1be939ce5153303e73676a68a50f3faba521e293b3579e04ee7d7b741f3cf7d 
+ 
+
+
+
+ Thanks for shopping with Safeway!
+
+
+
+ Here is your receipt from 09/09/2025.
+
+
+
+
+
+ 
+ 
+ Order Details
+ 
+ Total Price
+ 
+
+
+ 
+ 
+ BAKED GOODS
+ 
+
+ 
+ 
+ Bread Loaf Roast Garlic & Cheese
+ 
+ 
+ $4.79
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Better Cheddar Bagels 6 Count - 1lb  @5.99/lb
+ 
+ 
+ $5.49
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $5.99
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ DELI
+ 
+
+ 
+ 
+ Deviled Egg Potato Salad - 1.21lb  @7.99/lb
+ 
+ 
+ $9.67
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Sweet Smokey Bbq Roasted Chicken Hot - 1lb  @9.99/lb
+ 
+ 
+ $9.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ GROCERY
+ 
+
+ 
+ 
+ Signature Select Seltzer Lime Fridge Pack 12 Pack 12 Fluid Ounce
+ 
+ 
+ $3.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $5.49
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ O Organics Herb De Provence 0.6 Ounce
+ 
+ 
+ $5.49
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Happy Coffee Cold Brew 11fz
+ 
+ 
+ $2.75
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $3.99
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Happy Coffee Vanilla Latte 11fz
+ 
+ 
+ $5.50
+ 
+ 
+
+ 
+ 
+ Quantity: 2
+ 
+
+ 
+ 
+ 
+ Regular Price $3.99
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Happy Coffee Mocha Latte 11fz
+ 
+ 
+ $2.75
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $3.99
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Happy Coffee Caramel Latte 11fz
+ 
+ 
+ $11.00
+ 
+ 
+
+ 
+ 
+ Quantity: 4
+ 
+
+ 
+ 
+ 
+ Regular Price $3.99
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ REFRIG/FROZEN
+ 
+
+ 
+ 
+ Ling Ling Chicken & Vegetable Potsticker
+ 
+ 
+ $11.49
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $12.49
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Ng Ling Pork & Vegetable Dumpling Potstickers
+ 
+ 
+ $11.49
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $12.49
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+
+
+
+
+
+ 
+ 
+ 
+ Total Items (16)
+ 
+ 
+ 
+ $98.32
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Total Savings
+ 
+ -$13.92
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Subtotal
+ 
+ $84.40
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Taxes and Fees
+ $1.44
+
+ 
+ 
+ 
+ 
+ 
+  
+ 
+ 
+ 
+ Sales Tax
+ 
+ $1.44
+ 
+
+ 
+ 
+  
+ 
+ 
+ 
+ Calculated
+ 
+ $13.92
+ 
+
+ 
+  
+ 
+
+
+ 
+
+
+ 
+ 
+ 
+  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  
+ 
+ 
+ 
+ Total
+ $85.84
+
+  
+ 
+  
+ 
+  
+ 
+  
+ 
+ 
+
+
+ 
+ 
+
+
+
+ 
+ 
+ Transaction Details
+ 
+
+ 
+ 
+ 
+ Card ending in 9846
+ 
+
+ 
+ 
+ Amount
+ 
+ $85.84
+ 
+
+ 
+ 
+ 
+ 
+ Authorization Code
+ 
+ 0000992R
+ 
+
+ 
+ 
+ 
+ Reference Number
+ 
+ 873154498460
+ 
+
+ 
+ 
+ 
+ Authorization Date
+ 
+ Sep 09, 2025
+ 
+
+ 
+ 
+ 
+ Authorization Time
+ 
+ 6:31 PM
+ 
+
+ 
+ 
+ 
+
+
+ 
+ 
+ 
+
+
+
+ For Customer Support please call 
+tel:1-877-358-7328 
+1-877-358-7328 .
+For questions about your payment call payment services at 
+tel:1-877-392-9517 
+1-866-392-9517 .
+
+
+
+
+
+
+
+ 
+
+
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2ec19877face9c75b335c421a34dc951c9957241ac4b83aff6ec95df7e4abfccacd8b00557d50a0cf8178b05d49236b0d33618dab18ca45a1f 
+Safeway For U&trade;
+
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2e6d092c0b46df496e04ecb87e7cba611276b7efad2654cf8e2d56bf04f27e3537359ef500d2c1ef5c0e887185af2c9380c00f01e2b70e6fc9 
+Meal Plans
+
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2e552f20c79f0180c9ac1f08d2ee7d0da816fb6b14b0c1001b766e15834bd27aef745f46b8daf696b6d0a20561f0b9fe5212d699a23a347fa8 
+Deals
+
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2ee718a8ac81731fa03f8eab657c2169e7157d60c5ed6f1db5446b2909ef6a70f93f9514e61fe8acd4174cb494ae288ff4e5a6f313a127a0d8 
+Health
+
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2e5148006eb3e1169542fbed88acd9cbe83ffabab6396b3f480a90e507c7547c8eda730ca5d51cc79f4d854001769c52410be01e7ab592ae63 
+Weekly Ad
+
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2e8d41130933e899bfa21a1e28bd986ab98f5b61966277818debcf99d4188dd0116a227a6e93a7d2c47911134dbaf04b68e46262016adafa86 
+FreshPass(R)
+
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2ec19877face9c75b335c421a34dc951c9957241ac4b83aff6ec95df7e4abfccacd8b00557d50a0cf8178b05d49236b0d33618dab18ca45a1f 
+Safeway For U&trade;
+
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2e6d092c0b46df496e04ecb87e7cba611276b7efad2654cf8e2d56bf04f27e3537359ef500d2c1ef5c0e887185af2c9380c00f01e2b70e6fc9 
+Meal Plans
+
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2e552f20c79f0180c9ac1f08d2ee7d0da816fb6b14b0c1001b766e15834bd27aef745f46b8daf696b6d0a20561f0b9fe5212d699a23a347fa8 
+Deals
+
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2ee718a8ac81731fa03f8eab657c2169e7157d60c5ed6f1db5446b2909ef6a70f93f9514e61fe8acd4174cb494ae288ff4e5a6f313a127a0d8 
+Health
+
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2e5148006eb3e1169542fbed88acd9cbe83ffabab6396b3f480a90e507c7547c8eda730ca5d51cc79f4d854001769c52410be01e7ab592ae63 
+Weekly Ad
+
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2e8d41130933e899bfa21a1e28bd986ab98f5b61966277818debcf99d4188dd0116a227a6e93a7d2c47911134dbaf04b68e46262016adafa86 
+FreshPass(R)
+
+ 
+ 
+
+
+
+ 
+ 
+ 
+ 
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2e02e77052e726de56b2c48e327234091bedd9a273d9f46841fc33be1c7d23b95efd90d7b96d37b1a64867ce63b8efa4882ed54e680580b132 
+
+  
+ https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2eb8752b0656bc3d63aa07e796944f5ca0330c4f4195b53d26cd91c522a4350d70d9693b5fc6ad36c7df13030ad88d85c685af090a0420120c 
+
+  
+ https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2e6a20d4710dd6e0575735fbee8ba0b7efaf8288808d2ce1f6f39dcec99421964f3754e74398decfa2e155fbbaa5fbfaee7da48a6f82810701 
+
+ 
+ https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2ec0a6c35b9abf686e58538a39596eb50ed1713a0631e2f622eb72fd4257d1000c2ce89359e180d5f7b4bebd1332cc261ee0a995cd03b5c783 
+
+ 
+ https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2e9b1ea8879a2c23664d1ab33214fbb3c8e5c57c65e2ff938f1d04e43ed930dcc952316d2f28fb95ee81c5086f3192a28905a7bbda3c9180cb 
+
+  
+ https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2ec6ea9bcb37f5b28de075a9ea5a2ad61db90fc432e33b126629bc941d177cdb850401de0dcd72c7d3430a2d2b2e38720c6001bf686e3b6b00 
+
+ 
+ 
+
+
+ 
+ 
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2e02e77052e726de56b2c48e327234091bedd9a273d9f46841fc33be1c7d23b95efd90d7b96d37b1a64867ce63b8efa4882ed54e680580b132 
+
+  
+ https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2eb8752b0656bc3d63aa07e796944f5ca0330c4f4195b53d26cd91c522a4350d70d9693b5fc6ad36c7df13030ad88d85c685af090a0420120c 
+
+ 
+ https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2e6a20d4710dd6e0575735fbee8ba0b7efaf8288808d2ce1f6f39dcec99421964f3754e74398decfa2e155fbbaa5fbfaee7da48a6f82810701 
+
+  
+ https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2ec0a6c35b9abf686e58538a39596eb50ed1713a0631e2f622eb72fd4257d1000c2ce89359e180d5f7b4bebd1332cc261ee0a995cd03b5c783 
+
+ 
+ https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2e9b1ea8879a2c23664d1ab33214fbb3c8e5c57c65e2ff938f1d04e43ed930dcc952316d2f28fb95ee81c5086f3192a28905a7bbda3c9180cb 
+
+  
+ https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2ec6ea9bcb37f5b28de075a9ea5a2ad61db90fc432e33b126629bc941d177cdb850401de0dcd72c7d3430a2d2b2e38720c6001bf686e3b6b00 
+
+ 
+ 
+
+ 
+
+
+
+This email was sent by Safeway. Please do not reply to this email. We cannot accept or monitor electronic replies to this email address. This email contains information for the intended recipient. If you received this email in error, please delete it.
+
+Emails are sent from the 
+%%=RedirectTo(Concat( 
+no-reply@p.safeway.com domain.Please do not reply to this email.
+
+ 
+
+
+ Having trouble viewing this email? 
+ 
+https://view.go.albertsonscompanies.com/?qs=4a25059a1c72b718b81be42e987fda4baca2c5d741b2c53351a21061aa4e8829df10d01f7d90210c5c4d173dff5e09c09662e0e7d3efc90df9dd6eb8ece1e99fa6284ce98660d02d844883b92dc426a9 
+View in browser.
+
+
+ This email was sent by Safeway. Please do not reply to this email. We cannot accept or monitor electronic replies to this email address. This email contains information for the intended recipient. If you received this email in error, please delete it.
+
+Emails are sent from the 
+%%=RedirectTo(Concat( 
+no-reply@p.safeway.com domain.Please do not reply to this email.
+
+ 
+
+
+ Having trouble viewing this email? 
+ 
+https://view.go.albertsonscompanies.com/?qs=4a25059a1c72b718b81be42e987fda4baca2c5d741b2c53351a21061aa4e8829df10d01f7d90210c5c4d173dff5e09c09662e0e7d3efc90df9dd6eb8ece1e99fa6284ce98660d02d844883b92dc426a9 
+View in browser.
+
+ 
+ 
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2ea7f161974fa6246ed0e1f9f2e8937592a52d56adbe25291548c5185d0784e5ab6111cb0da50e8669cfc4837315dfc873b388daacd1e09acd 
+Accessibility Statement
+ 
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2ea283679c70394c3c1f5f092eca26da5bb39080f15bb44d25f410224eeddca473b316566f086e6ce619471c62d23c0649fcac50f9814369dd 
+Privacy Policy
+ 
+
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2ea7f161974fa6246ed0e1f9f2e8937592a52d56adbe25291548c5185d0784e5ab6111cb0da50e8669cfc4837315dfc873b388daacd1e09acd 
+Accessibility Statement
+ 
+https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2ea283679c70394c3c1f5f092eca26da5bb39080f15bb44d25f410224eeddca473b316566f086e6ce619471c62d23c0649fcac50f9814369dd 
+Privacy Policy
+ 
+
+ 
+
+
+ 
+
+
+ 
+ 
+ 
+
+ Albertsons Companies
+ 
+
+ Copyright (c) 2025 by Albertsons Companies, Inc. All rights reserved.
+ 
+
+ Contact us at 250 E. Parkcenter Blvd., Boise, ID 83706.
+ 
+
+
+ Albertsons Companies
+ 
+
+ Copyright (c) 2025 by Albertsons Companies, Inc. All rights reserved.
+ 
+
+ Contact us at 250 E. Parkcenter Blvd., Boise, ID 83706.
+ 
+
+
+ 
+
+ 
+ 
+ 
+ 
+
+
+ 
+ 
+
+
+ 
+ 
+
+
+
+--Ciwe7vc11oQa=_?:
+Content-Type: text/html;
+	charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+<!doctype html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+  <head>
+   <link href="https://fonts.googleapis.com/css?family=Nunito Sans" rel="stylesheet">
+   <link href="https://fonts.googleapis.com/css?family=Poppins" rel="stylesheet">
+  <!---->
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!--[if mso]>   <style type="text/css">   .desktop-hide {     display: none !important;     max-height: 0 !important;     overflow: hidden !important;   } </style>   <![endif]-->
+         <style type="text/css">
+   
+@media only screen and (max-width: 650px) {
+.container {width:100% !important;}
+.photo {width:100% !important; height:100% !important;}}
+
+@media only screen and (max-width: 480px) {
+.container {width:100% !important;}
+.photo {width:100% !important; height:auto !important;} 
+.hide_content {display:none !important; height:auto !important;}
+.drop {width:100% !important; display:block !important; box-sizing: border-box !important;} 
+.remove_padding {padding:0 !important;} 
+.show_content {display: block !important; height:auto !important;}
+.show_content_tab {display: block !important; height:auto !important;}
+.display_tablecell{display:table-cell !important;}
+.side_padding {padding-left: 20px !important; padding-right: 20px !important;}
+.tb_padding {padding-top: 20px !important; padding-bottom: 20px !important;}  
+.side_padding_10{padding-left: 10px !important; padding-right: 10px !important;}
+.tb_padding_10 {padding-top: 10px !important; padding-bottom: 10px !important;} 
+.side_padding_30{padding-left: 30px !important; padding-right: 30px !important;}
+.tb_padding_30{padding-top: 30px !important; padding-bottom: 30px !important;}
+.center_align{text-align: center !important;}    
+.left_align{text-align: left !important;}  
+.right_align{text-align: right !important;}
+.top_padding{padding-top: 20px !important;}
+.bottom_padding{padding-bottom: 20px !important;}
+.left_padding{padding-left: 20px !important;} 
+.right_padding{padding-right: 20px !important;} 
+.h1{font-size: 32px !important;}
+.h2{font-size: 30px !important;}
+.h3{font-size: 28px !important;}
+.h4{font-size: 26px !important;}
+.h5{font-size: 22px !important;}
+.h6{font-size: 20px !important;}
+.h7{font-size: 18px !important;}
+.h8{font-size: 16px !important;}
+.h9{font-size: 14.5px !important;}
+.h10{font-size: 14px !important;}
+.h11{font-size: 13.5px !important;}
+.h12{font-size: 13px !important;}
+.h13{font-size: 11px !important;}
+.h14{font-size: 24px !important;}  
+.h15{font-size: 40px !important;}  
+.h16{font-size: 12px !important;}  
+.h17{font-size: 11.5px !important;}
+.h18{font-size: 10px !important;}
+  
+.B_Radius_8{border-radius: 8px !important;}  
+.B_Radius_6{border-radius: 6px !important;}   
+.B_Radius_6_bottom{border-bottom-left-radius : 6px !important; border-bottom-right-radius : 6px!important;}  
+.B_Radius_6_top{border-top-left-radius : 6px !important; border-top-right-radius : 6px!important;}}
+     
+@media only screen and (max-width: 390px){
+.container {width:100% !important;}
+.photo {width:100% !important; height:auto !important;} 
+.hide_content {display:none !important; height:auto !important;} 
+
+.drop {width:100% !important; display:block !important; box-sizing: border-box !important;} 
+.remove-padding {padding:0 !important;}
+.show_content {display: block !important; height:auto !important;}
+
+.side_padding {padding-left: 15px !important; padding-right: 15px !important;} 
+.tb_padding {padding-top: 15px !important; padding-bottom: 15px !important;}  
+.side_padding_10{padding-left: 10px !important; padding-right: 10px !important;}
+.tb_padding_10 {padding-top: 10px !important; padding-bottom: 10px !important;} 
+.side_padding_30{padding-left: 20px !important; padding-right: 20px !important;}
+.tb_padding_30{padding-top: 20px !important; padding-bottom: 20px !important;}  
+.mtop_padding{padding-top: 10px !important;}
+.mbottom_padding{padding-bottom: 10px !important;}
+.mside_padding {padding-left: 30px !important; padding-right: 30px !important;} 
+.mtb_padding {padding-top: 15px !important; padding-bottom: 15px !important;}
+.h1{font-size: 28px !important; line-height: 100% !important;}
+.h2{font-size: 26px !important; line-height: 100% !important;}
+.h3{font-size: 24px !important; line-height: 100% !important;}
+.h4{font-size: 22px !important; line-height: 100% !important;}
+.h5{font-size: 20px !important; line-height: 100% !important;}
+.h6{font-size: 18px !important; line-height: 100% !important;}
+.h7{font-size: 14px !important; line-height: 100% !important;}
+.h8{font-size: 12px !important; line-height: 100% !important;}
+.tb_padding_10 {padding-top: 10px !important; padding-bottom: 10px !important;}
+}
+ @media only screen and (max-width: 374px) {
+     .hide_content_mob {display:none !important; height:auto !important;} 
+    .show_content_mob {display: block !important; height:auto !important;} 
+        .show_content_tab {display:none !important; height:auto !important;}}     
+          </style>
+</head>
+        <body style="font-family:Nunito Sans, 'Arial', Helvetica, sans-serif; background-color: #F0EDED;margin: 0px; padding:0px; -webkit-text-size-adjust:none; -ms-text-size-adjust: none;" yahoo="fix"><style type="text/css">
+div.preheader 
+{ display: none !important; } 
+</style>
+<div class="preheader" style="font-size: 1px; display: none !important;"></div>
+          
+          <!-- Table used to center email -->
+          <table bgcolor="#F0EDED" width="100%" height="" border="0" cellspacing="0" cellpadding="0" style="font-family: Nunito Sans, 'Arial', 'Helvetica', sans-serif; color: #000000; font-size: 16px; line-height: 1.5; min-width: 100%;">
+     
+          
+            
+            <tr>
+              <td width="624" align="center" bgcolor="#F0EDED" style="background-color:#F0EDED;">
+                <table align="center" class="container" width="624" border="0" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td width="624">
+                         
+
+
+
+
+
+
+<table align="center" bgcolor="#FCFCFC" border="0" cellpadding="0" cellspacing="0" class="container hide_content" height="42" style="border-top-left-radius : 12px; border-top-right-radius : 12px;" width="624">
+ 
+  <tr>
+   <td align="left" style="padding: 0px 0px 0px 16px" width="608">
+    <table cellpadding="0" cellspacing="0" class="hide_content">
+     
+      <tr>
+       <td class="hide_content">
+        <a  href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f150e93c441e6f9395a446c28dcb9e90b04b4392920b31623b2464a2f73c5f1472dda3da383be8cb7a3a8572edfda10be981fbe7770653b87bd" style="text-align: center; vertical-align: middle; display: inline-block;" target="_blank"> <img alt="Safeway logo" border="0" class="Imgw" height="18" src="https://images.albertsons-media.com/is/image/ABS/Safeway_DM?$emailcampaign-badge$" style="font-family:Nunito Sans; font-size: 16px; font-weight: bold; margin-bottom: 0px; float: none; display: block;" title="" width=""></a></td></tr></table></td></tr></table><!--[if !mso]><\!--><table align="center" bgcolor="#FCFCFC" border="0" cellpadding="0" cellspacing="0" class="container show_content" height="42" style="border-top-left-radius : 12px; border-top-right-radius : 12px; display: none;" width="624">
+ 
+  <tr>
+   <td align="left" height="42" style="padding: 0px 0px 0px 16px" width="608">
+    <table cellpadding="0" cellspacing="0">
+     
+      <tr>
+       <td>
+        <a  href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f15b6f0bc0c183412e63da290d36c4e01b6debf4aac42e3eb4a9503724285795653d1096dfc887d790eb417b62ae24ae7d8b9cf2d363f3e127c" style="text-align: center; vertical-align: middle; display: inline-block;" target="_blank"> <img alt="Safeway logo" border="0" class="Imgw" height="18" src="https://images.albertsons-media.com/is/image/ABS/Safeway_DM?$emailcampaign-badge$" style="font-family:Nunito Sans; font-size: 16px; font-weight: bold; margin-bottom: 0px; float: none; display: block;" title="" width=""></a></td></tr></table></td></tr></table><!-- <![endif]-->
+<table border="0" cellpadding="0" cellspacing="0" class="container" role="presentation" width="624">
+  <tr>
+    <td>
+      <table bgcolor="#FAF9F8" border="0" cellpadding="0" cellspacing="0" class="container" width="100%" role="presentation">
+        <tr>
+          <td class="h1"
+            style="padding-left: 32px; padding-top: 32px; padding-right: 32px;padding-bottom: 8px;font-size: 34px;font-weight: 600; line-height: 42.5px;color:#535250;font-family: Poppins, Arial; ">
+            Thanks for shopping with Safeway!</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<table  align="center" cellpadding="0" cellspacing="0" class="container" role="presentation" width="624">
+  <tr>
+   <td class="container" width="100%">
+    <table  align="center" cellpadding="0" cellspacing="0" class="container" width="100%" role="presentation" style="background-color:#FAF9F8;">
+      <tr>
+       <td width="560" style="padding-left: 32px; padding-top: 8px; padding-right: 32px;padding-bottom: 32px;font-size:18px ;font-weight: 400; line-height: 29.16px;color:#2A2928;font-family: Nunito Sans, Arial; ">
+       Here is your receipt from 09/09/2025.</td></tr></table></td></tr></table>
+
+
+<table
+  align="center"
+  cellpadding="0"
+  cellspacing="0"
+  class="container"
+  role="presentation"
+  style="
+    background-color: #F7F5F2;
+    color: #535250;
+  "
+  width="624"
+>
+  <tr>
+    <td style="padding: 16px 16px 0px 16px;">
+      <table
+        cellpadding="0"
+        cellspacing="0"
+        style="
+          color: #535250;
+        "
+        width="100%"  role="presentation"
+      >
+        
+        <tr>
+          <td style="
+              background-color: #FAF9F8;
+              border-radius: 6px;
+              box-shadow: 0px 0px 1px 0px rgb(214, 212, 210);
+            "
+          >
+            <table
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 400;
+                line-height: 100%;
+                padding: 4px 16px;
+                text-align: left;
+              "
+              width="100%"  role="presentation"
+            >
+              <tr>
+                <td>
+                  Order Details
+                </td>
+                <td style="text-align: right;">
+                  Total Price
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding-bottom: 10px;"></td>
+        </tr>
+        <tr>
+          <td style="
+              background-color: #FAF9F8;
+              border-radius: 6px 6px 0 0;
+              box-shadow: 0px 0px 1px 0px rgb(214, 212, 210);
+            "
+          >
+            
+            <table
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                padding: 0px 0px 4px 0px;
+                
+              "
+              width="100%"  role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    background-color: #F2F0ED;
+                    color: #7D7B78;
+                    font-family: Poppins, Arial;
+                    font-size: 14px;
+                    font-weight: 600;
+                    letter-spacing: -1%;
+                    line-height: 100%;
+                    overflow: hidden;
+                    padding: 6px 16px;
+                    text-align: left;
+                    text-transform: uppercase;
+                    text-overflow: ellipsis;
+                    border-radius: 6px 6px 0 0;
+                    
+                  "
+                >
+                  BAKED GOODS
+                </td>
+              </tr>
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Bread Loaf Roast Garlic & Cheese
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $4.79
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Better Cheddar Bagels 6 Count - 1lb  @5.99/lb
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $5.49
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $5.99
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                padding: 16px 0px 4px 0px;
+                
+              "
+              width="100%"  role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    background-color: #F2F0ED;
+                    color: #7D7B78;
+                    font-family: Poppins, Arial;
+                    font-size: 14px;
+                    font-weight: 600;
+                    letter-spacing: -1%;
+                    line-height: 100%;
+                    overflow: hidden;
+                    padding: 6px 16px;
+                    text-align: left;
+                    text-transform: uppercase;
+                    text-overflow: ellipsis;
+                    
+                  "
+                >
+                  DELI
+                </td>
+              </tr>
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Deviled Egg Potato Salad - 1.21lb  @7.99/lb
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $9.67
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Sweet Smokey Bbq Roasted Chicken Hot - 1lb  @9.99/lb
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $9.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                padding: 16px 0px 4px 0px;
+                
+              "
+              width="100%"  role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    background-color: #F2F0ED;
+                    color: #7D7B78;
+                    font-family: Poppins, Arial;
+                    font-size: 14px;
+                    font-weight: 600;
+                    letter-spacing: -1%;
+                    line-height: 100%;
+                    overflow: hidden;
+                    padding: 6px 16px;
+                    text-align: left;
+                    text-transform: uppercase;
+                    text-overflow: ellipsis;
+                    
+                  "
+                >
+                  GROCERY
+                </td>
+              </tr>
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Signature Select Seltzer Lime Fridge Pack 12 Pack 12 Fluid Ounce
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $3.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $5.49
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  O Organics Herb De Provence 0.6 Ounce
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $5.49
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Happy Coffee Cold Brew 11fz
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $2.75
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $3.99
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Happy Coffee Vanilla Latte 11fz
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $5.50
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 2
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $3.99
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Happy Coffee Mocha Latte 11fz
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $2.75
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $3.99
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Happy Coffee Caramel Latte 11fz
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $11.00
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 4
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $3.99
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                padding: 16px 0px 4px 0px;
+                
+              "
+              width="100%"  role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    background-color: #F2F0ED;
+                    color: #7D7B78;
+                    font-family: Poppins, Arial;
+                    font-size: 14px;
+                    font-weight: 600;
+                    letter-spacing: -1%;
+                    line-height: 100%;
+                    overflow: hidden;
+                    padding: 6px 16px;
+                    text-align: left;
+                    text-transform: uppercase;
+                    text-overflow: ellipsis;
+                    
+                  "
+                >
+                  REFRIG/FROZEN
+                </td>
+              </tr>
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Ling Ling Chicken & Vegetable Potsticker
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $11.49
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $12.49
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Ng Ling Pork & Vegetable Dumpling Potstickers
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $11.49
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $12.49
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+
+<table
+  align="center"
+  cellpadding="0"
+  cellspacing="0"
+  class="container"
+  role="presentation"
+  style="
+    background: #F7F5F2;
+    color: #535250;
+  "
+  width="624"
+>
+  <tr>
+    <td 
+      style="
+        border-radius: 0 0 12px 12px;
+        padding: 0px 16px 16px 16px;
+      "
+     
+    >
+      <table
+        align="center"
+        cellpadding="0"
+        cellspacing="0"
+        role="presentation"
+        style="border-radius: 0 0 12px 12px; box-shadow: 0px 0px 1px 0px rgb(214, 212, 210);"
+        width="592"
+      >
+        <tr>
+          <td  width="592" class="container">
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              role="presentation"
+              style="background-color: #FAF9F8; padding: 10px 6px;"
+              width="578"
+            >
+              <tr>
+                <td style="border-top: 2px solid #ddd9d5" width="578" class="container"></td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color: #FAF9F8;" width="578" class="container">
+            <table align="center" cellpadding="0" cellspacing="0" role="presentation"
+              style="
+                color: #2a2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                line-height: 100%;
+              "
+              width="578" class="container"
+            >
+              
+              
+              <tr>
+                <td style="
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: left;
+                " width="289">
+                  Total Items (16)
+                </td>
+    
+                <td style="
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: right;
+                " width="289">
+                  $98.32
+                </td>
+    
+              </tr>
+              
+              
+              
+              
+              
+              
+              
+              
+              
+              
+              
+              <tr>
+                <td style="
+                  background-color: #EDF7F1;
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: left;
+                " width="289">
+                  Total Savings
+                </td>
+                <td style="
+                  background-color: #EDF7F1;
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: right;
+                " width="289">
+                  -$13.92</td>
+              </tr>
+              
+              
+              
+              
+              
+              
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color: #FAF9F8;" width="578" class="container">
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              role="presentation"
+              style="padding: 10px 6px;"
+              width="566"
+            >
+              <tr>
+                <td style="border-top: 2px solid #ddd9d5" width="566" class="container"></td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color: #FAF9F8;" width="566" class="container">
+            <table align="center" cellpadding="0" cellspacing="0" role="presentation" class="container"
+              style="
+                color: #2a2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                line-height: 100%;
+              "
+              width="566"
+            >
+              
+              
+              
+              
+              
+              
+              
+              
+              
+              
+              <tr>
+                <td style="
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: left;
+                " width="283">
+                  Subtotal
+                </td>
+                <td style="
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: right;
+                " width="283">
+                  $84.40
+                </td>
+              </tr>
+              
+              
+              
+              
+              
+              
+              
+              
+              <tr>
+                <td style="
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: left;
+                " width="283">
+                  Taxes and Fees</td>
+                <td style="
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: right;
+                " width="283">
+                  $1.44</td>
+              </tr>
+              
+              
+              
+              
+              
+               
+              
+              
+              <tr>
+                <td style="
+                  padding: 10px 16px;
+                  text-align: left;
+                " width="283">
+                  Sales Tax
+                </td>
+                <td style="
+                  padding: 10px 16px;
+                  text-align: right;
+                " width="283">
+                  $1.44
+                </td>
+              </tr>
+              
+              
+               
+              
+              
+              <tr>
+                <td style="
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: left;
+                " width="283">
+                  Calculated
+                </td>
+                <td style="
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: right;
+                " width="283">
+                  $13.92
+                </td>
+              </tr>
+              
+               
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="background-color: #FAF9F8;" width="566" class="container">
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              role="presentation"
+              style="padding: 10px 6px;"
+              width="554"
+            >
+              <tr>
+                <td style="border-top: 2px solid #ddd9d5" width="554"></td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+  
+        <tr>
+          <td style="background-color: #FAF9F8;" width="554" class="container">
+            <table align="center" cellpadding="0" cellspacing="0" role="presentation" class="container"
+              style="
+                color: #2a2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                line-height: 100%;
+                
+              "
+              width="554"
+            >
+              <tr>
+                <td  width="554" class="container">
+                  <table align="center" cellpadding="0" cellspacing="0"  class="container" role="presentation" width="554">
+                    
+                     
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                     
+                    
+                    
+                    <tr>
+                      <td style="
+                        font-weight: 700;
+                        padding: 10px 16px;
+                        text-align: left;
+                      " width="277">
+                        Total</td>
+                      <td style="
+                        font-weight: 700;
+                        padding: 10px 16px;
+                        text-align: right;
+                      " width="277">
+                        $85.84</td>
+                    </tr>
+                     
+                    
+                     
+                    
+                     
+                    
+                     
+                    
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        
+      </table>
+    </td>
+  </tr>
+</table>
+
+<table
+  align="center"
+  cellpadding="0"
+  cellspacing="0"
+  class="container"
+  role="presentation"
+  style="background-color: #F7F5F2;"
+  width="624"
+>
+  <tr>
+    <td style="padding: 0 16px 16px;">
+      <table
+        cellpadding="0"
+        cellspacing="0"
+        style="color: #535250;"
+        width="100%"
+        role="presentation"
+      >
+        
+        <tr>
+          <td
+            style="
+              color: #2A2928;
+              padding: 16px 0px;
+              font-family: Poppins, Arial;
+              font-size: 16px;
+              font-weight: 600;
+              line-height: 16px;
+              letter-spacing: -0.02em;
+              text-align: left;
+            "
+          >
+            Transaction Details
+          </td>
+        </tr>
+        
+        
+        <tr>
+          <td 
+            style="
+              background-color: #FAF9F8;
+              border-radius: 12px;
+              box-shadow: 0px 0px 1px 0px rgb(214, 212, 210);
+              color: #2A2928;
+              font-family: 'Nunito Sans', Arial;
+              font-size: 14px;
+              font-weight: 500;
+              line-height: 100%;
+              letter-spacing: 0em;
+              padding: 16px 0;
+              text-align: left;
+              vertical-align: top;
+            "
+          >
+            <table
+              cellpadding="0"
+              cellspacing="0"
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    font-size: 13px;
+                    font-weight: 700;
+                    padding: 4px 16px 11px 16px;
+                  "
+                >
+                  Card ending in 9846
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 4px 4px 16px;">
+                  Amount
+                </td>
+                <td 
+                  style="
+                    padding: 4px 16px 4px 0;
+                    text-align: right;
+                  "
+                >
+                  $85.84
+                </td>
+              </tr>
+              
+              
+              
+              <tr>
+                <td style="padding: 4px 4px 4px 16px;">
+                  Authorization Code
+                </td>
+                <td 
+                  style="
+                    padding: 4px 16px 4px 0;
+                    text-align: right;
+                  "
+                >
+                  0000992R
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 4px 4px 16px;">
+                  Reference Number
+                </td>
+                <td 
+                  style="
+                    padding: 4px 16px 4px 0;
+                    text-align: right;
+                  "
+                >
+                  873154498460
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 4px 4px 16px;">
+                  Authorization Date
+                </td>
+                <td 
+                  style="
+                    padding: 4px 16px 4px 0;
+                    text-align: right;
+                  "
+                >
+                  Sep 09, 2025
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 4px 4px 16px;">
+                  Authorization Time
+                </td>
+                <td 
+                  style="
+                    padding: 4px 16px 4px 0;
+                    text-align: right;
+                  "
+                >
+                  6:31 PM
+                </td>
+              </tr>
+              
+              
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding-bottom: 16px;"></td>
+        </tr>
+        
+        
+  <!-- Commenting out as we dont have to show transactionNumber in the Email template. 
+        
+        <tr>
+          <td 
+            style="
+              background-color: #FAF9F8;
+              border-radius: 6px;
+              box-shadow: 0px 0px 1px 0px rgb(214, 212, 210);
+              color: #2A2928;
+              font-family: 'Nunito Sans', Arial;
+              font-size: 14px;
+              font-weight: 500;
+              letter-spacing: 0em;
+              line-height: 100%;
+              padding: 16px 0;
+              text-align: left;
+              vertical-align: top;
+            "
+          >
+            <table
+              cellpadding="0"
+              cellspacing="0"
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td style="padding: 4px 4px 4px 16px;">
+                  Transaction Number
+                </td>
+                <td 
+                  style="
+                    padding: 4px 16px 4px 0;
+                    text-align: right;
+                  "
+                >
+                  2734  175  183  8821
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        
+        
+       -->
+        
+      </table>
+    </td>
+  </tr>
+</table>
+<table align="center" border="0" cellpadding="0" cellspacing="0" class="container" role="presentation" style="background: #F7F5F2;" width="624">
+ 
+  <tr>
+   <td align="center" class="side_padding_30" style="padding: 16px;">
+    <table align="center" style="border-radius:12px;" bgcolor="#FFFFFF" border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%">
+     
+      <tr>
+       <td align="center" class="side_padding_10" style="padding: 16px 0;">
+        <img align="middle" alt="barcode" height="91" src="http://cl.s11.exct.net/LiveContent.aspx?qs=0408284f2376f92b2d6d2ff69479dbbc0ce3f51d5f2258fa344f6a1b6006b2d1b362916b407bc51e0f549868be3e88f642ca0e6fa533f5fc7eb11cdd6fd572208ec3454293a2c67cfb3930c405c17dbd4dbbf3465095b27f9bcc3544fd51ba7322567317b8f3f831" style="display:block;margin: 0 auto;" width="318"></td>
+      </tr>
+    </table>
+   </td>
+  </tr>
+</table>
+
+<table  align="center" cellpadding="0" cellspacing="0" class="container" role="presentation" width="624">
+  <tr>
+   <td class="container" width="100%">
+    <table  align="center" cellpadding="0" cellspacing="0" class="container" width="100%" role="presentation" style="background-color:#F7F5F2;">
+      <tr>
+       <td width="560" style="padding-left: 32px; padding-top: 8px; padding-right: 32px;padding-bottom: 32px;font-size:18px ;font-weight: 400; line-height: 29.16px;color:#1F1E1E;font-family: Nunito Sans, Arial; ">
+       <span>For Customer Support please call <a href="tel:1-877-358-7328" style="color: #C90209; font-weight: 700; white-space: nowrap;">1-877-358-7328</a>.</span><span style="display: block;"><br>For questions about your payment call payment services at <a href="tel:1-877-392-9517" style="color: #C90209; font-weight: 700; white-space: nowrap;">1-866-392-9517</a>.</span></td></tr></table></td></tr></table>
+
+<table  align="center" 
+    cellpadding="0"
+    cellspacing="0"
+    class="container"
+    role="presentation"
+    style="background-color:#F7F5F2;" width="624">
+    <tr>
+        <td class="container" style="padding: 32px 32px" width="560" align="left" >
+            <img
+                alt="Safeway logo"
+                height="85" 
+                width="240"
+                src="https://images.albertsons-media.com/is/image/ABS/Sincerely_Safeway_Small_VertLeft_RGB?$emailcampaign-badge$"
+                style="display: block;"
+            />
+        </td>
+    </tr>
+</table><table aria-label="" align="center" border="0" cellpadding="0" cellspacing="0" class="container" role="presentation" width="624">
+  
+ <tr>
+  <td>
+
+
+      
+
+<!-- start desktop --><table align="center" bgcolor="#F7F5F2" border="0" cellpadding="0" cellspacing="0" class="container hide_content" role="presentation" width="624">
+ 
+  <tr>
+   <td style="padding: 16px 60px;">
+    <table align="center" border="0" cellpadding="0" cellspacing="0" width="504" role="presentation">
+     
+      <tr>
+       <td style="border-right: 0.2px solid; border-right-color: #807171;" width="185">
+        <table align="center" cellpadding="0" cellspacing="0" role="presentation">
+         
+          <tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 18px;line-height: 18px;text-align: center;padding-bottom:14px;white-space: nowrap;color: #AD5C5E">
+            <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f151137ce54be9891eaf4e1267e3ba5ce01cb72857ed07c3f93d13436c8be65cc6af5a52a1b6283ebc06b8a49f8678e13c0b4215efc536158a9" style="color: #AD5C5E; text-decoration: none;" ><u>Safeway For U</u><sup style="font-size: 65%;line-height: 0px;">&trade;</sup></a></td></tr><tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 18px;line-height: 18px;
+                      text-align: center;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f1582e94083771330b74f90ca0dfb26c2508b73730caff5e61109abc51e86bc28ce198e3221e598e5c7d7fcae1841b1d95cf28e795e6c2db961" style="color: #AD5C5E;" ><u>Meal Plans</u></a></td></tr></table></td><td style="border-right: 0.2px solid; border-right-color: #807171;" width="149">
+        <table align="center" cellpadding="0" cellspacing="0" role="presentation">
+         
+          <tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 18px;line-height: 18px;
+                              text-align: center;padding-bottom:14px;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f1505df5e00c7bead2596e5ea7ec17306515b3d51ee0cd8dd1ab126104b9eeb2038cf386ac96c09b7add244ec319c99a4fac3ba0181df4e5ab5" style="color: #AD5C5E;" ><u>Deals</u></a></td></tr><tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 18px;line-height:18px;
+                      text-align: center;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f159824212ecc0bcb9c47d5658c4904ccc15a9510ec8da963f1937a5bda50745827e4ce98662f1b4a0a81ca57ec8043b116dd9a5c0d0a47f06b" style="color: #AD5C5E;" ><u>Health</u></a></td></tr></table></td><td width="166">
+        <table align="center" cellpadding="0" cellspacing="0" role="presentation">
+         
+          <tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 18px;line-height: 18px;
+                              text-align: center;padding-bottom:14px;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f15d80d4ad72799b1d080a83cd0e325625a40dc7f97ce9f78e9a9f869155c71b86f2b1825f94e859352d66a625bba3ab2238a185f6367a73427" style="color: #AD5C5E;" ><u>Weekly Ad</u></a></td></tr><tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 18px;line-height: 18px;text-align: center;white-space: nowrap;color: #AD5C5E">
+            <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f15c9786e08a7989500b79cd4df718669ff60ebaeb6bfd790406b664235f0a5605e2f1e304eabc82b0d7c2af0d14562e709f5bc7d593df32b50" style="color: #AD5C5E; text-decoration: none;" ><u>FreshPass</u><sup>&reg;</sup></a></td></tr></table></td></tr></table></td></tr></table><!-- end desktop --><!-- start below 480px --><!--[if !mso]><\!--><table align="center" bgcolor="#F7F5F2" border="0" cellpadding="0" cellspacing="0" class="container show_content" role="presentation" style="border-top-left-radius : 12px; border-top-right-radius : 12px;display: none;" width="624">
+ 
+  <tr>
+   <td style="padding: 18px 40px;" width="544">
+    <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation">
+     
+      <tr>
+       <td style="border-right: 0.2px solid; border-right-color: #807171;" width="130">
+        <table align="center" cellpadding="0" cellspacing="0" role="presentation">
+         
+          <tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 2.9vw;line-height: 2.9vw;text-align: center;padding-bottom:18px;white-space: nowrap;color: #AD5C5E">
+            <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f151137ce54be9891eaf4e1267e3ba5ce01cb72857ed07c3f93d13436c8be65cc6af5a52a1b6283ebc06b8a49f8678e13c0b4215efc536158a9" style="color: #AD5C5E; text-decoration: none;" ><u>Safeway For U</u><sup style="font-size: 65%;line-height: 0;">&trade;</sup></a></td></tr><tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 2.9vw;line-height: 2.9vw;
+                      text-align: center;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f1582e94083771330b74f90ca0dfb26c2508b73730caff5e61109abc51e86bc28ce198e3221e598e5c7d7fcae1841b1d95cf28e795e6c2db961" style="color: #AD5C5E;" ><u>Meal Plans</u></a></td></tr></table></td><td style="border-right: 0.2px solid; border-right-color: #807171;" width="88">
+        <table align="center" cellpadding="0" cellspacing="0" role="presentation">
+         
+          <tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 2.9vw;line-height: 2.9vw;
+                              text-align: center;padding-bottom:18px;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f1505df5e00c7bead2596e5ea7ec17306515b3d51ee0cd8dd1ab126104b9eeb2038cf386ac96c09b7add244ec319c99a4fac3ba0181df4e5ab5" style="color: #AD5C5E;" ><u>Deals</u></a></td></tr><tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 2.9vw;line-height: 2.9vw;
+                      text-align: center;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f159824212ecc0bcb9c47d5658c4904ccc15a9510ec8da963f1937a5bda50745827e4ce98662f1b4a0a81ca57ec8043b116dd9a5c0d0a47f06b" style="color: #AD5C5E;" ><u>Health</u></a></td></tr></table></td><td width="111">
+        <table align="center" cellpadding="0" cellspacing="0" role="presentation">
+         
+          <tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 2.9vw;line-height: 2.9vw;
+                              text-align: center;padding-bottom:18px;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f15d80d4ad72799b1d080a83cd0e325625a40dc7f97ce9f78e9a9f869155c71b86f2b1825f94e859352d66a625bba3ab2238a185f6367a73427" style="color: #AD5C5E;" ><u>Weekly Ad</u></a></td></tr><tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 2.9vw;line-height: 2.9vw;text-align: center;white-space: nowrap;color: #AD5C5E">
+            <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f15c9786e08a7989500b79cd4df718669ff60ebaeb6bfd790406b664235f0a5605e2f1e304eabc82b0d7c2af0d14562e709f5bc7d593df32b50" style="color: #AD5C5E; text-decoration: none;" ><u>FreshPass</u><sup>&reg;</sup></a></td></tr></table></td></tr></table></td></tr></table><!-- <![endif]--><!-- end below 480px --> 
+     
+
+
+<!-- start desktop -->
+<table align="center" bgcolor="#F7F5F2" border="0" cellpadding="0" cellspacing="0" class="container hide_content" role="presentation" style="min-width: 100%;" width="624">
+  <tr>
+    <td style="padding: 48px 60px 34px;" width="504">
+      
+      <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation">
+      <tr>
+        
+        <td style="text-align:center;width: 48px; height: 48px; padding-right: 24px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f15460d515e5331eee5e188a08b533feaea7373c766976d2fb022fa129c55adcdb46a22dfa86f7afe38f4515910897410eb002c37bf70ca4329" ><img alt="Facebook Logo" height="48" src="https://images.albertsons-media.com/is/image/ABS/Golden Gate Facebook?$emailcampaign-badge$" width="48"></a>
+        </td>
+         
+        <td style="text-align:center;width: 48px;height: 48px;padding-right: 24px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f15ee16fd22d546de8a0324271c2a2353d741b52ebcbda46bd222aab4b2539f85114ecb2ee4b05c44d7d5891acb5f71755e193bdf070009f7af" ><img alt="Instagram Logo" height="48" src="https://images.albertsons-media.com/is/image/ABS/Golden Gate Insta?$emailcampaign-badge$" width="48"></a>
+        </td>
+         
+        <td style="text-align:center;width: 48px;height: 48px;padding-right: 24px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f15d5495deb3e55eeac91aba5c509d9302679a488e80aa5668b34393edb228199b596be8fd183e85c81dd95374c3804b5996f4aef5570af2611" ><img alt="Pinterest Logo" height="48" src="https://images.albertsons-media.com/is/image/ABS/Golden%20Gate%20Pinterest?$emailcampaign-badge$" width="48"></a>
+        </td>
+        
+        <td style="text-align:center;width: 48px;height: 48px;padding-right: 24px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f15f53f396eaf14b92a7713654dd5161e4221845b364b2a973927a170a4ad1e18f916a735408a9e932b1c8ea1a7ab65bf497839df864c66981a" ><img alt="Youtube Logo" height="48" src="https://images.albertsons-media.com/is/image/ABS/Golden%20Gate%20Youtube?$emailcampaign-badge$" width="48"></a>
+        </td>
+        
+        <td style="text-align:center;width: 48px;height: 48px;padding-right: 24px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f159e1d72c2f6fbee26dba01814c1cd3f9bb03e0000a14c58ee7309b0ccf6c535199b236d9617ccc653f7a45534df16a502216ed36b9b55ebae" ><img alt="Twitter Logo" height="48" src="https://images.albertsons-media.com/is/image/ABS/Golden%20Gate%20X?$emailcampaign-badge$" width="48"></a>
+        </td>
+         
+        <td style="text-align:center;width: 48px; height: 48px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f1538cecc12a8769ba2477ae875718e0004d2d5bf37519b6b04de5e707f37d3007c12ae6cffdb1b7ea46e0e3479c8f872594cd70b78da6a8cf3" ><img alt="tikTok Logo" height="48" src="https://images.albertsons-media.com/is/image/ABS/Golden%20Gate%20Tik%20Tok?$emailcampaign-badge$" width="48"></a>
+        </td>
+        
+      </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- end desktop -->
+<!-- start below 480px -->
+<!--[if !mso]><\!-->
+<table align="center" bgcolor="#F7F5F2" border="0" cellpadding="0" cellspacing="0" class="container show_content" role="presentation" style="display: none; min-width: 100%;" width="624">
+  <tr>
+    <td style="padding: 28px 40px 24px;" width="544">
+    <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation">
+      <tr>
+        
+        <td style="text-align:center;width: 32px;height: 32px;padding-right: 12px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f15460d515e5331eee5e188a08b533feaea7373c766976d2fb022fa129c55adcdb46a22dfa86f7afe38f4515910897410eb002c37bf70ca4329" ><img alt="Facebook Logo" height="32" src="https://images.albertsons-media.com/is/image/ABS/Golden Gate Facebook?$emailcampaign-badge$" width="32"></a>
+        </td>
+         
+        <td style="text-align:center;width: 32px;height: 32px;padding-right: 12px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f15ee16fd22d546de8a0324271c2a2353d741b52ebcbda46bd222aab4b2539f85114ecb2ee4b05c44d7d5891acb5f71755e193bdf070009f7af" ><img alt="Instagram Logo" height="32" src="https://images.albertsons-media.com/is/image/ABS/Golden Gate Insta?$emailcampaign-badge$" width="32"></a>
+        </td>
+        
+        <td style="text-align:center;width: 32px;height: 32px;padding-right: 12px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f15d5495deb3e55eeac91aba5c509d9302679a488e80aa5668b34393edb228199b596be8fd183e85c81dd95374c3804b5996f4aef5570af2611" ><img alt="Pinterest Logo" height="32" src="https://images.albertsons-media.com/is/image/ABS/Golden%20Gate%20Pinterest?$emailcampaign-badge$" width="32"></a>
+        </td>
+         
+        <td style="text-align:center;width: 32px;height: 32px;padding-right: 12px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f15f53f396eaf14b92a7713654dd5161e4221845b364b2a973927a170a4ad1e18f916a735408a9e932b1c8ea1a7ab65bf497839df864c66981a" ><img alt="Youtube Logo" height="32" src="https://images.albertsons-media.com/is/image/ABS/Golden%20Gate%20Youtube?$emailcampaign-badge$" width="32"></a>
+        </td>
+        
+        <td style="text-align:center;width: 32px;height: 32px;padding-right: 12px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f159e1d72c2f6fbee26dba01814c1cd3f9bb03e0000a14c58ee7309b0ccf6c535199b236d9617ccc653f7a45534df16a502216ed36b9b55ebae" ><img alt="Twitter Logo" height="32" src="https://images.albertsons-media.com/is/image/ABS/Golden%20Gate%20X?$emailcampaign-badge$" width="32"></a>
+        </td>
+         
+        <td style="text-align:center;width: 32px;height: 32px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=246bc8bda5b49f1538cecc12a8769ba2477ae875718e0004d2d5bf37519b6b04de5e707f37d3007c12ae6cffdb1b7ea46e0e3479c8f872594cd70b78da6a8cf3" ><img alt="TikTok Logo" height="32" src="https://images.albertsons-media.com/is/image/ABS/Golden%20Gate%20Tik%20Tok?$emailcampaign-badge$" width="32"></a>
+        </td>
+        
+      </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- <![endif]-->
+<!-- end below 480px --> 
+
+
+<!-- start desktop -->
+<table align="left" bgcolor="#F7F5F2" border="0" cellpadding="0" cellspacing="0" class="container hide_content" role="presentation" style="min-width:100%;" width="624">
+  <tr>
+    <td style="padding: 0px 60px;" width="504">
+      <table align="left" border="0" cellpadding="0" cellspacing="0" role="presentation">
+        <tr>
+          <td style="font-family: Nunito Sans, Arial;font-weight: 400;font-size: 12px;
+                     line-height: 16px;color: #1F1E1E;text-align: left;word-break:break-word;">
+This email was sent by Safeway. Please do not reply to this email. We cannot accept or monitor electronic replies to this email address. This email contains information for the intended recipient. If you received this email in error, please delete it.<br><br>Emails are sent from the&nbsp;<a style="color:#1F1E1E" href=" Mailto:no-reply@p.safeway.com" x-cq-linkchecker="skip"><b><u>no-reply@p.safeway.com</u></b></a>&nbsp;domain.Please do not reply to this email. 
+
+    <br>
+            <br>
+            Having trouble viewing this email? 
+            <a href="https://view.go.albertsonscompanies.com/?qs=4a25059a1c72b718b81be42e987fda4baca2c5d741b2c53351a21061aa4e8829df10d01f7d90210c5c4d173dff5e09c09662e0e7d3efc90df9dd6eb8ece1e99f9b262e6103a3808939427d484cb0ec85" style="color:#1F1E1E" ><u>View in browser</u>.</a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- end desktop -->
+<!-- start below 480px -->
+<!--[if !mso]><\!-->
+<table align="left" bgcolor="#F7F5F2" border="0" cellpadding="0" cellspacing="0" class="container show_content" role="presentation" style="display: none; min-width:100%;" width="624">
+  <tr>
+    <td style="padding: 0px 40px;" width="544">
+      <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation">
+        <tr>
+          <td align="left" style="font-family: Nunito Sans, Arial;font-weight: 400;font-size: 2.5vw;
+                     line-height: 3vw;color: #1F1E1E;text-align: left;word-break:break-word;">
+            This email was sent by Safeway. Please do not reply to this email. We cannot accept or monitor electronic replies to this email address. This email contains information for the intended recipient. If you received this email in error, please delete it.<br><br>Emails are sent from the&nbsp;<a style="color:#1F1E1E" href=" Mailto:no-reply@p.safeway.com" x-cq-linkchecker="skip"><b><u>no-reply@p.safeway.com</u></b></a>&nbsp;domain.Please do not reply to this email. 
+
+    <br>
+            <br>
+            Having trouble viewing this email? 
+            <a href="https://view.go.albertsonscompanies.com/?qs=4a25059a1c72b718b81be42e987fda4baca2c5d741b2c53351a21061aa4e8829df10d01f7d90210c5c4d173dff5e09c09662e0e7d3efc90df9dd6eb8ece1e99f9b262e6103a3808939427d484cb0ec85" style="color:#1F1E1E" ><u>View in browser</u>.</a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- <![endif]-->
+<!-- end below 480px --> 
+   <!-- start desktop -->
+<table align="center" bgcolor="#F7F5F2" border="0" cellpadding="0" cellspacing="0" class="container hide_content" role="presentation" style="min-width: 100%;" width="624">
+  <tr>
+    <td style="padding: 16px 60px;" width="400">
+      <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation">
+        <tr>
+          <td align="center" style="width:200px;font-family: Nunito Sans, Arial;font-weight: 700;font-size: 16px;line-height: 16px;white-space: nowrap;border-right:1px solid #7D7B78;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2ea7f161974fa6246ed0e1f9f2e8937592a52d56adbe25291548c5185d0784e5ab6111cb0da50e8669cfc4837315dfc873b388daacd1e09acd" style="color:#1F1E1E" target="_blank"alias="Footer_Utility_Nav_Accessibility"><u>Accessibility Statement
+              </u></a>
+          </td>
+          <td align="center" style="width:130px;font-family: Nunito Sans, Arial;font-weight: 700;font-size: 16px;line-height: 16px;white-space: nowrap;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2e3d6b2ff4ff0d8ab5c5e9f553edb6f9c4b98c6725c179d13546b3c0b08ed453102422811231d68272099565ed3cf0ee02d3afaf3b549ece70" style="color:#1F1E1E" target="_blank" ><u>Privacy Policy
+              </u></a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- end desktop -->
+<!-- start below 480px -->
+<!--[if !mso]><\!-->
+<table align="center" bgcolor="#F7F5F2" border="0" cellpadding="0" cellspacing="0" class="container show_content" role="presentation" style="min-width: 100%; display: none;" width="624">
+  <tr>
+    <td style="padding: 18px 40px;" width="544">
+      <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation">
+        <tr>
+          <td align="center" style="width:148px;font-family: Nunito Sans, Arial;font-weight: 700;font-size: 2.5vw;line-height: 2.5vw;white-space: nowrap;border-right:1px solid #7D7B78;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2eed9f7a46c71bbd5c6b109d12b64de606ba7ae54f596ea96e569fc2bad783c43fee8b96032171248a72c365ce828a79cf990ee6f31c46b9a0" style="color:#1F1E1E" target="_blank" ><u>Accessibility Statement
+              </u></a>
+          </td>
+          <td align="center" style="width:90px;font-family: Nunito Sans, Arial;font-weight: 700;font-size: 2.5vw;line-height: 2.5vw;white-space: nowrap;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=b023ca6762106b2e3d6b2ff4ff0d8ab5c5e9f553edb6f9c4b98c6725c179d13546b3c0b08ed453102422811231d68272099565ed3cf0ee02d3afaf3b549ece70" style="color:#1F1E1E" target="_blank" ><u>Privacy Policy
+              </u></a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- <![endif]-->
+<!-- end below 480px --> 
+
+
+   
+
+<!-- start desktop -->
+<table align="center" bgcolor="#800308" border="0" cellpadding="0" cellspacing="0" class="container hide_content" role="presentation" style="border-bottom-left-radius : 12px; border-bottom-right-radius : 12px;min-width: 100%;" width="624">
+  <tr>
+    <td style="padding: 48px 60px 22px;" width="487">
+      <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%">
+        <tr align="center">
+          <td height="24px" width="">
+     
+     <img alt="Safeway logo" height="24px" src="https://images.albertsons-media.com/is/image/ABS/Safeway_wht_20px?$emailcampaign-badge$" width="">
+     
+          </td>
+        </tr>
+        <tr>
+          <td style="padding-top:14px;padding-bottom: 4px;font-family: Nunito Sans, Arial;
+                     font-weight: 600;font-size: 14px;line-height: 14px;color: #FAF9F8;text-align: center;">
+            Albertsons Companies
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Nunito Sans, Arial;
+                     font-weight: 400;font-size: 12px;line-height: 15px;color: #FAF9F8;text-align: center;">
+            Copyright &copy; 2025 by Albertsons Companies, Inc. All rights reserved.
+            <br>
+            Contact us at 250 E. Parkcenter Blvd., Boise, ID 83706.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- end desktop -->
+<!-- start below 480px -->
+<!--[if !mso]><\!-->
+<table align="center" bgcolor="#800308" border="0" cellpadding="0" cellspacing="0" class="container show_content" role="presentation" style="display: none; border-bottom-left-radius : 12px; border-bottom-right-radius : 12px;min-width: 100%;" width="624">
+  <tr>
+    <td style="padding: 28px 40px 14px;" width="544">
+      <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%">
+        <tr align="center">
+          <td height="20px">
+     
+            <img alt="Safeway logo" height="20px" src="https://images.albertsons-media.com/is/image/ABS/Safeway_wht_20px?$emailcampaign-badge$" width="">
+          </td>
+        </tr>
+        <tr>
+          <td style="padding-top:14px;padding-bottom: 4px;font-family: Nunito Sans, Arial;
+                     font-weight: 800;font-size: 2.292vw;line-height: 2.292vw;color: #FAF9F8;text-align: center;">
+            Albertsons Companies
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Nunito Sans, Arial;
+                     font-weight: 400;font-size: 12px;line-height: 15px;color: #FAF9F8;text-align: center;">
+            Copyright &copy; 2025 by Albertsons Companies, Inc. All rights reserved.
+            <br>
+           Contact us at 250 E. Parkcenter Blvd., Boise, ID 83706.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- <![endif]-->
+<!-- end below 480px -->
+      </td>
+  </tr>
+ </table>
+      
+      
+      
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Start: Content -->
+            <!-- Template Area 1 -->
+            <tr>
+              <td width="624" align="center" bgcolor="#F0EDED" style="background-color: #F0EDED;">
+                <table align="center" class="container" width="624" border="0" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td width="624">
+                       
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Template Area 2 -->
+            <tr>
+              <td width="624" align="center" bgcolor="#F0EDED" style="background-color: #F0EDED;">
+                <table align="center" class="container" width="624" border="0" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td width="624">
+                       
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+</table>
+            <img src="https://click.go.albertsonscompanies.com/open.aspx?ffcb10-fef91377736604-fe2115727d6c0178771378-fe3011717164077c741379-ff961578-fe5113767c6301757615-ff011771766106&d=110049&bmt=0" width="1" height="1" alt="">
+              </custom>
+        
+        
+             
+  </body>
+            </html>
+
+--Ciwe7vc11oQa=_?:--
+

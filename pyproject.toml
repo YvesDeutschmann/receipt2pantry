@@ -1,0 +1,30 @@
+[project]
+name = "receipt2pantry"
+version = "0.1.0"
+description = "Automated Safeway receipt fetching and pantry management"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "playwright>=1.40.0",
+    "python-dotenv>=1.0.0",
+    "email-validator>=2.0.0",
+    "click>=8.0.0",
+    "rich>=13.0.0"
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["parsers"]
+
+[tool.uv]
+dev-dependencies = [
+    "pytest>=7.0.0",
+    "black>=23.0.0",
+    "flake8>=6.0.0"
+]
+
+[tool.playwright]
+install-deps = true

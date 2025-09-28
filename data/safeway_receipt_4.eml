@@ -1,0 +1,4500 @@
+Delivered-To: yves.deutschmann@gmail.com
+Received: by 2002:a05:6358:b40f:b0:20e:d452:3485 with SMTP id pc15csp2125461rwc;
+        Tue, 9 Sep 2025 22:39:59 -0700 (PDT)
+X-Google-Smtp-Source: AGHT+IEZC4KNoT27iVy2zap29t32OFH82vyqV2UF1poP8p/mInu5XYlP7YuhhCO4yKJatPfdF7W6
+X-Received: by 2002:a05:622a:60e:b0:4b5:4874:4fa4 with SMTP id d75a77b69052e-4b5f83a9990mr112655771cf.10.1757482799381;
+        Tue, 09 Sep 2025 22:39:59 -0700 (PDT)
+ARC-Seal: i=1; a=rsa-sha256; t=1757482799; cv=none;
+        d=google.com; s=arc-20240605;
+        b=EGRSHZ1LUz1XDUVKYETVz43Ko8t0ges4Qw/yQorx2CKwAhLfpzBTDUVzTZjZs6akEm
+         s6Nvq0wMMvFsMTPd6/X7DXWjWGXXjYZKCWGgUloYnWX4mgmwhBrH4HgSXwGwy9jv26Yk
+         HohkskcQR4OJKOY77P3l5EEXQmVTQ89W8pWCKbl7avTW+tfMKfFSuNcoHk8kWAPVqVxS
+         gOVFoNyqw8R53F9em1OJvsfWy0FMp0yG7Ei0YHxjsRNfHtIEnle0Qp2yeFZqkfLi5q/N
+         bOgX0cViuDAakXw2byi6rPighD+tg6EG0KeEteVRx2MBG6fCrQLWMoJiMuGbkPM05bye
+         n1uQ==
+ARC-Message-Signature: i=1; a=rsa-sha256; c=relaxed/relaxed; d=google.com; s=arc-20240605;
+        h=feedback-id:message-id:reply-to:mime-version:list-help:date:subject
+         :to:from:dkim-signature:dkim-signature;
+        bh=XNn4pBHYqlmYvQXfOaWa+a89+vFSZqtqZsDFtKKKVEw=;
+        fh=RctTdd9GJH/IMN8+wnTLaIlVAfME7lHs+RvOm4M5Sus=;
+        b=ObxJ07gyGYzwcHlnwkHvZBVnhsmm4aXsO2LgkXh0ir+MBRpwyP1GUAFkNztUDctCij
+         YfkyZMyqdRO++phXujHMP6P8wohzxjVN4f4LDA9JjhEDwPFe/MjG2WQn0pm6FpadXkXz
+         kEqjPlFMs8OrM6r8o89Q7u4xhSiYCbGV5KnSvSbgIjqZQbXKY3DBY9P2mFXyA/JliDzR
+         kWnQfjJWNQREVNElp0hr8VZgvCxSD5yl+mqAbMLvhw6efYJBeie9LO+g4gigtrwgqm4K
+         wXL/yyYMbvNYhnK0LkvpZRQGQgcdu1B6S/zBIOzJ6aCF/14p0p6TVmQaX6+nDjnDYxpu
+         FJHw==;
+        dara=google.com
+ARC-Authentication-Results: i=1; mx.google.com;
+       dkim=pass header.i=@p.safeway.com header.s=11dkim1 header.b=FM+omrL3;
+       dkim=pass header.i=@s11.y.mc.salesforce.com header.s=fbldkim11 header.b=PJuiiI2+;
+       spf=pass (google.com: domain of bounce-18_html-76975844-77620-514031179-31355@bounce.go.albertsonscompanies.com designates 128.245.68.226 as permitted sender) smtp.mailfrom=bounce-18_HTML-76975844-77620-514031179-31355@bounce.go.albertsonscompanies.com;
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=p.safeway.com
+Return-Path: <bounce-18_HTML-76975844-77620-514031179-31355@bounce.go.albertsonscompanies.com>
+Received: from mta2.go.albertsonscompanies.com (mta2.go.albertsonscompanies.com. [128.245.68.226])
+        by mx.google.com with ESMTPS id d75a77b69052e-4b61bab2d99si13756851cf.179.2025.09.09.22.39.59
+        for <yves.deutschmann@gmail.com>
+        (version=TLS1_2 cipher=ECDHE-ECDSA-AES128-GCM-SHA256 bits=128/128);
+        Tue, 09 Sep 2025 22:39:59 -0700 (PDT)
+Received-SPF: pass (google.com: domain of bounce-18_html-76975844-77620-514031179-31355@bounce.go.albertsonscompanies.com designates 128.245.68.226 as permitted sender) client-ip=128.245.68.226;
+Authentication-Results: mx.google.com;
+       dkim=pass header.i=@p.safeway.com header.s=11dkim1 header.b=FM+omrL3;
+       dkim=pass header.i=@s11.y.mc.salesforce.com header.s=fbldkim11 header.b=PJuiiI2+;
+       spf=pass (google.com: domain of bounce-18_html-76975844-77620-514031179-31355@bounce.go.albertsonscompanies.com designates 128.245.68.226 as permitted sender) smtp.mailfrom=bounce-18_HTML-76975844-77620-514031179-31355@bounce.go.albertsonscompanies.com;
+       dmarc=pass (p=REJECT sp=REJECT dis=NONE) header.from=p.safeway.com
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; s=11dkim1; d=p.safeway.com;
+ h=From:To:Subject:Date:List-Help:MIME-Version:Reply-To:Message-ID:Content-Type;
+ i=safeway@p.safeway.com;
+ bh=XNn4pBHYqlmYvQXfOaWa+a89+vFSZqtqZsDFtKKKVEw=;
+ b=FM+omrL3oDW8ZifetDvYsktO+Ng0Wpf4cwN9/F5F9gED/jwKfehsOdLMEKndB/t6OQAh++j59m3V
+   EkvDQPHHbcxfpN191OMmP3eQHjZgbgSjt9mqtJITw2R+s+k5rte7NXdH4ujerrGX5/u+hlF3Xr/2
+   0i7z40VdH8vh0EEyYSTJQmd3uXbjLNkyDgzx1i1elWxg+Flohyn946F82kk7/pcX6Ub0YxbBlcDc
+   ii6huJwQ/PHjgCSAl/GfF9u6zlNBD6THfbpr+TRkt2vY+DMEmWrx7IsPxCoKVxEy4vuSObZIktTh
+   WXhqk7LcL2YjAslKL9Q14B4xDBPFBcJ6ZxQMag==
+DKIM-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed; s=fbldkim11; d=s11.y.mc.salesforce.com;
+ h=From:To:Subject:Date:List-Help:MIME-Version:Reply-To:Message-ID:Content-Type;
+ bh=XNn4pBHYqlmYvQXfOaWa+a89+vFSZqtqZsDFtKKKVEw=;
+ b=PJuiiI2++8oKnZvp8wosrQHFAe2LGoP1BxAp47/KC4tznVIGAVapQSTJOYDoQW3txyMxJfh0obA7
+   bvAhIVrgIi47RpHOm8pj5gKIughrmlbkcLX69kb5CyfvstycGLZXkJHMpIsL1PcLM2XGGk8/jeYi
+   qFMIOHbO+U4vk9R/58N4FQHj/pj2Fpf9y4bH8dryeVNE39H06FfvW2zRMY62nKmYVTBYqc4xqNxq
+   20UL2h1jZt4WsCqmbkAB9TkONeZnWwJqsGCXQCo6bxWMfvTV3Eglg3WRypWbf1mgjMxiNNVLf7W+
+   MpeJ8EodPCSgQoMV2JLJBMTMzJQo3suplDMh9w==
+Received: by mta2.go.albertsonscompanies.com id ho47iu2fmd4k for <yves.deutschmann@gmail.com>; Wed, 10 Sep 2025 05:39:59 +0000 (envelope-from <bounce-18_HTML-76975844-77620-514031179-31355@bounce.go.albertsonscompanies.com>)
+From: "Safeway" <safeway@p.safeway.com>
+To: <yves.deutschmann@gmail.com>
+Subject: Your Receipt From Safeway
+Date: Tue, 09 Sep 2025 23:39:58 -0600
+List-Help: <https://click.go.albertsonscompanies.com/subscription_center.aspx?jwt=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJtaWQiOiI1MTQwMzExNzkiLCJzIjoiNzY5NzU4NDQiLCJsaWQiOiIxOCIsImoiOiI3NzYyMCIsImpiIjoiMzEzNTUiLCJkIjoiMTEwMDUyIn0.qCi3QfytnoI3Xe-AUFITDajMNkfHuP22BbFJLjx27iY>
+MIME-Version: 1.0
+x-messageKey: 944110a0-8e08-11f0-b270-5d8fbb12dd34
+X-Delivery: Transactional
+X-SFMC-Stack: 11
+x-job: 514031179_77620
+Reply-To: "Safeway" <reply-fef91377736604-18_HTML-76975844-514031179-31355@go.albertsonscompanies.com>
+Message-ID: <2cd81c52-5046-4eeb-a2fb-309bae77723d@atl1s11mta1102.xt.local>
+Feedback-ID: 514031179:77620:128.245.68.226:sfmktgcld
+Content-Type: multipart/alternative;
+	boundary="Ciwe7vc11oQa=_?:"
+
+This is a multi-part message in MIME format.
+
+--Ciwe7vc11oQa=_?:
+Content-Type: text/plain;
+	charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+
+ 
+
+
+
+
+
+
+
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c202aea33319b792f50f967e17d2e353dc43f7be61c9247aa44c41c6879eb811169e96a8b56a6310b21ec9dfb9162b339896cb5505f76bc6255d 
+ 
+
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c202166912c3e5d356345f03be64c538bf2318618fe99a3d37996cf0c888f6e6b5d7ea4fd5c344ce40ca18cc57a7c1f15e7e343a15b95ab61e65 
+ 
+
+
+
+ Thanks for shopping with Safeway!
+
+
+
+ Here is your receipt from 07/29/2025.
+
+
+
+
+
+ 
+ 
+ Order Details
+ 
+ Total Price
+ 
+
+
+ 
+ 
+ BAKED GOODS
+ 
+
+ 
+ 
+ Franz 8 Count Hamburger Buns
+ 
+ 
+ $2.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $5.49
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Franz Big Horn 100% Whole Wheat Bread
+ 
+ 
+ $5.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Better Cheddar Bagels 6 Count - 1lb  @5.99/lb
+ 
+ 
+ $5.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ DELI
+ 
+
+ 
+ 
+ Odyssey Feta In Brine Chunk Cheese
+ 
+ 
+ $6.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Creminelli Prosciutto Sliced Vp
+ 
+ 
+ $4.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $6.49
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ GROC NONEDIBLE
+ 
+
+ 
+ 
+ Signature Select Facial Tissue Softly Pocket Pack 8 Pk 15 Ct
+ 
+ 
+ $4.00
+ 
+ 
+
+ 
+ 
+ Quantity: 2
+ 
+
+ 
+ 
+ 
+ Regular Price $2.49
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Signature Select Softly Facial Tissue With Lotion 60 Count
+ 
+ 
+ $4.00
+ 
+ 
+
+ 
+ 
+ Quantity: 2
+ 
+
+ 
+ 
+ 
+ Regular Price $2.29
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ GROCERY
+ 
+
+ 
+ 
+ Pep Farm Goldfish Pretzel 8oz
+ 
+ 
+ $1.97
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $3.49
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Signature Select Pink Lemonade 64 Fluid Ounce
+ 
+ 
+ $1.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $3.99
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Signature Select Cinnamon Apple Sauce 24 Ounce
+ 
+ 
+ $2.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Signature Select Large Elbow Macaroni Pasta 16 Ounce
+ 
+ 
+ $1.67
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $1.99
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Signature Select Mostaccioli Pasta 16 Oz
+ 
+ 
+ $1.67
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $1.99
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Signature Select Rigatoni Pasta 16 Ounce
+ 
+ 
+ $1.66
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $1.99
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Lipton Cold Brew Tea Bags
+ 
+ 
+ $7.20
+ 
+ 
+
+ 
+ 
+ Quantity: 3
+ 
+
+ 
+ 
+ 
+ Regular Price $5.99
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Country Time Ready To Drink Soft Drink
+ 
+ 
+ $3.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Belvita Soft Banana Bread 8.8oz
+ 
+ 
+ $4.79
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $5.49
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Guerrero Riquisima Flour Tortillas 10ct
+ 
+ 
+ $3.79
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Culture Pop Probiotic Strawberry Rhubarb 4-12fz
+ 
+ 
+ $7.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $8.99
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ MEAT
+ 
+
+ 
+ 
+ Gallo Salame Deli Style Light
+ 
+ 
+ $5.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Land O Frost Premium Variety Ham/salami/bologna
+ 
+ 
+ $6.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $8.99
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ PRODUCE
+ 
+
+ 
+ 
+ O Organics Mint Fresh 0.5 Ounce
+ 
+ 
+ $2.49
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ O Organics Living Butter Lettuce
+ 
+ 
+ $3.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Organic Tomatoes On The Vine - 1.64lb  @4.49/lb
+ 
+ 
+ $7.36
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Grapes Green Seedless - 2.56lb  @3.99/lb
+ 
+ 
+ $3.76
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $3.99
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Avocados Hass
+ 
+ 
+ $5.98
+ 
+ 
+
+ 
+ 
+ Quantity: 2
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ REFRIG/FROZEN
+ 
+
+ 
+ 
+ Pillsbury Cinnamon Rolls With Cream Cheese Frosting
+ 
+ 
+ $4.98
+ 
+ 
+
+ 
+ 
+ Quantity: 2
+ 
+
+ 
+ 
+ 
+ Regular Price $4.49
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Lucerne Cage Free Large A Shelled Eggs 12 Count
+ 
+ 
+ $5.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Lucerne Sliced Havarti Cheese
+ 
+ 
+ $2.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Lucerne Cheese Provolone Smoke Flavored Sliced
+ 
+ 
+ $2.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Kelloggs Eggo Pancakes Buttermilk
+ 
+ 
+ $3.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Nestle Coffee Mate Cold Foam Creamer French Vanilla Bottle 14 Oz
+ 
+ 
+ $4.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $5.49
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ Tillamook Oregon Strawberry Low Fat Yogurt
+ 
+ 
+ $3.79
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Tillamook Ice Cream White Choc Raspberry
+ 
+ 
+ $6.99
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Open Nature Fruit Bars Strawberry 6 Ct-2.45 Fz
+ 
+ 
+ $4.49
+ 
+ 
+
+ 
+ 
+ Quantity: 1
+ 
+
+ 
+ 
+ 
+ Regular Price $4.99
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+
+
+
+
+
+ 
+ 
+ 
+ Total Items (39)
+ 
+ 
+ 
+ $188.39
+ 
+ 
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Total Savings
+ 
+ -$35.97
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Subtotal
+ 
+ $152.42
+ 
+
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ Taxes and Fees
+ $2.26
+
+ 
+ 
+ 
+ 
+ 
+  
+ 
+ 
+ 
+ Sales Tax
+ 
+ $2.26
+ 
+
+ 
+ 
+  
+ 
+ 
+ 
+ Calculated
+ 
+ $35.97
+ 
+
+ 
+  
+ 
+
+
+ 
+
+
+ 
+ 
+ 
+  
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+ 
+  
+ 
+ 
+ 
+ Total
+ $154.68
+
+  
+ 
+  
+ 
+  
+ 
+  
+ 
+ 
+
+
+ 
+ 
+
+
+
+ 
+ 
+ Transaction Details
+ 
+
+ 
+ 
+ 
+ Card ending in 2293
+ 
+
+ 
+ 
+ Amount
+ 
+ $154.68
+ 
+
+ 
+ 
+ 
+ 
+ Authorization Code
+ 
+ 0002947R
+ 
+
+ 
+ 
+ 
+ Reference Number
+ 
+ 302456422930
+ 
+
+ 
+ 
+ 
+ Authorization Date
+ 
+ Jul 29, 2025
+ 
+
+ 
+ 
+ 
+ Authorization Time
+ 
+ 7:24 PM
+ 
+
+ 
+ 
+ 
+
+
+ 
+ 
+ 
+
+
+
+ For Customer Support please call 
+tel:1-877-358-7328 
+1-877-358-7328 .
+For questions about your payment call payment services at 
+tel:1-877-392-9517 
+1-866-392-9517 .
+
+
+
+
+
+
+
+ 
+
+
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c202f52299809aaeb068bc13bb089a6d043e9b0b81c11386c906c72a94b24945176aa46ab671c1e0d54f50fdb274882d685d72171f9bb7ab366b 
+Safeway For U&trade;
+
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c20264c87685bdbe3e7b071273121bfe166b32b76a664cac2d4dbbc5bc95db085b53b059d3bbca4d4aedf3f920326097e94876777ef0bd1b6865 
+Meal Plans
+
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c2021fe45f453f652e72486f4177f52428250558bde7050ffa6a7e272bbb6c90328fe749787cf54c540242856054d9a9967c814f6549a2ef66a2 
+Deals
+
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c20264556992c8f6ab21b807a1d4a286d406fe4f5132d171df45ceef72a40b54a2b3fff1c214866e16fa711984becd75221e47dce6ef84c852e7 
+Health
+
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c2026e75491b1c901e1e24b6ec14dfbc11013bd92359e12e958ef28e225d27c6c2fe79f24d517eba4803380ac6539b29222583e97f3d73860d1f 
+Weekly Ad
+
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c20276086f4785ac839b578874a117bb6713db7c83d8a334f210e1cb4e0adfd37cd787946093bbb6637ce5852d118587fe06f988204b684a0212 
+FreshPass(R)
+
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c202f52299809aaeb068bc13bb089a6d043e9b0b81c11386c906c72a94b24945176aa46ab671c1e0d54f50fdb274882d685d72171f9bb7ab366b 
+Safeway For U&trade;
+
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c20264c87685bdbe3e7b071273121bfe166b32b76a664cac2d4dbbc5bc95db085b53b059d3bbca4d4aedf3f920326097e94876777ef0bd1b6865 
+Meal Plans
+
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c2021fe45f453f652e72486f4177f52428250558bde7050ffa6a7e272bbb6c90328fe749787cf54c540242856054d9a9967c814f6549a2ef66a2 
+Deals
+
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c20264556992c8f6ab21b807a1d4a286d406fe4f5132d171df45ceef72a40b54a2b3fff1c214866e16fa711984becd75221e47dce6ef84c852e7 
+Health
+
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c2026e75491b1c901e1e24b6ec14dfbc11013bd92359e12e958ef28e225d27c6c2fe79f24d517eba4803380ac6539b29222583e97f3d73860d1f 
+Weekly Ad
+
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c20276086f4785ac839b578874a117bb6713db7c83d8a334f210e1cb4e0adfd37cd787946093bbb6637ce5852d118587fe06f988204b684a0212 
+FreshPass(R)
+
+ 
+ 
+
+
+
+ 
+ 
+ 
+ 
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c202bf1b14f2d07a006d105db7458c143d160d6cca3108d31f57116e452474af100b1622f2a56dd38d2cfcc33414c2dfe1ab4007de3c6378bce9 
+
+  
+ https://click.go.albertsonscompanies.com/?qs=bf02bd280308c20289c25b214d540aa3ea8718f4f16a035a50d155aafba1549912a28adf83f44fd69d637f708538dfd766938cd515c454a6ee193583aa8f4647 
+
+  
+ https://click.go.albertsonscompanies.com/?qs=bf02bd280308c20287ab1084f469834f95c5641f754657aaf3b692e55def60930848309ef73dbc9bb5dea6e159af5d15cfd50678a66a00a70649c9c77806c58f 
+
+ 
+ https://click.go.albertsonscompanies.com/?qs=bf02bd280308c2024502615d72f67469ca16069fa3bfd8e980fb385efe643b1415bdc3e7be313085b465c92156a86e53dece60e56fa3bb62255a8c448cf02719 
+
+ 
+ https://click.go.albertsonscompanies.com/?qs=bf02bd280308c20279741eaaf58dc975ae06caafc89ba4cac664b9bd8fd8f75c972f16e1a1b1862136474e60c6c6af18869ff93307e367b6478a22031be2ecb1 
+
+  
+ https://click.go.albertsonscompanies.com/?qs=bf02bd280308c202d094e58bcb0ee4e54049d1b6cbe91997ba1ffca273e5f7c3549b40c48d8a9c4dba2f94e1020514f42d3bb3b93991bb7d3d1fd700f1b49f43 
+
+ 
+ 
+
+
+ 
+ 
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c202bf1b14f2d07a006d105db7458c143d160d6cca3108d31f57116e452474af100b1622f2a56dd38d2cfcc33414c2dfe1ab4007de3c6378bce9 
+
+  
+ https://click.go.albertsonscompanies.com/?qs=bf02bd280308c20289c25b214d540aa3ea8718f4f16a035a50d155aafba1549912a28adf83f44fd69d637f708538dfd766938cd515c454a6ee193583aa8f4647 
+
+ 
+ https://click.go.albertsonscompanies.com/?qs=bf02bd280308c20287ab1084f469834f95c5641f754657aaf3b692e55def60930848309ef73dbc9bb5dea6e159af5d15cfd50678a66a00a70649c9c77806c58f 
+
+  
+ https://click.go.albertsonscompanies.com/?qs=bf02bd280308c2024502615d72f67469ca16069fa3bfd8e980fb385efe643b1415bdc3e7be313085b465c92156a86e53dece60e56fa3bb62255a8c448cf02719 
+
+ 
+ https://click.go.albertsonscompanies.com/?qs=bf02bd280308c20279741eaaf58dc975ae06caafc89ba4cac664b9bd8fd8f75c972f16e1a1b1862136474e60c6c6af18869ff93307e367b6478a22031be2ecb1 
+
+  
+ https://click.go.albertsonscompanies.com/?qs=bf02bd280308c202d094e58bcb0ee4e54049d1b6cbe91997ba1ffca273e5f7c3549b40c48d8a9c4dba2f94e1020514f42d3bb3b93991bb7d3d1fd700f1b49f43 
+
+ 
+ 
+
+ 
+
+
+
+This email was sent by Safeway. Please do not reply to this email. We cannot accept or monitor electronic replies to this email address. This email contains information for the intended recipient. If you received this email in error, please delete it.
+
+Emails are sent from the 
+%%=RedirectTo(Concat( 
+no-reply@p.safeway.com domain.Please do not reply to this email.
+
+ 
+
+
+ Having trouble viewing this email? 
+ 
+https://view.go.albertsonscompanies.com/?qs=4a25059a1c72b718b81be42e987fda4baca2c5d741b2c533e46d5eed1200516117f2ab11e04490fc6f6b5ecfc3b88ffe68dd69d0fa84c2adc97a99e6ba801e63ac9f47aea792ae351932b87c1c0184cb 
+View in browser.
+
+
+ This email was sent by Safeway. Please do not reply to this email. We cannot accept or monitor electronic replies to this email address. This email contains information for the intended recipient. If you received this email in error, please delete it.
+
+Emails are sent from the 
+%%=RedirectTo(Concat( 
+no-reply@p.safeway.com domain.Please do not reply to this email.
+
+ 
+
+
+ Having trouble viewing this email? 
+ 
+https://view.go.albertsonscompanies.com/?qs=4a25059a1c72b718b81be42e987fda4baca2c5d741b2c533e46d5eed1200516117f2ab11e04490fc6f6b5ecfc3b88ffe68dd69d0fa84c2adc97a99e6ba801e63ac9f47aea792ae351932b87c1c0184cb 
+View in browser.
+
+ 
+ 
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c2022605db70cdfb46c8182d3b83be33da2f09f9e428ac8b9723e110dbe0b26849e37a61cae9445414fb821d3de0e1bc3a246561a042f73e5b05 
+Accessibility Statement
+ 
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c202d83fd785a05afd81df2a2513b8f5bf65e9597b24871e70efffb847e47d71463667d64659959699846f7a6c82befa2abd1326ab88c269d3ab 
+Privacy Policy
+ 
+
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c2022605db70cdfb46c8182d3b83be33da2f09f9e428ac8b9723e110dbe0b26849e37a61cae9445414fb821d3de0e1bc3a246561a042f73e5b05 
+Accessibility Statement
+ 
+https://click.go.albertsonscompanies.com/?qs=bf02bd280308c202d83fd785a05afd81df2a2513b8f5bf65e9597b24871e70efffb847e47d71463667d64659959699846f7a6c82befa2abd1326ab88c269d3ab 
+Privacy Policy
+ 
+
+ 
+
+
+ 
+
+
+ 
+ 
+ 
+
+ Albertsons Companies
+ 
+
+ Copyright (c) 2025 by Albertsons Companies, Inc. All rights reserved.
+ 
+
+ Contact us at 250 E. Parkcenter Blvd., Boise, ID 83706.
+ 
+
+
+ Albertsons Companies
+ 
+
+ Copyright (c) 2025 by Albertsons Companies, Inc. All rights reserved.
+ 
+
+ Contact us at 250 E. Parkcenter Blvd., Boise, ID 83706.
+ 
+
+
+ 
+
+ 
+ 
+ 
+ 
+
+
+ 
+ 
+
+
+ 
+ 
+
+
+
+--Ciwe7vc11oQa=_?:
+Content-Type: text/html;
+	charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+<!doctype html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+  <head>
+   <link href="https://fonts.googleapis.com/css?family=Nunito Sans" rel="stylesheet">
+   <link href="https://fonts.googleapis.com/css?family=Poppins" rel="stylesheet">
+  <!---->
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+      <meta http-equiv="X-UA-Compatible" content="IE=edge">
+        <meta name="viewport" content="width=device-width, initial-scale=1">
+    <!--[if mso]>   <style type="text/css">   .desktop-hide {     display: none !important;     max-height: 0 !important;     overflow: hidden !important;   } </style>   <![endif]-->
+         <style type="text/css">
+   
+@media only screen and (max-width: 650px) {
+.container {width:100% !important;}
+.photo {width:100% !important; height:100% !important;}}
+
+@media only screen and (max-width: 480px) {
+.container {width:100% !important;}
+.photo {width:100% !important; height:auto !important;} 
+.hide_content {display:none !important; height:auto !important;}
+.drop {width:100% !important; display:block !important; box-sizing: border-box !important;} 
+.remove_padding {padding:0 !important;} 
+.show_content {display: block !important; height:auto !important;}
+.show_content_tab {display: block !important; height:auto !important;}
+.display_tablecell{display:table-cell !important;}
+.side_padding {padding-left: 20px !important; padding-right: 20px !important;}
+.tb_padding {padding-top: 20px !important; padding-bottom: 20px !important;}  
+.side_padding_10{padding-left: 10px !important; padding-right: 10px !important;}
+.tb_padding_10 {padding-top: 10px !important; padding-bottom: 10px !important;} 
+.side_padding_30{padding-left: 30px !important; padding-right: 30px !important;}
+.tb_padding_30{padding-top: 30px !important; padding-bottom: 30px !important;}
+.center_align{text-align: center !important;}    
+.left_align{text-align: left !important;}  
+.right_align{text-align: right !important;}
+.top_padding{padding-top: 20px !important;}
+.bottom_padding{padding-bottom: 20px !important;}
+.left_padding{padding-left: 20px !important;} 
+.right_padding{padding-right: 20px !important;} 
+.h1{font-size: 32px !important;}
+.h2{font-size: 30px !important;}
+.h3{font-size: 28px !important;}
+.h4{font-size: 26px !important;}
+.h5{font-size: 22px !important;}
+.h6{font-size: 20px !important;}
+.h7{font-size: 18px !important;}
+.h8{font-size: 16px !important;}
+.h9{font-size: 14.5px !important;}
+.h10{font-size: 14px !important;}
+.h11{font-size: 13.5px !important;}
+.h12{font-size: 13px !important;}
+.h13{font-size: 11px !important;}
+.h14{font-size: 24px !important;}  
+.h15{font-size: 40px !important;}  
+.h16{font-size: 12px !important;}  
+.h17{font-size: 11.5px !important;}
+.h18{font-size: 10px !important;}
+  
+.B_Radius_8{border-radius: 8px !important;}  
+.B_Radius_6{border-radius: 6px !important;}   
+.B_Radius_6_bottom{border-bottom-left-radius : 6px !important; border-bottom-right-radius : 6px!important;}  
+.B_Radius_6_top{border-top-left-radius : 6px !important; border-top-right-radius : 6px!important;}}
+     
+@media only screen and (max-width: 390px){
+.container {width:100% !important;}
+.photo {width:100% !important; height:auto !important;} 
+.hide_content {display:none !important; height:auto !important;} 
+
+.drop {width:100% !important; display:block !important; box-sizing: border-box !important;} 
+.remove-padding {padding:0 !important;}
+.show_content {display: block !important; height:auto !important;}
+
+.side_padding {padding-left: 15px !important; padding-right: 15px !important;} 
+.tb_padding {padding-top: 15px !important; padding-bottom: 15px !important;}  
+.side_padding_10{padding-left: 10px !important; padding-right: 10px !important;}
+.tb_padding_10 {padding-top: 10px !important; padding-bottom: 10px !important;} 
+.side_padding_30{padding-left: 20px !important; padding-right: 20px !important;}
+.tb_padding_30{padding-top: 20px !important; padding-bottom: 20px !important;}  
+.mtop_padding{padding-top: 10px !important;}
+.mbottom_padding{padding-bottom: 10px !important;}
+.mside_padding {padding-left: 30px !important; padding-right: 30px !important;} 
+.mtb_padding {padding-top: 15px !important; padding-bottom: 15px !important;}
+.h1{font-size: 28px !important; line-height: 100% !important;}
+.h2{font-size: 26px !important; line-height: 100% !important;}
+.h3{font-size: 24px !important; line-height: 100% !important;}
+.h4{font-size: 22px !important; line-height: 100% !important;}
+.h5{font-size: 20px !important; line-height: 100% !important;}
+.h6{font-size: 18px !important; line-height: 100% !important;}
+.h7{font-size: 14px !important; line-height: 100% !important;}
+.h8{font-size: 12px !important; line-height: 100% !important;}
+.tb_padding_10 {padding-top: 10px !important; padding-bottom: 10px !important;}
+}
+ @media only screen and (max-width: 374px) {
+     .hide_content_mob {display:none !important; height:auto !important;} 
+    .show_content_mob {display: block !important; height:auto !important;} 
+        .show_content_tab {display:none !important; height:auto !important;}}     
+          </style>
+</head>
+        <body style="font-family:Nunito Sans, 'Arial', Helvetica, sans-serif; background-color: #F0EDED;margin: 0px; padding:0px; -webkit-text-size-adjust:none; -ms-text-size-adjust: none;" yahoo="fix"><style type="text/css">
+div.preheader 
+{ display: none !important; } 
+</style>
+<div class="preheader" style="font-size: 1px; display: none !important;"></div>
+          
+          <!-- Table used to center email -->
+          <table bgcolor="#F0EDED" width="100%" height="" border="0" cellspacing="0" cellpadding="0" style="font-family: Nunito Sans, 'Arial', 'Helvetica', sans-serif; color: #000000; font-size: 16px; line-height: 1.5; min-width: 100%;">
+     
+          
+            
+            <tr>
+              <td width="624" align="center" bgcolor="#F0EDED" style="background-color:#F0EDED;">
+                <table align="center" class="container" width="624" border="0" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td width="624">
+                         
+
+
+
+
+
+
+<table align="center" bgcolor="#FCFCFC" border="0" cellpadding="0" cellspacing="0" class="container hide_content" height="42" style="border-top-left-radius : 12px; border-top-right-radius : 12px;" width="624">
+ 
+  <tr>
+   <td align="left" style="padding: 0px 0px 0px 16px" width="608">
+    <table cellpadding="0" cellspacing="0" class="hide_content">
+     
+      <tr>
+       <td class="hide_content">
+        <a  href="https://click.go.albertsonscompanies.com/?qs=066cfa4426fa843daa3e3168269c8edce6484189ec24b49b91e25139e4b46d6a42bd09a69c147452b67f6aa3e068d70792a940b7c0768194af9614244a377a47" style="text-align: center; vertical-align: middle; display: inline-block;" target="_blank"> <img alt="Safeway logo" border="0" class="Imgw" height="18" src="https://images.albertsons-media.com/is/image/ABS/Safeway_DM?$emailcampaign-badge$" style="font-family:Nunito Sans; font-size: 16px; font-weight: bold; margin-bottom: 0px; float: none; display: block;" title="" width=""></a></td></tr></table></td></tr></table><!--[if !mso]><\!--><table align="center" bgcolor="#FCFCFC" border="0" cellpadding="0" cellspacing="0" class="container show_content" height="42" style="border-top-left-radius : 12px; border-top-right-radius : 12px; display: none;" width="624">
+ 
+  <tr>
+   <td align="left" height="42" style="padding: 0px 0px 0px 16px" width="608">
+    <table cellpadding="0" cellspacing="0">
+     
+      <tr>
+       <td>
+        <a  href="https://click.go.albertsonscompanies.com/?qs=066cfa4426fa843d46119134e22499927216cfd884a82308bacd930f5c18735301048b8914795909496c70b49a9a930a112fc7e65ba7e53f9213e78b19dad0f0" style="text-align: center; vertical-align: middle; display: inline-block;" target="_blank"> <img alt="Safeway logo" border="0" class="Imgw" height="18" src="https://images.albertsons-media.com/is/image/ABS/Safeway_DM?$emailcampaign-badge$" style="font-family:Nunito Sans; font-size: 16px; font-weight: bold; margin-bottom: 0px; float: none; display: block;" title="" width=""></a></td></tr></table></td></tr></table><!-- <![endif]-->
+<table border="0" cellpadding="0" cellspacing="0" class="container" role="presentation" width="624">
+  <tr>
+    <td>
+      <table bgcolor="#FAF9F8" border="0" cellpadding="0" cellspacing="0" class="container" width="100%" role="presentation">
+        <tr>
+          <td class="h1"
+            style="padding-left: 32px; padding-top: 32px; padding-right: 32px;padding-bottom: 8px;font-size: 34px;font-weight: 600; line-height: 42.5px;color:#535250;font-family: Poppins, Arial; ">
+            Thanks for shopping with Safeway!</td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<table  align="center" cellpadding="0" cellspacing="0" class="container" role="presentation" width="624">
+  <tr>
+   <td class="container" width="100%">
+    <table  align="center" cellpadding="0" cellspacing="0" class="container" width="100%" role="presentation" style="background-color:#FAF9F8;">
+      <tr>
+       <td width="560" style="padding-left: 32px; padding-top: 8px; padding-right: 32px;padding-bottom: 32px;font-size:18px ;font-weight: 400; line-height: 29.16px;color:#2A2928;font-family: Nunito Sans, Arial; ">
+       Here is your receipt from 07/29/2025.</td></tr></table></td></tr></table>
+
+
+<table
+  align="center"
+  cellpadding="0"
+  cellspacing="0"
+  class="container"
+  role="presentation"
+  style="
+    background-color: #F7F5F2;
+    color: #535250;
+  "
+  width="624"
+>
+  <tr>
+    <td style="padding: 16px 16px 0px 16px;">
+      <table
+        cellpadding="0"
+        cellspacing="0"
+        style="
+          color: #535250;
+        "
+        width="100%"  role="presentation"
+      >
+        
+        <tr>
+          <td style="
+              background-color: #FAF9F8;
+              border-radius: 6px;
+              box-shadow: 0px 0px 1px 0px rgb(214, 212, 210);
+            "
+          >
+            <table
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 400;
+                line-height: 100%;
+                padding: 4px 16px;
+                text-align: left;
+              "
+              width="100%"  role="presentation"
+            >
+              <tr>
+                <td>
+                  Order Details
+                </td>
+                <td style="text-align: right;">
+                  Total Price
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding-bottom: 10px;"></td>
+        </tr>
+        <tr>
+          <td style="
+              background-color: #FAF9F8;
+              border-radius: 6px 6px 0 0;
+              box-shadow: 0px 0px 1px 0px rgb(214, 212, 210);
+            "
+          >
+            
+            <table
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                padding: 0px 0px 4px 0px;
+                
+              "
+              width="100%"  role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    background-color: #F2F0ED;
+                    color: #7D7B78;
+                    font-family: Poppins, Arial;
+                    font-size: 14px;
+                    font-weight: 600;
+                    letter-spacing: -1%;
+                    line-height: 100%;
+                    overflow: hidden;
+                    padding: 6px 16px;
+                    text-align: left;
+                    text-transform: uppercase;
+                    text-overflow: ellipsis;
+                    border-radius: 6px 6px 0 0;
+                    
+                  "
+                >
+                  BAKED GOODS
+                </td>
+              </tr>
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Franz 8 Count Hamburger Buns
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $2.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $5.49
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Franz Big Horn 100% Whole Wheat Bread
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $5.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Better Cheddar Bagels 6 Count - 1lb  @5.99/lb
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $5.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                padding: 16px 0px 4px 0px;
+                
+              "
+              width="100%"  role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    background-color: #F2F0ED;
+                    color: #7D7B78;
+                    font-family: Poppins, Arial;
+                    font-size: 14px;
+                    font-weight: 600;
+                    letter-spacing: -1%;
+                    line-height: 100%;
+                    overflow: hidden;
+                    padding: 6px 16px;
+                    text-align: left;
+                    text-transform: uppercase;
+                    text-overflow: ellipsis;
+                    
+                  "
+                >
+                  DELI
+                </td>
+              </tr>
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Odyssey Feta In Brine Chunk Cheese
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $6.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Creminelli Prosciutto Sliced Vp
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $4.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $6.49
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                padding: 16px 0px 4px 0px;
+                
+              "
+              width="100%"  role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    background-color: #F2F0ED;
+                    color: #7D7B78;
+                    font-family: Poppins, Arial;
+                    font-size: 14px;
+                    font-weight: 600;
+                    letter-spacing: -1%;
+                    line-height: 100%;
+                    overflow: hidden;
+                    padding: 6px 16px;
+                    text-align: left;
+                    text-transform: uppercase;
+                    text-overflow: ellipsis;
+                    
+                  "
+                >
+                  GROC NONEDIBLE
+                </td>
+              </tr>
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Signature Select Facial Tissue Softly Pocket Pack 8 Pk 15 Ct
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $4.00
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 2
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $2.49
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Signature Select Softly Facial Tissue With Lotion 60 Count
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $4.00
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 2
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $2.29
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                padding: 16px 0px 4px 0px;
+                
+              "
+              width="100%"  role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    background-color: #F2F0ED;
+                    color: #7D7B78;
+                    font-family: Poppins, Arial;
+                    font-size: 14px;
+                    font-weight: 600;
+                    letter-spacing: -1%;
+                    line-height: 100%;
+                    overflow: hidden;
+                    padding: 6px 16px;
+                    text-align: left;
+                    text-transform: uppercase;
+                    text-overflow: ellipsis;
+                    
+                  "
+                >
+                  GROCERY
+                </td>
+              </tr>
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Pep Farm Goldfish Pretzel 8oz
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $1.97
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $3.49
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Signature Select Pink Lemonade 64 Fluid Ounce
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $1.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $3.99
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Signature Select Cinnamon Apple Sauce 24 Ounce
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $2.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Signature Select Large Elbow Macaroni Pasta 16 Ounce
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $1.67
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $1.99
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Signature Select Mostaccioli Pasta 16 Oz
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $1.67
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $1.99
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Signature Select Rigatoni Pasta 16 Ounce
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $1.66
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $1.99
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Lipton Cold Brew Tea Bags
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $7.20
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 3
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $5.99
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Country Time Ready To Drink Soft Drink
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $3.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Belvita Soft Banana Bread 8.8oz
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $4.79
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $5.49
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Guerrero Riquisima Flour Tortillas 10ct
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $3.79
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Culture Pop Probiotic Strawberry Rhubarb 4-12fz
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $7.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $8.99
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                padding: 16px 0px 4px 0px;
+                
+              "
+              width="100%"  role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    background-color: #F2F0ED;
+                    color: #7D7B78;
+                    font-family: Poppins, Arial;
+                    font-size: 14px;
+                    font-weight: 600;
+                    letter-spacing: -1%;
+                    line-height: 100%;
+                    overflow: hidden;
+                    padding: 6px 16px;
+                    text-align: left;
+                    text-transform: uppercase;
+                    text-overflow: ellipsis;
+                    
+                  "
+                >
+                  MEAT
+                </td>
+              </tr>
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Gallo Salame Deli Style Light
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $5.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Land O Frost Premium Variety Ham/salami/bologna
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $6.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $8.99
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                padding: 16px 0px 4px 0px;
+                
+              "
+              width="100%"  role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    background-color: #F2F0ED;
+                    color: #7D7B78;
+                    font-family: Poppins, Arial;
+                    font-size: 14px;
+                    font-weight: 600;
+                    letter-spacing: -1%;
+                    line-height: 100%;
+                    overflow: hidden;
+                    padding: 6px 16px;
+                    text-align: left;
+                    text-transform: uppercase;
+                    text-overflow: ellipsis;
+                    
+                  "
+                >
+                  PRODUCE
+                </td>
+              </tr>
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  O Organics Mint Fresh 0.5 Ounce
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $2.49
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  O Organics Living Butter Lettuce
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $3.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Organic Tomatoes On The Vine - 1.64lb  @4.49/lb
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $7.36
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Grapes Green Seedless - 2.56lb  @3.99/lb
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $3.76
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $3.99
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Avocados Hass
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $5.98
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 2
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                padding: 16px 0px 4px 0px;
+                
+              "
+              width="100%"  role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    background-color: #F2F0ED;
+                    color: #7D7B78;
+                    font-family: Poppins, Arial;
+                    font-size: 14px;
+                    font-weight: 600;
+                    letter-spacing: -1%;
+                    line-height: 100%;
+                    overflow: hidden;
+                    padding: 6px 16px;
+                    text-align: left;
+                    text-transform: uppercase;
+                    text-overflow: ellipsis;
+                    
+                  "
+                >
+                  REFRIG/FROZEN
+                </td>
+              </tr>
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Pillsbury Cinnamon Rolls With Cream Cheese Frosting
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $4.98
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 2
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $4.49
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Lucerne Cage Free Large A Shelled Eggs 12 Count
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $5.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Lucerne Sliced Havarti Cheese
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $2.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Lucerne Cheese Provolone Smoke Flavored Sliced
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $2.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Kelloggs Eggo Pancakes Buttermilk
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $3.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Nestle Coffee Mate Cold Foam Creamer French Vanilla Bottle 14 Oz
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $4.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $5.49
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Tillamook Oregon Strawberry Low Fat Yogurt
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $3.79
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Tillamook Ice Cream White Choc Raspberry
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $6.99
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              
+              
+            </table>
+            
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              style="
+                color: #2A2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                font-weight: 500;
+                letter-spacing: 0em;
+                line-height: 100%;
+                padding: 6px 0;
+                text-align: left;
+              "
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    padding: 4px 0px 4px 16px;
+                    vertical-align: top;
+                  "
+                >
+                  Open Nature Fruit Bars Strawberry 6 Ct-2.45 Fz
+                </td>
+                <td
+                  style="
+                    padding: 4px 16px 4px 4px;
+                    text-align: right;
+                    vertical-align: top;
+                  "
+                >
+                
+                  $4.49
+                
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Quantity: 1
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 16px;">
+                  Regular Price $4.99
+                </td>
+              </tr>
+              
+              
+              
+            </table>
+            
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+
+<table
+  align="center"
+  cellpadding="0"
+  cellspacing="0"
+  class="container"
+  role="presentation"
+  style="
+    background: #F7F5F2;
+    color: #535250;
+  "
+  width="624"
+>
+  <tr>
+    <td 
+      style="
+        border-radius: 0 0 12px 12px;
+        padding: 0px 16px 16px 16px;
+      "
+     
+    >
+      <table
+        align="center"
+        cellpadding="0"
+        cellspacing="0"
+        role="presentation"
+        style="border-radius: 0 0 12px 12px; box-shadow: 0px 0px 1px 0px rgb(214, 212, 210);"
+        width="592"
+      >
+        <tr>
+          <td  width="592" class="container">
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              role="presentation"
+              style="background-color: #FAF9F8; padding: 10px 6px;"
+              width="578"
+            >
+              <tr>
+                <td style="border-top: 2px solid #ddd9d5" width="578" class="container"></td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color: #FAF9F8;" width="578" class="container">
+            <table align="center" cellpadding="0" cellspacing="0" role="presentation"
+              style="
+                color: #2a2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                line-height: 100%;
+              "
+              width="578" class="container"
+            >
+              
+              
+              <tr>
+                <td style="
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: left;
+                " width="289">
+                  Total Items (39)
+                </td>
+    
+                <td style="
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: right;
+                " width="289">
+                  $188.39
+                </td>
+    
+              </tr>
+              
+              
+              
+              
+              
+              
+              
+              
+              
+              
+              
+              <tr>
+                <td style="
+                  background-color: #EDF7F1;
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: left;
+                " width="289">
+                  Total Savings
+                </td>
+                <td style="
+                  background-color: #EDF7F1;
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: right;
+                " width="289">
+                  -$35.97</td>
+              </tr>
+              
+              
+              
+              
+              
+              
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color: #FAF9F8;" width="578" class="container">
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              role="presentation"
+              style="padding: 10px 6px;"
+              width="566"
+            >
+              <tr>
+                <td style="border-top: 2px solid #ddd9d5" width="566" class="container"></td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="background-color: #FAF9F8;" width="566" class="container">
+            <table align="center" cellpadding="0" cellspacing="0" role="presentation" class="container"
+              style="
+                color: #2a2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                line-height: 100%;
+              "
+              width="566"
+            >
+              
+              
+              
+              
+              
+              
+              
+              
+              
+              
+              <tr>
+                <td style="
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: left;
+                " width="283">
+                  Subtotal
+                </td>
+                <td style="
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: right;
+                " width="283">
+                  $152.42
+                </td>
+              </tr>
+              
+              
+              
+              
+              
+              
+              
+              
+              <tr>
+                <td style="
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: left;
+                " width="283">
+                  Taxes and Fees</td>
+                <td style="
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: right;
+                " width="283">
+                  $2.26</td>
+              </tr>
+              
+              
+              
+              
+              
+               
+              
+              
+              <tr>
+                <td style="
+                  padding: 10px 16px;
+                  text-align: left;
+                " width="283">
+                  Sales Tax
+                </td>
+                <td style="
+                  padding: 10px 16px;
+                  text-align: right;
+                " width="283">
+                  $2.26
+                </td>
+              </tr>
+              
+              
+               
+              
+              
+              <tr>
+                <td style="
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: left;
+                " width="283">
+                  Calculated
+                </td>
+                <td style="
+                  font-weight: 700;
+                  padding: 10px 16px;
+                  text-align: right;
+                " width="283">
+                  $35.97
+                </td>
+              </tr>
+              
+               
+            </table>
+          </td>
+        </tr>
+
+        <tr>
+          <td style="background-color: #FAF9F8;" width="566" class="container">
+            <table
+              align="center"
+              cellpadding="0"
+              cellspacing="0"
+              role="presentation"
+              style="padding: 10px 6px;"
+              width="554"
+            >
+              <tr>
+                <td style="border-top: 2px solid #ddd9d5" width="554"></td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+  
+        <tr>
+          <td style="background-color: #FAF9F8;" width="554" class="container">
+            <table align="center" cellpadding="0" cellspacing="0" role="presentation" class="container"
+              style="
+                color: #2a2928;
+                font-family: 'Nunito Sans', Arial;
+                font-size: 14px;
+                line-height: 100%;
+                
+              "
+              width="554"
+            >
+              <tr>
+                <td  width="554" class="container">
+                  <table align="center" cellpadding="0" cellspacing="0"  class="container" role="presentation" width="554">
+                    
+                     
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                    
+                     
+                    
+                    
+                    <tr>
+                      <td style="
+                        font-weight: 700;
+                        padding: 10px 16px;
+                        text-align: left;
+                      " width="277">
+                        Total</td>
+                      <td style="
+                        font-weight: 700;
+                        padding: 10px 16px;
+                        text-align: right;
+                      " width="277">
+                        $154.68</td>
+                    </tr>
+                     
+                    
+                     
+                    
+                     
+                    
+                     
+                    
+                  </table>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        
+      </table>
+    </td>
+  </tr>
+</table>
+
+<table
+  align="center"
+  cellpadding="0"
+  cellspacing="0"
+  class="container"
+  role="presentation"
+  style="background-color: #F7F5F2;"
+  width="624"
+>
+  <tr>
+    <td style="padding: 0 16px 16px;">
+      <table
+        cellpadding="0"
+        cellspacing="0"
+        style="color: #535250;"
+        width="100%"
+        role="presentation"
+      >
+        
+        <tr>
+          <td
+            style="
+              color: #2A2928;
+              padding: 16px 0px;
+              font-family: Poppins, Arial;
+              font-size: 16px;
+              font-weight: 600;
+              line-height: 16px;
+              letter-spacing: -0.02em;
+              text-align: left;
+            "
+          >
+            Transaction Details
+          </td>
+        </tr>
+        
+        
+        <tr>
+          <td 
+            style="
+              background-color: #FAF9F8;
+              border-radius: 12px;
+              box-shadow: 0px 0px 1px 0px rgb(214, 212, 210);
+              color: #2A2928;
+              font-family: 'Nunito Sans', Arial;
+              font-size: 14px;
+              font-weight: 500;
+              line-height: 100%;
+              letter-spacing: 0em;
+              padding: 16px 0;
+              text-align: left;
+              vertical-align: top;
+            "
+          >
+            <table
+              cellpadding="0"
+              cellspacing="0"
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td
+                  style="
+                    font-size: 13px;
+                    font-weight: 700;
+                    padding: 4px 16px 11px 16px;
+                  "
+                >
+                  Card ending in 2293
+                </td>
+              </tr>
+              
+              <tr>
+                <td style="padding: 4px 4px 4px 16px;">
+                  Amount
+                </td>
+                <td 
+                  style="
+                    padding: 4px 16px 4px 0;
+                    text-align: right;
+                  "
+                >
+                  $154.68
+                </td>
+              </tr>
+              
+              
+              
+              <tr>
+                <td style="padding: 4px 4px 4px 16px;">
+                  Authorization Code
+                </td>
+                <td 
+                  style="
+                    padding: 4px 16px 4px 0;
+                    text-align: right;
+                  "
+                >
+                  0002947R
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 4px 4px 16px;">
+                  Reference Number
+                </td>
+                <td 
+                  style="
+                    padding: 4px 16px 4px 0;
+                    text-align: right;
+                  "
+                >
+                  302456422930
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 4px 4px 16px;">
+                  Authorization Date
+                </td>
+                <td 
+                  style="
+                    padding: 4px 16px 4px 0;
+                    text-align: right;
+                  "
+                >
+                  Jul 29, 2025
+                </td>
+              </tr>
+              
+              
+              <tr>
+                <td style="padding: 4px 4px 4px 16px;">
+                  Authorization Time
+                </td>
+                <td 
+                  style="
+                    padding: 4px 16px 4px 0;
+                    text-align: right;
+                  "
+                >
+                  7:24 PM
+                </td>
+              </tr>
+              
+              
+            </table>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding-bottom: 16px;"></td>
+        </tr>
+        
+        
+  <!-- Commenting out as we dont have to show transactionNumber in the Email template. 
+        
+        <tr>
+          <td 
+            style="
+              background-color: #FAF9F8;
+              border-radius: 6px;
+              box-shadow: 0px 0px 1px 0px rgb(214, 212, 210);
+              color: #2A2928;
+              font-family: 'Nunito Sans', Arial;
+              font-size: 14px;
+              font-weight: 500;
+              letter-spacing: 0em;
+              line-height: 100%;
+              padding: 16px 0;
+              text-align: left;
+              vertical-align: top;
+            "
+          >
+            <table
+              cellpadding="0"
+              cellspacing="0"
+              width="100%"
+              role="presentation"
+            >
+              <tr>
+                <td style="padding: 4px 4px 4px 16px;">
+                  Transaction Number
+                </td>
+                <td 
+                  style="
+                    padding: 4px 16px 4px 0;
+                    text-align: right;
+                  "
+                >
+                  2734  6  200  9726
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+        
+        
+       -->
+        
+      </table>
+    </td>
+  </tr>
+</table>
+<table align="center" border="0" cellpadding="0" cellspacing="0" class="container" role="presentation" style="background: #F7F5F2;" width="624">
+ 
+  <tr>
+   <td align="center" class="side_padding_30" style="padding: 16px;">
+    <table align="center" style="border-radius:12px;" bgcolor="#FFFFFF" border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%">
+     
+      <tr>
+       <td align="center" class="side_padding_10" style="padding: 16px 0;">
+        <img align="middle" alt="barcode" height="91" src="http://cl.s11.exct.net/LiveContent.aspx?qs=0408284f2376f92b2d6d2ff69479dbbc7d273e64ccf1e0253206d4c9187690f81e48aa19bbc2f0e39216e2157e4964a31f5321dcbe399faf321f4252d46e44a21af8282797da8b0f7732f363f65809d155bd80eab8df1e59fb4af283fd6527cb367a7f9cf3fecae8" style="display:block;margin: 0 auto;" width="318"></td>
+      </tr>
+    </table>
+   </td>
+  </tr>
+</table>
+
+<table  align="center" cellpadding="0" cellspacing="0" class="container" role="presentation" width="624">
+  <tr>
+   <td class="container" width="100%">
+    <table  align="center" cellpadding="0" cellspacing="0" class="container" width="100%" role="presentation" style="background-color:#F7F5F2;">
+      <tr>
+       <td width="560" style="padding-left: 32px; padding-top: 8px; padding-right: 32px;padding-bottom: 32px;font-size:18px ;font-weight: 400; line-height: 29.16px;color:#1F1E1E;font-family: Nunito Sans, Arial; ">
+       <span>For Customer Support please call <a href="tel:1-877-358-7328" style="color: #C90209; font-weight: 700; white-space: nowrap;">1-877-358-7328</a>.</span><span style="display: block;"><br>For questions about your payment call payment services at <a href="tel:1-877-392-9517" style="color: #C90209; font-weight: 700; white-space: nowrap;">1-866-392-9517</a>.</span></td></tr></table></td></tr></table>
+
+<table  align="center" 
+    cellpadding="0"
+    cellspacing="0"
+    class="container"
+    role="presentation"
+    style="background-color:#F7F5F2;" width="624">
+    <tr>
+        <td class="container" style="padding: 32px 32px" width="560" align="left" >
+            <img
+                alt="Safeway logo"
+                height="85" 
+                width="240"
+                src="https://images.albertsons-media.com/is/image/ABS/Sincerely_Safeway_Small_VertLeft_RGB?$emailcampaign-badge$"
+                style="display: block;"
+            />
+        </td>
+    </tr>
+</table><table aria-label="" align="center" border="0" cellpadding="0" cellspacing="0" class="container" role="presentation" width="624">
+  
+ <tr>
+  <td>
+
+
+      
+
+<!-- start desktop --><table align="center" bgcolor="#F7F5F2" border="0" cellpadding="0" cellspacing="0" class="container hide_content" role="presentation" width="624">
+ 
+  <tr>
+   <td style="padding: 16px 60px;">
+    <table align="center" border="0" cellpadding="0" cellspacing="0" width="504" role="presentation">
+     
+      <tr>
+       <td style="border-right: 0.2px solid; border-right-color: #807171;" width="185">
+        <table align="center" cellpadding="0" cellspacing="0" role="presentation">
+         
+          <tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 18px;line-height: 18px;text-align: center;padding-bottom:14px;white-space: nowrap;color: #AD5C5E">
+            <a href="https://click.go.albertsonscompanies.com/?qs=343cd4b5f931ff6bb31c6af0eb57a7274f4070121a234911f9db24025641170cd5b739c2fa0f680b6d14c2f7d8c576208be7239c6fe0dad488550d0be184a9a6" style="color: #AD5C5E; text-decoration: none;" ><u>Safeway For U</u><sup style="font-size: 65%;line-height: 0px;">&trade;</sup></a></td></tr><tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 18px;line-height: 18px;
+                      text-align: center;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=343cd4b5f931ff6b55e1e4b56b13107e87506130391c4e62fd25a3ee9880c6ce3c17df4980faa8813bf9b6dc8d3e2763b180d21dd89b732ce57adf7ba5cda881" style="color: #AD5C5E;" ><u>Meal Plans</u></a></td></tr></table></td><td style="border-right: 0.2px solid; border-right-color: #807171;" width="149">
+        <table align="center" cellpadding="0" cellspacing="0" role="presentation">
+         
+          <tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 18px;line-height: 18px;
+                              text-align: center;padding-bottom:14px;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=343cd4b5f931ff6b97ed2d8a328c6be6117ecfcca1b23d7c9c0e1c8674bd704a1e5b8fb1d049db1df4fdee088c2185ae80ebecee16ba7c661dd2f2e247ab0a7e" style="color: #AD5C5E;" ><u>Deals</u></a></td></tr><tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 18px;line-height:18px;
+                      text-align: center;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=343cd4b5f931ff6bb357f4ae919ea0bab64cf7d41b0ee153226a256c0a5bc205cea8e4364e04ac58036a10826bf16be8c582cffbb3630515a1fe5464ba278b68" style="color: #AD5C5E;" ><u>Health</u></a></td></tr></table></td><td width="166">
+        <table align="center" cellpadding="0" cellspacing="0" role="presentation">
+         
+          <tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 18px;line-height: 18px;
+                              text-align: center;padding-bottom:14px;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=343cd4b5f931ff6b0221b8d6a245bc200ce8e9584fa321e40bb43368ce9e20f28158dee23f76f519eb04db4ee17589fa682e5804a50f6e57f4cb016af635eff5" style="color: #AD5C5E;" ><u>Weekly Ad</u></a></td></tr><tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 18px;line-height: 18px;text-align: center;white-space: nowrap;color: #AD5C5E">
+            <a href="https://click.go.albertsonscompanies.com/?qs=343cd4b5f931ff6b55207ac0801c285d6a55cdca0ae66a27a694b31842d892026bd2bd62bb9bb46d068c7854ce3b5b870bc0adbb214a28ef9ec7bfb0e00c6464" style="color: #AD5C5E; text-decoration: none;" ><u>FreshPass</u><sup>&reg;</sup></a></td></tr></table></td></tr></table></td></tr></table><!-- end desktop --><!-- start below 480px --><!--[if !mso]><\!--><table align="center" bgcolor="#F7F5F2" border="0" cellpadding="0" cellspacing="0" class="container show_content" role="presentation" style="border-top-left-radius : 12px; border-top-right-radius : 12px;display: none;" width="624">
+ 
+  <tr>
+   <td style="padding: 18px 40px;" width="544">
+    <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation">
+     
+      <tr>
+       <td style="border-right: 0.2px solid; border-right-color: #807171;" width="130">
+        <table align="center" cellpadding="0" cellspacing="0" role="presentation">
+         
+          <tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 2.9vw;line-height: 2.9vw;text-align: center;padding-bottom:18px;white-space: nowrap;color: #AD5C5E">
+            <a href="https://click.go.albertsonscompanies.com/?qs=343cd4b5f931ff6bb31c6af0eb57a7274f4070121a234911f9db24025641170cd5b739c2fa0f680b6d14c2f7d8c576208be7239c6fe0dad488550d0be184a9a6" style="color: #AD5C5E; text-decoration: none;" ><u>Safeway For U</u><sup style="font-size: 65%;line-height: 0;">&trade;</sup></a></td></tr><tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 2.9vw;line-height: 2.9vw;
+                      text-align: center;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=343cd4b5f931ff6b55e1e4b56b13107e87506130391c4e62fd25a3ee9880c6ce3c17df4980faa8813bf9b6dc8d3e2763b180d21dd89b732ce57adf7ba5cda881" style="color: #AD5C5E;" ><u>Meal Plans</u></a></td></tr></table></td><td style="border-right: 0.2px solid; border-right-color: #807171;" width="88">
+        <table align="center" cellpadding="0" cellspacing="0" role="presentation">
+         
+          <tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 2.9vw;line-height: 2.9vw;
+                              text-align: center;padding-bottom:18px;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=343cd4b5f931ff6b97ed2d8a328c6be6117ecfcca1b23d7c9c0e1c8674bd704a1e5b8fb1d049db1df4fdee088c2185ae80ebecee16ba7c661dd2f2e247ab0a7e" style="color: #AD5C5E;" ><u>Deals</u></a></td></tr><tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 2.9vw;line-height: 2.9vw;
+                      text-align: center;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=343cd4b5f931ff6bb357f4ae919ea0bab64cf7d41b0ee153226a256c0a5bc205cea8e4364e04ac58036a10826bf16be8c582cffbb3630515a1fe5464ba278b68" style="color: #AD5C5E;" ><u>Health</u></a></td></tr></table></td><td width="111">
+        <table align="center" cellpadding="0" cellspacing="0" role="presentation">
+         
+          <tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 2.9vw;line-height: 2.9vw;
+                              text-align: center;padding-bottom:18px;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=343cd4b5f931ff6b0221b8d6a245bc200ce8e9584fa321e40bb43368ce9e20f28158dee23f76f519eb04db4ee17589fa682e5804a50f6e57f4cb016af635eff5" style="color: #AD5C5E;" ><u>Weekly Ad</u></a></td></tr><tr>
+           <td align="center" style="font-family: Nunito Sans, Arial;font-weight: 700;font-size: 2.9vw;line-height: 2.9vw;text-align: center;white-space: nowrap;color: #AD5C5E">
+            <a href="https://click.go.albertsonscompanies.com/?qs=343cd4b5f931ff6b55207ac0801c285d6a55cdca0ae66a27a694b31842d892026bd2bd62bb9bb46d068c7854ce3b5b870bc0adbb214a28ef9ec7bfb0e00c6464" style="color: #AD5C5E; text-decoration: none;" ><u>FreshPass</u><sup>&reg;</sup></a></td></tr></table></td></tr></table></td></tr></table><!-- <![endif]--><!-- end below 480px --> 
+     
+
+
+<!-- start desktop -->
+<table align="center" bgcolor="#F7F5F2" border="0" cellpadding="0" cellspacing="0" class="container hide_content" role="presentation" style="min-width: 100%;" width="624">
+  <tr>
+    <td style="padding: 48px 60px 34px;" width="504">
+      
+      <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation">
+      <tr>
+        
+        <td style="text-align:center;width: 48px; height: 48px; padding-right: 24px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=bf02bd280308c202237ffdbcc08348a9129b0c75424674f06974675d0630fa2be6aaae0be4a9bc61c77fd745597cf4237044b19d4fb86385dc85da35d1687fc7" ><img alt="Facebook Logo" height="48" src="https://images.albertsons-media.com/is/image/ABS/Golden Gate Facebook?$emailcampaign-badge$" width="48"></a>
+        </td>
+         
+        <td style="text-align:center;width: 48px;height: 48px;padding-right: 24px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=bf02bd280308c2028d71beb49dfa60a7a470e63981cd1d01cae1bd4147ca2f9da670c0b1e22ea0126fdfdf16b0e323dec08ff6d95dd00049d3880e7c2e915b46" ><img alt="Instagram Logo" height="48" src="https://images.albertsons-media.com/is/image/ABS/Golden Gate Insta?$emailcampaign-badge$" width="48"></a>
+        </td>
+         
+        <td style="text-align:center;width: 48px;height: 48px;padding-right: 24px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=bf02bd280308c202a0b85896684f96932b5cd2aabbbd720064453034fad8d6c4c4044a5fbe8a2443d37641995d5894ab05edf05f6c9326ef0a17d9ffc4d6f0f1" ><img alt="Pinterest Logo" height="48" src="https://images.albertsons-media.com/is/image/ABS/Golden%20Gate%20Pinterest?$emailcampaign-badge$" width="48"></a>
+        </td>
+        
+        <td style="text-align:center;width: 48px;height: 48px;padding-right: 24px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=bf02bd280308c2020980b6832c21a6a6f3d08424c5f43d8c8f77a50f8eebf38a103aff882967d4b7e7f5bf5e870fbc34f076646db3b084bf0bc7ed81c8593153" ><img alt="Youtube Logo" height="48" src="https://images.albertsons-media.com/is/image/ABS/Golden%20Gate%20Youtube?$emailcampaign-badge$" width="48"></a>
+        </td>
+        
+        <td style="text-align:center;width: 48px;height: 48px;padding-right: 24px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=bf02bd280308c202bbd5b4547c3acd99ffb1cc615c6929f2f01ca9904015508941b1f2791962441b2ff1296b0e1d0c0a5c3420a75fda83346b99932953e7dd52" ><img alt="Twitter Logo" height="48" src="https://images.albertsons-media.com/is/image/ABS/Golden%20Gate%20X?$emailcampaign-badge$" width="48"></a>
+        </td>
+         
+        <td style="text-align:center;width: 48px; height: 48px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=bf02bd280308c20202a0a80670d84786d338ec0f7e1ba85c49dadb51139aca46141deea9be5b9e558dacce5104ed2197b3394e4e703205730ffe26d942927d20" ><img alt="tikTok Logo" height="48" src="https://images.albertsons-media.com/is/image/ABS/Golden%20Gate%20Tik%20Tok?$emailcampaign-badge$" width="48"></a>
+        </td>
+        
+      </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- end desktop -->
+<!-- start below 480px -->
+<!--[if !mso]><\!-->
+<table align="center" bgcolor="#F7F5F2" border="0" cellpadding="0" cellspacing="0" class="container show_content" role="presentation" style="display: none; min-width: 100%;" width="624">
+  <tr>
+    <td style="padding: 28px 40px 24px;" width="544">
+    <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation">
+      <tr>
+        
+        <td style="text-align:center;width: 32px;height: 32px;padding-right: 12px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=bf02bd280308c202237ffdbcc08348a9129b0c75424674f06974675d0630fa2be6aaae0be4a9bc61c77fd745597cf4237044b19d4fb86385dc85da35d1687fc7" ><img alt="Facebook Logo" height="32" src="https://images.albertsons-media.com/is/image/ABS/Golden Gate Facebook?$emailcampaign-badge$" width="32"></a>
+        </td>
+         
+        <td style="text-align:center;width: 32px;height: 32px;padding-right: 12px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=bf02bd280308c2028d71beb49dfa60a7a470e63981cd1d01cae1bd4147ca2f9da670c0b1e22ea0126fdfdf16b0e323dec08ff6d95dd00049d3880e7c2e915b46" ><img alt="Instagram Logo" height="32" src="https://images.albertsons-media.com/is/image/ABS/Golden Gate Insta?$emailcampaign-badge$" width="32"></a>
+        </td>
+        
+        <td style="text-align:center;width: 32px;height: 32px;padding-right: 12px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=bf02bd280308c202a0b85896684f96932b5cd2aabbbd720064453034fad8d6c4c4044a5fbe8a2443d37641995d5894ab05edf05f6c9326ef0a17d9ffc4d6f0f1" ><img alt="Pinterest Logo" height="32" src="https://images.albertsons-media.com/is/image/ABS/Golden%20Gate%20Pinterest?$emailcampaign-badge$" width="32"></a>
+        </td>
+         
+        <td style="text-align:center;width: 32px;height: 32px;padding-right: 12px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=bf02bd280308c2020980b6832c21a6a6f3d08424c5f43d8c8f77a50f8eebf38a103aff882967d4b7e7f5bf5e870fbc34f076646db3b084bf0bc7ed81c8593153" ><img alt="Youtube Logo" height="32" src="https://images.albertsons-media.com/is/image/ABS/Golden%20Gate%20Youtube?$emailcampaign-badge$" width="32"></a>
+        </td>
+        
+        <td style="text-align:center;width: 32px;height: 32px;padding-right: 12px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=bf02bd280308c202bbd5b4547c3acd99ffb1cc615c6929f2f01ca9904015508941b1f2791962441b2ff1296b0e1d0c0a5c3420a75fda83346b99932953e7dd52" ><img alt="Twitter Logo" height="32" src="https://images.albertsons-media.com/is/image/ABS/Golden%20Gate%20X?$emailcampaign-badge$" width="32"></a>
+        </td>
+         
+        <td style="text-align:center;width: 32px;height: 32px;">
+          <a href="https://click.go.albertsonscompanies.com/?qs=bf02bd280308c20202a0a80670d84786d338ec0f7e1ba85c49dadb51139aca46141deea9be5b9e558dacce5104ed2197b3394e4e703205730ffe26d942927d20" ><img alt="TikTok Logo" height="32" src="https://images.albertsons-media.com/is/image/ABS/Golden%20Gate%20Tik%20Tok?$emailcampaign-badge$" width="32"></a>
+        </td>
+        
+      </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- <![endif]-->
+<!-- end below 480px --> 
+
+
+<!-- start desktop -->
+<table align="left" bgcolor="#F7F5F2" border="0" cellpadding="0" cellspacing="0" class="container hide_content" role="presentation" style="min-width:100%;" width="624">
+  <tr>
+    <td style="padding: 0px 60px;" width="504">
+      <table align="left" border="0" cellpadding="0" cellspacing="0" role="presentation">
+        <tr>
+          <td style="font-family: Nunito Sans, Arial;font-weight: 400;font-size: 12px;
+                     line-height: 16px;color: #1F1E1E;text-align: left;word-break:break-word;">
+This email was sent by Safeway. Please do not reply to this email. We cannot accept or monitor electronic replies to this email address. This email contains information for the intended recipient. If you received this email in error, please delete it.<br><br>Emails are sent from the&nbsp;<a style="color:#1F1E1E" href=" Mailto:no-reply@p.safeway.com" x-cq-linkchecker="skip"><b><u>no-reply@p.safeway.com</u></b></a>&nbsp;domain.Please do not reply to this email. 
+
+    <br>
+            <br>
+            Having trouble viewing this email? 
+            <a href="https://view.go.albertsonscompanies.com/?qs=4a25059a1c72b718b81be42e987fda4baca2c5d741b2c533e46d5eed1200516117f2ab11e04490fc6f6b5ecfc3b88ffe68dd69d0fa84c2adc97a99e6ba801e6331ba12f3753f597a33ad7a629064a61f" style="color:#1F1E1E" ><u>View in browser</u>.</a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- end desktop -->
+<!-- start below 480px -->
+<!--[if !mso]><\!-->
+<table align="left" bgcolor="#F7F5F2" border="0" cellpadding="0" cellspacing="0" class="container show_content" role="presentation" style="display: none; min-width:100%;" width="624">
+  <tr>
+    <td style="padding: 0px 40px;" width="544">
+      <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation">
+        <tr>
+          <td align="left" style="font-family: Nunito Sans, Arial;font-weight: 400;font-size: 2.5vw;
+                     line-height: 3vw;color: #1F1E1E;text-align: left;word-break:break-word;">
+            This email was sent by Safeway. Please do not reply to this email. We cannot accept or monitor electronic replies to this email address. This email contains information for the intended recipient. If you received this email in error, please delete it.<br><br>Emails are sent from the&nbsp;<a style="color:#1F1E1E" href=" Mailto:no-reply@p.safeway.com" x-cq-linkchecker="skip"><b><u>no-reply@p.safeway.com</u></b></a>&nbsp;domain.Please do not reply to this email. 
+
+    <br>
+            <br>
+            Having trouble viewing this email? 
+            <a href="https://view.go.albertsonscompanies.com/?qs=4a25059a1c72b718b81be42e987fda4baca2c5d741b2c533e46d5eed1200516117f2ab11e04490fc6f6b5ecfc3b88ffe68dd69d0fa84c2adc97a99e6ba801e6331ba12f3753f597a33ad7a629064a61f" style="color:#1F1E1E" ><u>View in browser</u>.</a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- <![endif]-->
+<!-- end below 480px --> 
+   <!-- start desktop -->
+<table align="center" bgcolor="#F7F5F2" border="0" cellpadding="0" cellspacing="0" class="container hide_content" role="presentation" style="min-width: 100%;" width="624">
+  <tr>
+    <td style="padding: 16px 60px;" width="400">
+      <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation">
+        <tr>
+          <td align="center" style="width:200px;font-family: Nunito Sans, Arial;font-weight: 700;font-size: 16px;line-height: 16px;white-space: nowrap;border-right:1px solid #7D7B78;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=bf02bd280308c2022605db70cdfb46c8182d3b83be33da2f09f9e428ac8b9723e110dbe0b26849e37a61cae9445414fb821d3de0e1bc3a246561a042f73e5b05" style="color:#1F1E1E" target="_blank"alias="Footer_Utility_Nav_Accessibility"><u>Accessibility Statement
+              </u></a>
+          </td>
+          <td align="center" style="width:130px;font-family: Nunito Sans, Arial;font-weight: 700;font-size: 16px;line-height: 16px;white-space: nowrap;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=bf02bd280308c2022d9a01d1ecbcf3c8fd3007895d362c6370afa1628ae4f87b7c05fcbb64598e1910e881f1502f7d08be8bdc2ea5f4b1878257cdf66f91e78d" style="color:#1F1E1E" target="_blank" ><u>Privacy Policy
+              </u></a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- end desktop -->
+<!-- start below 480px -->
+<!--[if !mso]><\!-->
+<table align="center" bgcolor="#F7F5F2" border="0" cellpadding="0" cellspacing="0" class="container show_content" role="presentation" style="min-width: 100%; display: none;" width="624">
+  <tr>
+    <td style="padding: 18px 40px;" width="544">
+      <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation">
+        <tr>
+          <td align="center" style="width:148px;font-family: Nunito Sans, Arial;font-weight: 700;font-size: 2.5vw;line-height: 2.5vw;white-space: nowrap;border-right:1px solid #7D7B78;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=bf02bd280308c20258f7f2bc5cc0ad63ab0facc24345e90e42ec4911fd36993d0a1395891eba1a2a1ecd78b63082c167ca2170c0b1cc3093eb9633dc0a238195" style="color:#1F1E1E" target="_blank" ><u>Accessibility Statement
+              </u></a>
+          </td>
+          <td align="center" style="width:90px;font-family: Nunito Sans, Arial;font-weight: 700;font-size: 2.5vw;line-height: 2.5vw;white-space: nowrap;">
+            <a href="https://click.go.albertsonscompanies.com/?qs=bf02bd280308c2022d9a01d1ecbcf3c8fd3007895d362c6370afa1628ae4f87b7c05fcbb64598e1910e881f1502f7d08be8bdc2ea5f4b1878257cdf66f91e78d" style="color:#1F1E1E" target="_blank" ><u>Privacy Policy
+              </u></a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- <![endif]-->
+<!-- end below 480px --> 
+
+
+   
+
+<!-- start desktop -->
+<table align="center" bgcolor="#800308" border="0" cellpadding="0" cellspacing="0" class="container hide_content" role="presentation" style="border-bottom-left-radius : 12px; border-bottom-right-radius : 12px;min-width: 100%;" width="624">
+  <tr>
+    <td style="padding: 48px 60px 22px;" width="487">
+      <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%">
+        <tr align="center">
+          <td height="24px" width="">
+     
+     <img alt="Safeway logo" height="24px" src="https://images.albertsons-media.com/is/image/ABS/Safeway_wht_20px?$emailcampaign-badge$" width="">
+     
+          </td>
+        </tr>
+        <tr>
+          <td style="padding-top:14px;padding-bottom: 4px;font-family: Nunito Sans, Arial;
+                     font-weight: 600;font-size: 14px;line-height: 14px;color: #FAF9F8;text-align: center;">
+            Albertsons Companies
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Nunito Sans, Arial;
+                     font-weight: 400;font-size: 12px;line-height: 15px;color: #FAF9F8;text-align: center;">
+            Copyright &copy; 2025 by Albertsons Companies, Inc. All rights reserved.
+            <br>
+            Contact us at 250 E. Parkcenter Blvd., Boise, ID 83706.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- end desktop -->
+<!-- start below 480px -->
+<!--[if !mso]><\!-->
+<table align="center" bgcolor="#800308" border="0" cellpadding="0" cellspacing="0" class="container show_content" role="presentation" style="display: none; border-bottom-left-radius : 12px; border-bottom-right-radius : 12px;min-width: 100%;" width="624">
+  <tr>
+    <td style="padding: 28px 40px 14px;" width="544">
+      <table align="center" border="0" cellpadding="0" cellspacing="0" role="presentation" width="100%">
+        <tr align="center">
+          <td height="20px">
+     
+            <img alt="Safeway logo" height="20px" src="https://images.albertsons-media.com/is/image/ABS/Safeway_wht_20px?$emailcampaign-badge$" width="">
+          </td>
+        </tr>
+        <tr>
+          <td style="padding-top:14px;padding-bottom: 4px;font-family: Nunito Sans, Arial;
+                     font-weight: 800;font-size: 2.292vw;line-height: 2.292vw;color: #FAF9F8;text-align: center;">
+            Albertsons Companies
+          </td>
+        </tr>
+        <tr>
+          <td style="font-family: Nunito Sans, Arial;
+                     font-weight: 400;font-size: 12px;line-height: 15px;color: #FAF9F8;text-align: center;">
+            Copyright &copy; 2025 by Albertsons Companies, Inc. All rights reserved.
+            <br>
+           Contact us at 250 E. Parkcenter Blvd., Boise, ID 83706.
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+<!-- <![endif]-->
+<!-- end below 480px -->
+      </td>
+  </tr>
+ </table>
+      
+      
+      
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Start: Content -->
+            <!-- Template Area 1 -->
+            <tr>
+              <td width="624" align="center" bgcolor="#F0EDED" style="background-color: #F0EDED;">
+                <table align="center" class="container" width="624" border="0" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td width="624">
+                       
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Template Area 2 -->
+            <tr>
+              <td width="624" align="center" bgcolor="#F0EDED" style="background-color: #F0EDED;">
+                <table align="center" class="container" width="624" border="0" cellspacing="0" cellpadding="0">
+                  <tr>
+                    <td width="624">
+                       
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+</table>
+            <img src="https://click.go.albertsonscompanies.com/open.aspx?ffcb10-fef91377736604-fe2d15727d6c0178761571-fe3011717164077c741379-ff961578-fe4d13767c6301757110-fefe1771766101&d=110052&bmt=0" width="1" height="1" alt="">
+              </custom>
+        
+        
+             
+  </body>
+            </html>
+
+--Ciwe7vc11oQa=_?:--
+
