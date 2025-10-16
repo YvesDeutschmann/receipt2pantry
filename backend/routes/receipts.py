@@ -1,6 +1,7 @@
 """Receipt management endpoints"""
 
 from flask import Blueprint, jsonify, request, current_app
+from backend.parsers.parser_registry import ParserRegistry, ParserNotFoundException
 from backend.utils.logger import get_logger
 from backend.utils.exceptions import ParserException, DatabaseException
 
@@ -22,7 +23,12 @@ def get_receipts():
         if not user_id:
             return jsonify({"error": "user_id is required"}), 400
         
-        limit = int(request.args.get("limit", 50))
+        # Validate and constrain limit parameter
+        try:
+            limit = int(request.args.get("limit", 50))
+            limit = min(max(limit, 1), 100)  # Constrain between 1 and 100
+        except ValueError:
+            return jsonify({"error": "limit must be an integer"}), 400
         
         # Get Supabase service from app context
         supabase_service = current_app.config.get("SUPABASE_SERVICE")
@@ -65,13 +71,12 @@ def parse_receipt():
         if not provider or not email_content:
             return jsonify({"error": "provider and email_content are required"}), 400
         
-        # Get parser (placeholder - would use parser registry)
-        # For now, hardcode Safeway parser
-        if provider.lower() != "safeway":
-            return jsonify({"error": f"Parser for {provider} not available"}), 400
-        
-        from backend.parsers.safeway_parser import SafewayParser
-        parser = SafewayParser()
+        # Get parser from registry
+        try:
+            parser = ParserRegistry.get_parser(provider)
+        except ParserNotFoundException as e:
+            logger.error(f"Parser not found: {e}")
+            return jsonify({"error": str(e)}), 404
         
         parsed_data = parser.parse(email_content)
         

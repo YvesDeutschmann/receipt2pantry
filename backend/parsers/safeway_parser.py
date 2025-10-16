@@ -4,12 +4,14 @@ import re
 from typing import Dict, List, Optional
 from datetime import datetime
 from backend.parsers.base_parser import BaseParser
+from backend.parsers.parser_registry import register_parser
 from backend.utils.exceptions import ParserException
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
+@register_parser("safeway")
 class SafewayParser(BaseParser):
     """Parser for Safeway receipt emails"""
     

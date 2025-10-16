@@ -135,7 +135,11 @@ def parse_receipt_from_email(email_content: str, parser_instance) -> Dict:
 
 
 def store_parsed_receipt(
-    user_id: str, provider: str, receipt_data: Dict, supabase_service
+    user_id: str,
+    provider: str,
+    receipt_data: Dict,
+    supabase_service,
+    grocery_account_id: str = None,
 ) -> str:
     """
     Store a parsed receipt in the database
@@ -145,6 +149,7 @@ def store_parsed_receipt(
         provider: Provider name
         receipt_data: Parsed receipt data
         supabase_service: Supabase service instance
+        grocery_account_id: Optional grocery account ID
     
     Returns:
         Receipt ID
@@ -155,6 +160,7 @@ def store_parsed_receipt(
         # Prepare receipt record
         receipt_record = {
             "user_id": user_id,
+            "grocery_account_id": grocery_account_id,
             "provider": provider,
             "order_id": receipt_data["order_id"],
             "order_date": receipt_data["order_date"],

@@ -58,7 +58,7 @@ def get_provider_status(provider_name):
             "provider": provider_name,
             "configured": True,
             "active": account.get("is_active", False),
-            "last_login": account.get("last_successful_login"),
+            "last_successful_login": account.get("last_successful_login"),
             "mfa_required": account.get("mfa_required", False)
         }), 200
     

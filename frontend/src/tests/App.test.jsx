@@ -5,14 +5,17 @@ import App from '../App'
 describe('App', () => {
   it('renders without crashing', () => {
     render(<App />)
-    expect(screen.getByText(/GrocerySync/i)).toBeInTheDocument()
+    // Check for header navigation
+    const navigation = screen.getByRole('navigation')
+    expect(navigation).toBeInTheDocument()
   })
 
   it('renders navigation links', () => {
     render(<App />)
-    expect(screen.getByText(/Dashboard/i)).toBeInTheDocument()
-    expect(screen.getByText(/Providers/i)).toBeInTheDocument()
-    expect(screen.getByText(/Settings/i)).toBeInTheDocument()
+    // Use getByRole to specifically target navigation links
+    expect(screen.getByRole('link', { name: /dashboard/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /providers/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /settings/i })).toBeInTheDocument()
   })
 })
 

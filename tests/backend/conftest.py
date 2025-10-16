@@ -4,6 +4,10 @@ import pytest
 from backend.app import create_app
 from backend.config import Config
 
+# Import parsers and providers to register them
+from backend.parsers import safeway_parser  # noqa: F401
+from backend.providers import safeway_provider  # noqa: F401
+
 
 class TestConfig(Config):
     """Test configuration"""

@@ -6,10 +6,11 @@ from backend.config import get_config
 from backend.utils.logger import setup_logger, get_logger
 from backend.utils.exceptions import GrocerySyncException
 
-# Import routes
+    # Import routes
 from backend.routes.health import health_bp
 from backend.routes.receipts import receipts_bp
 from backend.routes.providers import providers_bp
+from backend.routes.parsers import parsers_bp
 
 
 def create_app(config=None):
@@ -86,14 +87,16 @@ def create_app(config=None):
     app.config["PLAYWRIGHT_HEADLESS"] = config.PLAYWRIGHT_HEADLESS
     app.config["PLAYWRIGHT_TIMEOUT"] = config.PLAYWRIGHT_TIMEOUT
     
-    # Import providers to register them
-    # This ensures @register_provider decorators are executed
+    # Import providers and parsers to register them
+    # This ensures @register_provider and @register_parser decorators are executed
     from backend.providers import safeway_provider  # noqa: F401
+    from backend.parsers import safeway_parser  # noqa: F401
     
     # Register blueprints
     app.register_blueprint(health_bp, url_prefix="/api")
     app.register_blueprint(receipts_bp, url_prefix="/api")
     app.register_blueprint(providers_bp, url_prefix="/api")
+    app.register_blueprint(parsers_bp, url_prefix="/api")
     logger.info("Routes registered")
     
     # Register error handlers
