@@ -1,0 +1,76 @@
+import { useState, useEffect } from 'react'
+import { api } from '../services/apiClient'
+
+function Dashboard() {
+  const [receipts, setReceipts] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    // For demo purposes, we'll skip actual API calls
+    // In production, you would call: api.getReceipts(userId)
+    setLoading(false)
+  }, [])
+
+  return (
+    <div>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
+        <p className="text-gray-600 mt-2">
+          Welcome to GrocerySync! View your recent receipts and shopping statistics.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="card">
+          <h3 className="text-sm font-medium text-gray-600 mb-2">Total Receipts</h3>
+          <p className="text-3xl font-bold text-gray-900">0</p>
+        </div>
+        <div className="card">
+          <h3 className="text-sm font-medium text-gray-600 mb-2">This Month</h3>
+          <p className="text-3xl font-bold text-gray-900">$0.00</p>
+        </div>
+        <div className="card">
+          <h3 className="text-sm font-medium text-gray-600 mb-2">Total Items</h3>
+          <p className="text-3xl font-bold text-gray-900">0</p>
+        </div>
+      </div>
+
+      <div className="card">
+        <h2 className="text-xl font-semibold mb-4">Recent Receipts</h2>
+        {loading ? (
+          <div className="text-center py-8 text-gray-600">Loading...</div>
+        ) : error ? (
+          <div className="text-center py-8 text-red-600">{error}</div>
+        ) : receipts.length === 0 ? (
+          <div className="text-center py-8 text-gray-600">
+            <p className="mb-4">No receipts yet!</p>
+            <p className="text-sm">
+              Configure a provider to start syncing your grocery receipts.
+            </p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {receipts.map((receipt) => (
+              <div key={receipt.id} className="border rounded-lg p-4">
+                <div className="flex justify-between items-start">
+                  <div>
+                    <h3 className="font-semibold">{receipt.provider}</h3>
+                    <p className="text-sm text-gray-600">{receipt.order_date}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-semibold">${receipt.total_amount}</p>
+                    <p className="text-sm text-gray-600">{receipt.num_items} items</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+export default Dashboard
+

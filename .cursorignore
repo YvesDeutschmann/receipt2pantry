@@ -1,0 +1,49 @@
+# Cursor ignore file
+# This file controls what Cursor ignores in the workspace
+
+# Allow .env file to be visible and editable
+# Remove .env from default ignore patterns
+
+# Keep these ignored for security/performance
+node_modules/
+.git/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.temp
+

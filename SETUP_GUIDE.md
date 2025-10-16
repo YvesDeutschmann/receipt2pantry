@@ -1,233 +1,182 @@
-# Safeway Receipt Automation - Setup Guide
+# GrocerySync Setup Guide
 
-This guide will help you set up and run the Safeway receipt automation tool.
+This guide will walk you through setting up GrocerySync from scratch.
 
 ## Prerequisites
 
-- Python 3.11 or higher
-- A Safeway account with online access
-- An email account with SMTP access (Gmail recommended)
+Before you begin, make sure you have:
 
-## Quick Setup
+- **Python 3.11+** installed
+- **Node.js 18+** and npm installed
+- **uv** package manager installed (`pip install uv`)
+- A **Supabase** account (optional for development, required for production)
+- An **AWS** account (optional for development, required for production)
 
-### 1. Install Dependencies
+## Step 1: Clone and Install Dependencies
 
 ```bash
+# Clone the repository
+git clone https://github.com/yourusername/receipt2pantry.git
+cd receipt2pantry
+
 # Install Python dependencies
-pip install -e .
+uv sync
 
 # Install Playwright browsers
-playwright install
+uv run playwright install
+
+# Install frontend dependencies
+cd frontend
+npm install
+cd ..
 ```
 
-### 2. Configure Credentials
-
-Create a `.env` file with your credentials:
+## Step 2: Configure Environment
 
 ```bash
-# Copy the example file
-cp env.example .env
+# Copy the example environment file
+cp .env.example .env
 
-# Edit with your credentials
-# Use your favorite text editor to edit .env
+# Edit .env with your configuration
+# For development, you can leave AWS credentials empty (will use mock service)
 ```
 
-Required credentials:
-- `SAFEWAY_USERNAME`: Your Safeway account email
-- `SAFEWAY_PASSWORD`: Your Safeway account password
-- `SMTP_USERNAME`: Your email address
-- `SMTP_PASSWORD`: Your email password (or App Password for Gmail)
-- `RECIPIENT_EMAIL`: Where to send the receipts
+**Minimum configuration for local development:**
+```env
+FLASK_ENV=development
+FLASK_SECRET_KEY=your-development-secret-key
+FLASK_PORT=5000
 
-### 3. Gmail Setup (if using Gmail)
+# Leave Supabase empty for testing without database
+SUPABASE_URL=
+SUPABASE_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
 
-1. Enable 2-Factor Authentication on your Google account
-2. Go to Google Account settings → Security → 2-Step Verification → App passwords
-3. Generate a password for "Mail"
-4. Use this password as `SMTP_PASSWORD` in your `.env` file
+# Leave AWS empty for mock credentials service
+AWS_ACCESS_KEY_ID=
+AWS_SECRET_ACCESS_KEY=
 
-### 4. Validate Configuration
+LOG_LEVEL=DEBUG
+PLAYWRIGHT_HEADLESS=false
+```
 
+## Step 3: Database Setup (Optional)
+
+If you want to use Supabase:
+
+1. Create a new project at [supabase.com](https://supabase.com)
+2. Go to Project Settings > API to get your URL and keys
+3. Go to SQL Editor and run `migrations/001_initial_schema.sql`
+4. Update your `.env` with the Supabase credentials
+
+## Step 4: Run the Application
+
+**Terminal 1 - Backend:**
 ```bash
-python config_validator.py
+# From project root
+uv run python backend/app.py
+
+# Or use the script
+chmod +x run_backend.sh
+./run_backend.sh
 ```
 
-### 5. Run Automation
-
+**Terminal 2 - Frontend:**
 ```bash
-# Basic run
-python run_automation.py
+# From project root
+cd frontend
+npm run dev
 
-# Or use the convenience scripts
-# Windows:
-run.bat
-
-# Linux/Mac:
-./run.sh
+# Or use the script
+chmod +x run_frontend.sh
+./run_frontend.sh
 ```
 
-## Detailed Setup
+Visit `http://localhost:5173` to see the application!
 
-### Using the Setup Script
+## Step 5: Test the Installation
 
-The easiest way to set up everything:
-
+**Run backend tests:**
 ```bash
-python setup.py
+uv run pytest
 ```
 
-This will:
-- Check Python version compatibility
-- Install all dependencies
-- Create necessary directories
-- Create a sample `.env` file
-- Validate the setup
-
-### Manual Setup
-
-If you prefer to set up manually:
-
-1. **Install Dependencies**:
-   ```bash
-   pip install playwright python-dotenv email-validator click rich
-   playwright install
-   ```
-
-2. **Create Directories**:
-   ```bash
-   mkdir downloads logs
-   ```
-
-3. **Create Configuration**:
-   ```bash
-   python config_validator.py --create-sample
-   ```
-
-4. **Edit Configuration**:
-   Edit the `.env` file with your actual credentials.
-
-## Usage Examples
-
-### Basic Automation
-
+**Run frontend tests:**
 ```bash
-python run_automation.py
+cd frontend
+npm test
 ```
 
-### With Custom Options
-
+**Test the health endpoint:**
 ```bash
-# Run with visible browser (for debugging)
-python run_automation.py --no-headless
-
-# Limit number of receipts
-python run_automation.py --max-receipts 10
-
-# Use custom configuration file
-python run_automation.py --config my_config.env
+curl http://localhost:5000/api/health
 ```
 
-### Command Line Overrides
-
-```bash
-python run_automation.py \
-  --username your_email@example.com \
-  --password your_password \
-  --recipient-email receipts@example.com \
-  --max-receipts 20
+Expected response:
+```json
+{
+  "status": "healthy",
+  "service": "grocerysync-backend",
+  "version": "0.1.0"
+}
 ```
+
+## Step 6: Configure Your First Provider
+
+1. Go to `http://localhost:5173/providers`
+2. Click "Configure" on Safeway
+3. Enter your Safeway credentials
+4. Test the connection
 
 ## Troubleshooting
 
-### Common Issues
+### Backend won't start
+- Check that port 5000 is not in use: `lsof -i :5000`
+- Verify Python version: `python --version` (should be 3.11+)
+- Check logs for specific errors
 
-1. **"Python not found"**
-   - Install Python 3.11+ from python.org
-   - Make sure Python is in your PATH
+### Frontend won't start
+- Check that port 5173 is not in use: `lsof -i :5173`
+- Clear node_modules and reinstall: `rm -rf node_modules && npm install`
+- Check Node version: `node --version` (should be 18+)
 
-2. **"Playwright browsers not installed"**
-   ```bash
-   playwright install
-   ```
+### Database connection errors
+- Verify Supabase credentials in `.env`
+- Check that the migration was applied successfully
+- Ensure your IP is allowed in Supabase project settings
 
-3. **"Login failed"**
-   - Verify your Safeway credentials
-   - Try running with `--no-headless` to see what's happening
-   - Check if your account has online access
-
-4. **"SMTP authentication error"**
-   - For Gmail, use an App Password instead of your regular password
-   - Ensure 2-factor authentication is enabled
-   - Check SMTP server and port settings
-
-5. **"No receipts found"**
-   - Verify you have purchase history in your Safeway account
-   - Check if the orders page is accessible
-   - Try running with `--no-headless` to debug navigation
-
-### Debug Mode
-
-Run with `--no-headless` to see the browser in action:
-
-```bash
-python run_automation.py --no-headless
-```
-
-This will open a browser window so you can see what's happening during automation.
-
-### Getting Help
-
-```bash
-# Configuration help
-python config_validator.py --help-config
-
-# Automation help
-python run_automation.py --help
-
-# Setup help
-python setup.py --help
-```
-
-## File Structure
-
-After setup, your directory should look like this:
-
-```
-receipt2pantry/
-├── .env                     # Your configuration (create this)
-├── downloads/               # Downloaded receipts (auto-created)
-├── logs/                    # Log files (auto-created)
-├── pantry_data.json         # Pantry data (auto-created)
-├── safeway_automation.py    # Main automation script
-├── run_automation.py        # Complete automation runner
-├── config_validator.py      # Configuration validator
-├── setup.py                 # Setup script
-├── run.bat                  # Windows convenience script
-├── run.sh                   # Linux/Mac convenience script
-└── ...                      # Other project files
-```
-
-## Security Notes
-
-- Never commit your `.env` file to version control
-- Use App Passwords for Gmail instead of your regular password
-- Keep your Safeway credentials secure
-- The tool runs locally and doesn't store credentials anywhere else
-
-## Support
-
-If you encounter issues:
-
-1. Check the troubleshooting section above
-2. Run with `--no-headless` to see what's happening
-3. Validate your configuration with `python config_validator.py`
-4. Check the logs in the `logs/` directory
+### Provider automation fails
+- Try running with `PLAYWRIGHT_HEADLESS=false` to see what's happening
+- Check that credentials are correct
+- Some stores may have captcha or additional security measures
 
 ## Next Steps
 
-Once everything is working:
+- Configure additional providers
+- Set up automated receipt syncing
+- Explore the database schema
+- Customize the frontend UI
 
-1. Set up a cron job (Linux/Mac) or Task Scheduler (Windows) to run automatically
-2. Consider setting up email notifications for automation results
-3. Explore the pantry management features
-4. Customize the receipt parsing for your specific needs
+## Production Deployment
+
+For production deployment:
+
+1. Set `FLASK_ENV=production`
+2. Generate a strong `FLASK_SECRET_KEY`
+3. Configure proper Supabase production database
+4. Set up AWS Secrets Manager for credential storage
+5. Enable HTTPS
+6. Set `PLAYWRIGHT_HEADLESS=true`
+7. Configure proper CORS origins
+8. Set up monitoring and logging
+
+See the main README for more details on production deployment.
+
+## Getting Help
+
+- Check the [README.md](README.md) for more information
+- Review the code documentation
+- Open an issue on GitHub
+- Check existing issues for solutions
+
+Happy grocery syncing! 🛒

@@ -1,0 +1,14 @@
+- using "command prompts"
+- new project:
+    - define a project brief (business) to reference reagardless of the feature
+    - embed tech guidance in .cursorrules
+    - setup core skeleton (first feature?)
+- building features:
+    - plan_feature command
+    - review the plan
+    - Phases
+    - code_review command
+    - read through the review
+    - select fixes to implement
+    - manually test
+    - confirm code and merge
