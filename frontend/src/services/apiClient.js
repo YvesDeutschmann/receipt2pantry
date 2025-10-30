@@ -3,7 +3,7 @@ import axios from 'axios'
 // Create axios instance with default config
 const apiClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api',
-  timeout: 30000,
+  timeout: 120000, // 2 minutes timeout for device verification
   headers: {
     'Content-Type': 'application/json',
   },
@@ -80,12 +80,49 @@ export const api = {
     return response.data
   },
 
-  testProviderConnection: async (providerName, username, password) => {
+  testProviderConnection: async (providerName, username, password, userId = 'anonymous') => {
     const response = await apiClient.post(`/providers/${providerName}/test`, {
       username,
-      password
+      password,
+      user_id: userId
     })
     return response.data
+  },
+
+  // Device Verification Methods
+  getDeviceVerificationOptions: async (providerName, sessionId) => {
+    const response = await apiClient.get(
+      `/providers/${providerName}/login/${sessionId}/device-verification`
+    )
+    return response.data
+  },
+
+  selectDeviceVerificationMethod: async (providerName, sessionId, method) => {
+    const response = await apiClient.post(
+      `/providers/${providerName}/login/${sessionId}/device-verification`,
+      { method }
+    )
+    return response.data
+  },
+
+  // MFA Methods
+  submitMfaCode: async (providerName, sessionId, code) => {
+    const response = await apiClient.post(
+      `/providers/${providerName}/login/${sessionId}/mfa`,
+      { code }
+    )
+    return response.data
+  },
+
+  getLoginStatus: async (providerName, sessionId) => {
+    const response = await apiClient.get(
+      `/providers/${providerName}/login/${sessionId}/status`
+    )
+    return response.data
+  },
+
+  cancelLoginSession: async (providerName, sessionId) => {
+    await apiClient.delete(`/providers/${providerName}/login/${sessionId}`)
   },
 }
 

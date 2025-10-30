@@ -209,6 +209,116 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Failed to log automation run: {e}")
             raise DatabaseException(f"Failed to log automation run: {e}")
+    
+    # Login Session Management Methods
+    
+    def create_login_session(
+        self, user_id: str, provider: str, session_id: str, expires_at: datetime
+    ) -> None:
+        """
+        Create a login session record in the database
+        
+        Args:
+            user_id: User ID
+            provider: Provider name
+            session_id: Session UUID
+            expires_at: Session expiration time
+        """
+        try:
+            session_data = {
+                "id": session_id,
+                "user_id": user_id,
+                "provider": provider,
+                "state": "awaiting_code",
+                "created_at": datetime.utcnow().isoformat(),
+                "expires_at": expires_at.isoformat(),
+            }
+            
+            self.client.table("login_sessions").insert(session_data).execute()
+            logger.info(f"Created login session record: {session_id}")
+        except Exception as e:
+            logger.error(f"Failed to create login session: {e}")
+            # Don't raise - this is optional persistence
+    
+    def update_login_session_state(
+        self, session_id: str, state: str, error_message: Optional[str] = None
+    ) -> None:
+        """
+        Update the state of a login session
+        
+        Args:
+            session_id: Session UUID
+            state: New state
+            error_message: Optional error message
+        """
+        try:
+            update_data = {"state": state}
+            
+            if error_message:
+                update_data["error_message"] = error_message
+            
+            if state == "completed":
+                update_data["completed_at"] = datetime.utcnow().isoformat()
+            
+            self.client.table("login_sessions").update(update_data).eq(
+                "id", session_id
+            ).execute()
+            
+            logger.info(f"Updated login session {session_id} to state: {state}")
+        except Exception as e:
+            logger.error(f"Failed to update login session state: {e}")
+            # Don't raise - this is optional persistence
+    
+    def get_login_session(self, session_id: str) -> Optional[Dict]:
+        """
+        Get a login session by ID
+        
+        Args:
+            session_id: Session UUID
+        
+        Returns:
+            Session dictionary or None if not found
+        """
+        try:
+            response = (
+                self.client.table("login_sessions")
+                .select("*")
+                .eq("id", session_id)
+                .execute()
+            )
+            
+            if response.data and len(response.data) > 0:
+                return response.data[0]
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get login session: {e}")
+            return None
+    
+    def cleanup_expired_sessions(self) -> int:
+        """
+        Delete expired login sessions from the database
+        
+        Returns:
+            Number of sessions deleted
+        """
+        try:
+            now = datetime.utcnow().isoformat()
+            
+            # Delete expired sessions
+            response = (
+                self.client.table("login_sessions")
+                .delete()
+                .lt("expires_at", now)
+                .execute()
+            )
+            
+            count = len(response.data) if response.data else 0
+            if count > 0:
+                logger.info(f"Cleaned up {count} expired login sessions from database")
+            return count
+        except Exception as e:
+            logger.error(f"Failed to cleanup expired sessions: {e}")
+            return 0
 
 
 def create_supabase_service(

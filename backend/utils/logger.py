@@ -65,6 +65,26 @@ def setup_logger(name: str, level: str = "INFO") -> logging.Logger:
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Get a logger instance"""
-    return logging.getLogger(name)
+    """
+    Get a logger instance with JSON formatting
+    
+    If the logger doesn't have handlers, set it up automatically
+    """
+    logger = logging.getLogger(name)
+    
+    # If logger has no handlers, set it up
+    if not logger.handlers:
+        # Get root logger config level
+        root_level = logging.getLogger("grocerysync").level or logging.INFO
+        logger.setLevel(root_level)
+        
+        # Add console handler with JSON formatting
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(JSONFormatter())
+        logger.addHandler(handler)
+        
+        # Don't propagate to avoid duplicate logs
+        logger.propagate = False
+    
+    return logger
 
