@@ -1,10 +1,11 @@
 """Safeway provider implementation"""
 
 import os
+import random
 import time
 from datetime import datetime
 from typing import Dict, List, Optional
-from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext
 from backend.providers.base_provider import BaseProvider
 from backend.providers.provider_registry import register_provider
 from backend.utils.exceptions import AuthenticationException, ProviderException, MFARequiredException
@@ -94,9 +95,6 @@ class SafewayProvider(BaseProvider):
         )
         
         # Generate random device fingerprint for each session
-        import random
-        import time
-        
         # Random viewport sizes (common resolutions)
         viewports = [
             {'width': 1366, 'height': 768},
@@ -145,8 +143,6 @@ class SafewayProvider(BaseProvider):
         timezone = random.choice(timezones)
         locale = random.choice(locales)
         
-        logger.info(f"Using random device fingerprint: {viewport}, {timezone}, {locale}")
-        
         # Load existing session if available
         if os.path.exists(self.SESSION_FILE):
             self.context = self.browser.new_context(
@@ -156,7 +152,6 @@ class SafewayProvider(BaseProvider):
                 locale=locale,
                 storage_state=self.SESSION_FILE
             )
-            logger.info("Loaded existing session")
         else:
             self.context = self.browser.new_context(
                 viewport=viewport,
@@ -192,15 +187,12 @@ class SafewayProvider(BaseProvider):
                     }
                 }
             """)
-            
-            logger.info("Cleared browser data for fresh session")
         except Exception as e:
             logger.warning(f"Could not clear browser data: {e}")
         
         # Force fresh session by navigating to Safeway
         try:
             self.page.goto("https://www.safeway.com/")
-            logger.info("Navigated to Safeway for fresh session")
         except Exception as e:
             logger.warning(f"Could not navigate to Safeway: {e}")
         
@@ -276,11 +268,8 @@ class SafewayProvider(BaseProvider):
             }}
             """
             self.page.evaluate(fingerprint_script)
-            logger.info(f"Applied enhanced randomized device fingerprint: {screen_width}x{screen_height}, {platform}, {hardware_cores} cores, {device_memory}GB")
         except Exception as e:
             logger.warning(f"Could not apply fingerprint randomization: {e}")
-        
-        logger.info("Browser started successfully")
     
     def login(self, credentials: Dict, session_id: Optional[str] = None) -> bool:
         """
@@ -309,12 +298,10 @@ class SafewayProvider(BaseProvider):
             self._start_browser()
             
             # Navigate to Safeway
-            logger.info("Navigating to safeway.com")
             self.page.goto("https://safeway.com/", wait_until="domcontentloaded")
             
             # Check if already logged in
             if self._is_logged_in():
-                logger.info("Already logged in")
                 return True
             
             # Perform login
@@ -326,14 +313,11 @@ class SafewayProvider(BaseProvider):
             
             # Save session
             self.context.storage_state(path=self.SESSION_FILE)
-            logger.info("Session saved")
-            
             logger.info("Login successful")
             return True
         
-        except MFARequiredException as e:
+        except MFARequiredException:
             # MFA required - don't cleanup, keep browser alive for MFA flow
-            logger.info("MFA required, keeping browser session alive")
             raise
         
         except Exception as e:
@@ -349,20 +333,15 @@ class SafewayProvider(BaseProvider):
             
             # If the text is "Sign in" or similar, we're NOT logged in
             if account_name.lower() in ["sign in", "signin", "log in", "login"]:
-                logger.info(f"Not logged in (found: '{account_name}')")
                 return False
-            
-            logger.info(f"Logged in as: {account_name}")
             return True
         except Exception:
-            logger.info("Not logged in (element not found)")
             return False
     
     def _perform_login(self, username: str, password: str, session_id: Optional[str] = None) -> None:
         """Perform the login sequence"""
         try:
             # Click sign in
-            logger.info("Clicking sign in button")
             sign_in_element = self.page.wait_for_selector("a#auth_signin_link")
             sign_in_element.click()
             
@@ -373,7 +352,6 @@ class SafewayProvider(BaseProvider):
             sign_in_btn.click()
             
             # Enter username
-            logger.info("Entering username")
             username_input = self.page.wait_for_selector("input#enterUsername")
             username_input.fill(username)
             
@@ -384,7 +362,6 @@ class SafewayProvider(BaseProvider):
             sign_in_pw_btn.click()
             
             # Enter password
-            logger.info("Entering password")
             password_input = self.page.wait_for_selector("input#password")
             password_input.fill(password)
             
@@ -395,45 +372,26 @@ class SafewayProvider(BaseProvider):
             sign_in_final.click()
             
             # Wait for page transition and check for MFA
-            logger.info("Waiting for login response")
             self.page.wait_for_timeout(3000)
-            
-            # Debug: Log current page state
-            try:
-                current_url = self.page.url
-                current_title = self.page.title()
-                logger.info(f"Current page: {current_url}")
-                logger.info(f"Page title: {current_title}")
-            except Exception as e:
-                logger.warning(f"Could not get page info: {e}")
             
             # Check for MFA prompt
             if self._detect_mfa_prompt():
                 logger.info("MFA verification required")
                 
                 # Wait a bit longer for device verification modal to appear
-                logger.info("Waiting for device verification modal to appear...")
                 self.page.wait_for_timeout(5000)
                 
                 # Handle device verification immediately if needed
                 if self._detect_device_verification_modal():
-                    logger.info("Device verification modal detected, handling immediately")
                     try:
                         # Automatically select SMS option (first available option)
                         success = self.select_device_verification_method("sms")
-                        if success:
-                            logger.info("Device verification method selected successfully")
-                        else:
+                        if not success:
                             logger.error("Failed to select device verification method")
                     except Exception as device_error:
                         logger.error(f"Error handling device verification: {device_error}", exc_info=True)
-                else:
-                    logger.info("No device verification modal detected, proceeding with MFA")
                 
                 raise MFARequiredException("Multi-factor authentication required to complete login")
-            
-            # Wait for successful login indicator
-            logger.info("Login sequence completed")
         
         except MFARequiredException:
             # Re-raise MFA exceptions
@@ -452,7 +410,6 @@ class SafewayProvider(BaseProvider):
         try:
             # First check for device verification modal
             if self._detect_device_verification_modal():
-                logger.info("Device verification modal detected")
                 return True
             
             # Check for MFA input field - Safeway uses various selectors
@@ -471,7 +428,6 @@ class SafewayProvider(BaseProvider):
                 try:
                     element = self.page.locator(selector).first
                     if element.count() > 0 and element.is_visible():
-                        logger.info(f"MFA input detected with selector: {selector}")
                         return True
                 except Exception:
                     continue
@@ -488,7 +444,6 @@ class SafewayProvider(BaseProvider):
             page_content = self.page.content().lower()
             for pattern in mfa_text_patterns:
                 if pattern in page_content:
-                    logger.info(f"MFA text detected: '{pattern}'")
                     return True
             
             return False
@@ -505,26 +460,6 @@ class SafewayProvider(BaseProvider):
             True if device verification modal is detected
         """
         try:
-            logger.info("Checking for device verification modal...")
-            
-            # Debug: Log page content to see what's actually there
-            try:
-                page_content = self.page.content()
-                logger.info(f"Page content length: {len(page_content)}")
-                
-                # Look for specific text that indicates device verification
-                if "verify-device" in page_content:
-                    logger.info("Found 'verify-device' in page content")
-                if "Text code to" in page_content:
-                    logger.info("Found 'Text code to' in page content")
-                if "Send code to" in page_content:
-                    logger.info("Found 'Send code to' in page content")
-                if "radioButton" in page_content:
-                    logger.info("Found 'radioButton' in page content")
-                    
-            except Exception as e:
-                logger.warning(f"Could not analyze page content: {e}")
-            
             # Look for the device verification radio buttons using the exact selectors from the HTML
             device_verification_selectors = [
                 "input[name='verify-device']",
@@ -541,22 +476,16 @@ class SafewayProvider(BaseProvider):
                 try:
                     # First check if element exists (even if not visible)
                     elements = self.page.query_selector_all(selector)
-                    logger.info(f"Selector '{selector}' found {len(elements)} elements")
-                    
                     if elements:
-                        logger.info(f"Device verification modal detected with selector: {selector} (found {len(elements)} elements)")
                         return True
                     
                     # Also try wait_for_selector for visible elements
                     element = self.page.wait_for_selector(selector, timeout=2000)
                     if element:
-                        logger.info(f"Device verification modal detected with selector: {selector}")
                         return True
-                except Exception as e:
-                    logger.debug(f"Selector {selector} not found: {e}")
+                except Exception:
                     continue
             
-            logger.info("No device verification modal found")
             return False
             
         except Exception as e:
@@ -574,43 +503,24 @@ class SafewayProvider(BaseProvider):
             True if selection was successful
         """
         try:
-            logger.info(f"Selecting device verification method: {method}")
-            
             # Wait for device verification modal to be visible
             self.page.wait_for_timeout(2000)
-
-            """
-            <span class="d-flex align-items-center justify-content-center pds-radio-bullet-container"><span class="pds-radio-bullet"></span></span>
-            """
             
             # Select the appropriate radio button using exact selectors from HTML
             if method.lower() == "sms":
-                # Select the span element by its ID
                 sms_radio_option = self.page.locator("#sms")
-                if sms_radio_option:
-                    logger.info(f"Located SMS radio button")
-                    logger.info(f"Radio Button text: {sms_radio_option.inner_text()}")
-                    sms_radio_option.click()
-                else:
-                    logger.error("Could not find SMS radio button")
+                if not sms_radio_option:
                     return False
-                    
+                sms_radio_option.click()
             elif method.lower() == "email":
-                # Select the span element by its ID
                 email_radio_option = self.page.locator("#email")
-                if email_radio_option:
-                    logger.info(f"Located email radio button")
-                    logger.info(f"Radio Button text: {email_radio_option.inner_text()}")
-                    email_radio_option.click()
-                else:
-                    logger.error("Could not find email radio button")
+                if not email_radio_option:
                     return False
+                email_radio_option.click()
             else:
-                logger.error(f"Invalid verification method: {method}")
                 return False
             
             # Wait for Continue button to become enabled and click it
-            logger.info("Waiting for Continue button to become enabled...")
             try:
                 continue_button = self.page.wait_for_selector(
                     "button.btn.btn-lg.btn-primary.auth-styles__btn[data-tabindex='last']:not([disabled])", 
@@ -618,24 +528,16 @@ class SafewayProvider(BaseProvider):
                 )
                 
                 if continue_button:
-                    # Wait a moment for the button to be fully ready
                     self.page.wait_for_timeout(1000)
-                    
-                    # Click the Continue button
                     continue_button.click()
-                    logger.info("Clicked enabled Continue button")
                 else:
-                    logger.error("Continue button did not become enabled")
                     return False
-                    
             except Exception as e:
                 logger.error(f"Error waiting for Continue button: {e}")
                 return False
             
             # Wait for the page to process the selection
             self.page.wait_for_timeout(3000)
-            
-            logger.info("Device verification method selection completed")
             return True
             
         except Exception as e:
@@ -650,8 +552,6 @@ class SafewayProvider(BaseProvider):
             Dictionary with method as key and display text as value
         """
         try:
-            logger.info("Getting device verification options")
-            
             options = {}
             
             # Look for SMS option
@@ -660,9 +560,8 @@ class SafewayProvider(BaseProvider):
                 if sms_element.count() > 0:
                     sms_text = sms_element.inner_text().strip()
                     options["sms"] = sms_text
-                    logger.info(f"Found SMS option: {sms_text}")
-            except Exception as e:
-                logger.warning(f"Could not find SMS option: {e}")
+            except Exception:
+                pass
             
             # Look for email option
             try:
@@ -670,11 +569,9 @@ class SafewayProvider(BaseProvider):
                 if email_element.count() > 0:
                     email_text = email_element.inner_text().strip()
                     options["email"] = email_text
-                    logger.info(f"Found email option: {email_text}")
-            except Exception as e:
-                logger.warning(f"Could not find email option: {e}")
+            except Exception:
+                pass
             
-            logger.info(f"Available verification options: {options}")
             return options
             
         except Exception as e:
@@ -777,7 +674,7 @@ class SafewayProvider(BaseProvider):
     
     def handle_mfa(self, mfa_code: str) -> bool:
         """
-        Handle MFA verification
+        Handle MFA verification (abstract method implementation - currently unused)
         
         Args:
             mfa_code: MFA code from user
@@ -789,222 +686,9 @@ class SafewayProvider(BaseProvider):
             AuthenticationException: If MFA verification fails
             ProviderException: If browser page is not active
         """
-        try:
-            logger.info("Starting MFA verification")
-            
-            # Get a fresh page object to avoid thread issues
-            if not self.context:
-                raise ProviderException("Browser context not available. Login session may have expired.")
-            
-            # Get the current page or create a new one
-            try:
-                pages = self.context.pages
-                if pages:
-                    self.page = pages[0]  # Use existing page
-                else:
-                    self.page = self.context.new_page()  # Create new page
-                    logger.info("Created new page for MFA verification")
-            except Exception as e:
-                logger.error(f"Could not get page object: {e}")
-                raise ProviderException("Browser page not available. Login session may have expired.")
-            
-            # Debug: Log current page URL and title
-            try:
-                current_url = self.page.url
-                current_title = self.page.title()
-                logger.info(f"Current page: {current_url}")
-                logger.info(f"Page title: {current_title}")
-            except Exception as e:
-                logger.warning(f"Could not get page info: {e}")
-            
-            # Wait a moment for page to stabilize
-            self.page.wait_for_timeout(1000)
+        # Legacy method - MFA is handled via _perform_mfa_verification
+        return self._perform_mfa_verification(mfa_code)
 
-            """
-            <!-- <input type="text" aria-label="Enter Verification Code" placeholder="------" maxlength="6" size="6" min="6" max="6" formcontrolname="otpCode" aria-describedby="error-otp" required="" class="input-field__otp-code ng-untouched ng-pristine ng-invalid" data-tabindex="last"> -->
-            """
-            
-            
-            # Locate MFA input field using flexible selectors
-            mfa_input = None
-            mfa_selectors = [
-                "input[formcontrolname='otpCode']",
-                "input[aria-label='Enter Verification Code']",
-            ]
-            
-            logger.info(f"Searching for MFA input field with {len(mfa_selectors)} selectors...")
-            for selector in mfa_selectors:
-                try:
-                    element = self.page.locator(selector).first
-                    if element.count() > 0:
-                        is_visible = element.is_visible()
-                        logger.info(f"Selector '{selector}': found={element.count()}, visible={is_visible}")
-                        if is_visible:
-                            mfa_input = element
-                            logger.info(f"Found MFA input with selector: {selector}")
-                            break
-                except Exception as e:
-                    logger.debug(f"Selector '{selector}' failed: {e}")
-                    continue
-            
-            if not mfa_input:
-                # Debug: Save screenshot and log page content snippet
-                try:
-                    # Ensure debug directory exists
-                    os.makedirs("debug_screenshots", exist_ok=True)
-                    screenshot_path = f"debug_screenshots/mfa_not_found_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-                    self.page.screenshot(path=screenshot_path)
-                    logger.info(f"Screenshot saved to {screenshot_path}")
-                    
-                    # Log snippet of page HTML
-                    page_html = self.page.content()
-                    logger.info(f"Page HTML length: {len(page_html)} characters")
-                    logger.info(f"Page HTML snippet: {page_html[:500]}")
-                except Exception as e:
-                    logger.warning(f"Could not save debug info: {e}")
-                
-                raise ProviderException("MFA input field not found on page")
-            
-            # Fill in the MFA code
-            logger.info("Filling MFA code")
-            mfa_input.fill(mfa_code)
-            
-            # Locate and click submit button
-            submit_selectors = [
-                "button[type='submit']",
-                "btn btn-lg btn-primary auth-styles__btn",
-                "button[aria-label='Sign in']",
-            ]
-            
-            submit_button = None
-            for selector in submit_selectors:
-                try:
-                    element = self.page.locator(selector).first
-                    if element.count() > 0 and element.is_visible():
-                        submit_button = element
-                        logger.info(f"Found submit button with selector: {selector}")
-                        break
-                except Exception:
-                    continue
-            
-            if not submit_button:
-                raise ProviderException("MFA submit button not found on page")
-            
-            # Click submit button
-            logger.info("Submitting MFA code")
-            submit_button.click()
-            
-            # Wait for verification result
-            self.page.wait_for_timeout(3000)
-            
-            # Check for verification success
-            if self._is_logged_in():
-                logger.info("MFA verification successful")
-                # Save session
-                self.context.storage_state(path=self.SESSION_FILE)
-                logger.info("Session saved after MFA verification")
-                return True
-            
-            # Check for error messages
-            error_messages = [
-                "invalid code",
-                "incorrect code",
-                "expired code",
-                "verification failed",
-                "try again"
-            ]
-            
-            page_content = self.page.content().lower()
-            for error_msg in error_messages:
-                if error_msg in page_content:
-                    logger.warning(f"MFA verification failed: {error_msg}")
-                    raise AuthenticationException(f"MFA verification failed: {error_msg}")
-            
-            # If we're still on MFA page, verification likely failed
-            if self._detect_mfa_prompt():
-                raise AuthenticationException("MFA verification failed: Invalid code")
-            
-            # If we got here, something unexpected happened
-            raise AuthenticationException("MFA verification result unclear")
-            
-        except AuthenticationException:
-            # Re-raise authentication exceptions
-            raise
-        except Exception as e:
-            logger.error(f"MFA verification error: {e}")
-            raise AuthenticationException(f"MFA verification failed: {e}")
-    
-    
-
-    def _handle_mfa_in_same_thread(self, session_id: str, session_manager=None) -> None:
-        """
-        Handle MFA in the same thread as browser automation.
-        
-        Args:
-            session_id: Session ID to poll for MFA codes
-            session_manager: Session manager instance (passed from route handler)
-        """
-        logger.info(f"Starting MFA handling in same thread for session {session_id}")
-        
-        if not session_manager:
-            logger.error("Session manager not available for MFA handling")
-            return
-        
-        # Device verification is already handled in the login method
-        # Just update session state to awaiting_code
-        session_manager.update_session_state(session_id, "awaiting_code")
-        
-        max_wait_time = 300  # 5 minutes
-        poll_interval = 2  # 2 seconds
-        elapsed_time = 0
-        
-        while elapsed_time < max_wait_time:
-            try:
-                # Check if session still exists
-                session = session_manager.get_session(session_id)
-                if not session:
-                    logger.info(f"Session {session_id} no longer exists, stopping MFA handling")
-                    break
-                
-                # Check if MFA code is available
-                mfa_code = session.get("mfa_code")
-                if mfa_code:
-                    logger.info(f"Found MFA code for session {session_id}")
-                    
-                    # Process the MFA code in the same thread
-                    try:
-                        success = self._perform_mfa_verification(mfa_code)
-                        
-                        if success:
-                            session_manager.update_session_state(session_id, "completed")
-                            logger.info(f"MFA verification successful for session {session_id}")
-                            break
-                        else:
-                            # MFA verification failed - increment retry count and keep waiting
-                            retry_count = session_manager.increment_retry_count(session_id)
-                            session_manager.update_session_state(session_id, "awaiting_code", f"Invalid MFA code (attempt {retry_count})")
-                            logger.warning(f"MFA verification failed for session {session_id}, retry {retry_count}")
-                        
-                        # Clear the MFA code so we can wait for the next one
-                        session["mfa_code"] = None
-                        
-                    except Exception as e:
-                        logger.error(f"MFA verification error: {e}", exc_info=True)
-                        session_manager.update_session_state(session_id, "failed", str(e))
-                        break
-                
-                # Wait before next poll
-                import time
-                time.sleep(poll_interval)
-                elapsed_time += poll_interval
-                
-            except Exception as e:
-                logger.error(f"Error during MFA handling: {e}", exc_info=True)
-                break
-        
-        if elapsed_time >= max_wait_time:
-            logger.warning(f"MFA handling timeout for session {session_id}")
-            session_manager.update_session_state(session_id, "failed", "MFA timeout")
 
     def _perform_mfa_verification(self, mfa_code: str) -> bool:
         """
@@ -1017,20 +701,9 @@ class SafewayProvider(BaseProvider):
             True if MFA was successful, False otherwise
         """
         try:
-            logger.info("Starting MFA verification")
-            
             if not self.page:
                 logger.error("Browser page not available")
                 return False
-            
-            # Debug: Log current page URL and title
-            try:
-                current_url = self.page.url
-                current_title = self.page.title()
-                logger.info(f"Current page: {current_url}")
-                logger.info(f"Page title: {current_title}")
-            except Exception as e:
-                logger.warning(f"Could not get page info: {e}")
             
             # Wait a moment for page to stabilize
             self.page.wait_for_timeout(1000)
@@ -1055,7 +728,6 @@ class SafewayProvider(BaseProvider):
                 try:
                     mfa_input = self.page.wait_for_selector(selector, timeout=2000)
                     if mfa_input:
-                        logger.info(f"Found MFA input with selector: {selector}")
                         break
                 except Exception:
                     continue
@@ -1068,7 +740,6 @@ class SafewayProvider(BaseProvider):
             mfa_input.click()
             mfa_input.fill("")
             mfa_input.type(mfa_code)
-            logger.info(f"Entered MFA code: {mfa_code}")
             
             # Submit the form
             submit_selectors = [
@@ -1087,7 +758,6 @@ class SafewayProvider(BaseProvider):
                     submit_button = self.page.wait_for_selector(selector, timeout=2000)
                     if submit_button:
                         submit_button.click()
-                        logger.info(f"Clicked submit button with selector: {selector}")
                         submitted = True
                         break
                 except Exception:
@@ -1096,10 +766,8 @@ class SafewayProvider(BaseProvider):
             if not submitted:
                 # Try pressing Enter on the input field
                 mfa_input.press("Enter")
-                logger.info("Pressed Enter on MFA input field")
             
             # Wait for response
-            logger.info("Waiting for MFA verification response")
             self.page.wait_for_timeout(3000)
             
             # Check if verification was successful
@@ -1118,18 +786,15 @@ class SafewayProvider(BaseProvider):
                 try:
                     element = self.page.wait_for_selector(indicator, timeout=2000)
                     if element:
-                        logger.info(f"MFA verification successful - found: {indicator}")
+                        logger.info("MFA verification successful")
                         return True
                 except Exception:
                     continue
             
-            # Check for error indicators first - but be more specific to avoid false positives
+            # Check if we've been redirected away from the login page
             current_url = self.page.url
-            logger.info(f"MFA check - Current URL: {current_url}")
-            
-            # If we've been redirected away from the login page, assume success
             if "safeway.com" in current_url and "login" not in current_url.lower():
-                logger.info("MFA verification appears successful - redirected to main site")
+                logger.info("MFA verification successful")
                 return True
             
             # Check for specific MFA error messages (not generic page elements)
@@ -1144,14 +809,12 @@ class SafewayProvider(BaseProvider):
                 try:
                     element = self.page.wait_for_selector(indicator, timeout=1000)
                     if element:
-                        error_text = element.inner_text()
-                        logger.warning(f"MFA verification failed - found error: {error_text}")
+                        logger.warning("MFA verification failed")
                         return False
                 except Exception:
                     continue
             
-            # If we're still here and on a login page, it might have failed
-            # But check for success indicators first before declaring failure
+            # Could not determine result
             logger.warning("Could not determine MFA verification result")
             return False
             
@@ -1161,8 +824,6 @@ class SafewayProvider(BaseProvider):
     
     def cleanup(self) -> None:
         """Cleanup browser resources"""
-        logger.info("Cleaning up Safeway provider resources")
-        
         if self.browser:
             self.browser.close()
             self.browser = None
@@ -1173,5 +834,4 @@ class SafewayProvider(BaseProvider):
         
         self.context = None
         self.page = None
-        logger.info("Cleanup complete")
 

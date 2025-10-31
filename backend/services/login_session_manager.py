@@ -9,8 +9,6 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from threading import Lock
 from typing import Dict, Optional
-import queue
-import threading
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -150,29 +148,6 @@ class LoginSessionManager:
             
             return True
     
-    def set_mfa_code(self, session_id: str, mfa_code: str) -> bool:
-        """
-        Set the MFA code for a session.
-        
-        Args:
-            session_id: Session ID
-            mfa_code: MFA code provided by user
-            
-        Returns:
-            True if code was set, False if session not found
-        """
-        with self._lock:
-            session = self._sessions.get(session_id)
-            
-            if session is None:
-                logger.warning(f"Cannot set MFA code: session {session_id} not found")
-                return False
-            
-            session["mfa_code"] = mfa_code
-            logger.info(f"MFA code set for session {session_id}")
-            return True
-    
-    
     def increment_retry_count(self, session_id: str) -> int:
         """
         Increment the retry count for a session.
@@ -254,7 +229,6 @@ class LoginSessionManager:
             if browser_context:
                 try:
                     browser_context.close()
-                    logger.debug(f"Closed browser context for session {session['session_id']}")
                 except Exception as e:
                     logger.warning(f"Error closing browser context: {e}")
             
@@ -262,7 +236,6 @@ class LoginSessionManager:
             if provider_instance and hasattr(provider_instance, "cleanup"):
                 try:
                     provider_instance.cleanup()
-                    logger.debug(f"Called provider cleanup for session {session['session_id']}")
                 except Exception as e:
                     logger.warning(f"Error calling provider cleanup: {e}")
                     

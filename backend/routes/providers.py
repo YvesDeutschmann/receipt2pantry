@@ -122,7 +122,7 @@ def test_provider_connection(provider_name):
             "message": "Connection successful" if success else "Connection failed"
         }), 200 if success else 401
     
-    except MFARequiredException as e:
+    except MFARequiredException:
         # MFA is required - create login session and return session ID
         logger.info(f"MFA required for {provider_name}")
         

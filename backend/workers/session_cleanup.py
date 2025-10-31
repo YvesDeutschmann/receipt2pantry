@@ -84,8 +84,6 @@ class SessionCleanupWorker:
         Runs continuously until stop() is called, cleaning up expired sessions
         at each interval.
         """
-        logger.info("Session cleanup worker loop started")
-        
         while not self._stop_event.is_set():
             try:
                 # Perform cleanup
@@ -94,18 +92,11 @@ class SessionCleanupWorker:
                 if cleaned_count > 0:
                     logger.info(f"Cleaned up {cleaned_count} expired session(s)")
                 
-                # Get current session count for monitoring
-                active_count = self.session_manager.get_session_count()
-                if active_count > 0:
-                    logger.debug(f"Active sessions: {active_count}")
-                
             except Exception as e:
                 logger.error(f"Error during session cleanup: {e}", exc_info=True)
             
             # Wait for next interval or stop signal
             self._stop_event.wait(timeout=self.cleanup_interval)
-        
-        logger.info("Session cleanup worker loop ended")
     
     def force_cleanup(self) -> int:
         """
