@@ -45,6 +45,11 @@ def create_app(config=None):
     if config.SUPABASE_URL and config.SUPABASE_KEY:
         try:
             from backend.services.supabase_service import create_supabase_service
+            from backend.services.pantry_service import create_pantry_service
+            from backend.services.normalization_service import create_normalization_service
+            from backend.services.receipt_processor import create_receipt_processor
+            
+            # Initialize Supabase service
             supabase_service = create_supabase_service(
                 config.SUPABASE_URL,
                 config.SUPABASE_KEY,
@@ -52,8 +57,26 @@ def create_app(config=None):
             )
             app.config["SUPABASE_SERVICE"] = supabase_service
             logger.info("Supabase service initialized")
+            
+            # Initialize pantry management services
+            pantry_service = create_pantry_service(supabase_service)
+            app.config["PANTRY_SERVICE"] = pantry_service
+            logger.info("Pantry service initialized")
+            
+            normalization_service = create_normalization_service(supabase_service)
+            app.config["NORMALIZATION_SERVICE"] = normalization_service
+            logger.info("Normalization service initialized")
+            
+            receipt_processor = create_receipt_processor(
+                supabase_service,
+                normalization_service,
+                pantry_service
+            )
+            app.config["RECEIPT_PROCESSOR"] = receipt_processor
+            logger.info("Receipt processor initialized")
+            
         except Exception as e:
-            logger.warning(f"Failed to initialize Supabase: {e}")
+            logger.warning(f"Failed to initialize Supabase services: {e}")
     else:
         logger.info("Supabase not configured (development mode)")
     

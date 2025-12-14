@@ -319,6 +319,326 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Failed to cleanup expired sessions: {e}")
             return 0
+    
+    # Product Mappings Methods
+    
+    def get_product_mapping(self, raw_name: str) -> Optional[Dict]:
+        """
+        Get normalized product mapping by raw product name
+        
+        Args:
+            raw_name: Raw product name from receipt
+        
+        Returns:
+            Product mapping dictionary or None if not found
+        """
+        try:
+            response = (
+                self.client.table("product_mappings")
+                .select("*")
+                .eq("raw_name", raw_name)
+                .execute()
+            )
+            
+            if response.data and len(response.data) > 0:
+                return response.data[0]
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get product mapping for {raw_name}: {e}")
+            return None
+    
+    def store_product_mapping(self, mapping_data: Dict) -> str:
+        """
+        Store a product normalization mapping
+        
+        Args:
+            mapping_data: Product mapping dictionary
+        
+        Returns:
+            Mapping ID
+        """
+        try:
+            # Use admin client for inserts (bypasses RLS)
+            client = self.admin_client if self.admin_client else self.client
+            
+            response = (
+                client.table("product_mappings")
+                .insert(mapping_data)
+                .execute()
+            )
+            
+            if response.data and len(response.data) > 0:
+                mapping_id = response.data[0]["id"]
+                logger.info(f"Stored product mapping: {mapping_data.get('raw_name')} -> {mapping_data.get('normalized_name')}")
+                return mapping_id
+            else:
+                raise DatabaseException("No data returned after insert")
+        except Exception as e:
+            logger.error(f"Failed to store product mapping: {e}")
+            raise DatabaseException(f"Failed to store product mapping: {e}")
+    
+    def get_all_product_mappings(self, limit: int = 1000) -> List[Dict]:
+        """
+        Get all product mappings
+        
+        Args:
+            limit: Maximum number of mappings to return
+        
+        Returns:
+            List of product mapping dictionaries
+        """
+        try:
+            response = (
+                self.client.table("product_mappings")
+                .select("*")
+                .limit(limit)
+                .execute()
+            )
+            return response.data if response.data else []
+        except Exception as e:
+            logger.error(f"Failed to get product mappings: {e}")
+            raise DatabaseException(f"Failed to retrieve product mappings: {e}")
+    
+    # Pantry Items Methods
+    
+    def get_user_pantry(self, user_id: str) -> List[Dict]:
+        """
+        Get all pantry items for a user
+        
+        Args:
+            user_id: User ID
+        
+        Returns:
+            List of pantry item dictionaries
+        """
+        try:
+            response = (
+                self.client.table("pantry_items")
+                .select("*")
+                .eq("user_id", user_id)
+                .gt("quantity", 0)
+                .order("base_ingredient", desc=False)
+                .execute()
+            )
+            return response.data if response.data else []
+        except Exception as e:
+            logger.error(f"Failed to get pantry for user {user_id}: {e}")
+            raise DatabaseException(f"Failed to retrieve pantry: {e}")
+    
+    def get_receipt_items(self, receipt_id: str) -> List[Dict]:
+        """
+        Get all items for a receipt
+        
+        Args:
+            receipt_id: Receipt ID
+        
+        Returns:
+            List of receipt item dictionaries
+        """
+        try:
+            response = (
+                self.client.table("receipt_items")
+                .select("*")
+                .eq("receipt_id", receipt_id)
+                .execute()
+            )
+            return response.data if response.data else []
+        except Exception as e:
+            logger.error(f"Failed to get items for receipt {receipt_id}: {e}")
+            raise DatabaseException(f"Failed to retrieve receipt items: {e}")
+    
+    def upsert_pantry_item(self, item_data: Dict) -> str:
+        """
+        Insert or update a pantry item
+        
+        Args:
+            item_data: Pantry item dictionary
+        
+        Returns:
+            Item ID
+        """
+        try:
+            response = (
+                self.client.table("pantry_items")
+                .upsert(item_data, on_conflict="user_id,base_ingredient,variant,unit")
+                .execute()
+            )
+            
+            if response.data and len(response.data) > 0:
+                item_id = response.data[0]["id"]
+                logger.info(f"Upserted pantry item: {item_data.get('normalized_name')}")
+                return item_id
+            else:
+                raise DatabaseException("No data returned after upsert")
+        except Exception as e:
+            logger.error(f"Failed to upsert pantry item: {e}")
+            raise DatabaseException(f"Failed to upsert pantry item: {e}")
+    
+    def update_pantry_quantity(self, item_id: str, quantity: float) -> None:
+        """
+        Update quantity of a pantry item
+        
+        Args:
+            item_id: Pantry item ID
+            quantity: New quantity
+        """
+        try:
+            self.client.table("pantry_items").update({
+                "quantity": quantity
+            }).eq("id", item_id).execute()
+            
+            logger.info(f"Updated pantry item {item_id} quantity to {quantity}")
+        except Exception as e:
+            logger.error(f"Failed to update pantry quantity: {e}")
+            raise DatabaseException(f"Failed to update pantry quantity: {e}")
+    
+    def delete_pantry_item(self, item_id: str) -> None:
+        """
+        Delete a pantry item
+        
+        Args:
+            item_id: Pantry item ID
+        """
+        try:
+            self.client.table("pantry_items").delete().eq("id", item_id).execute()
+            logger.info(f"Deleted pantry item {item_id}")
+        except Exception as e:
+            logger.error(f"Failed to delete pantry item: {e}")
+            raise DatabaseException(f"Failed to delete pantry item: {e}")
+    
+    # Cooking Log Methods
+    
+    def log_cooking_event(self, log_data: Dict) -> str:
+        """
+        Log a cooking event
+        
+        Args:
+            log_data: Cooking log dictionary
+        
+        Returns:
+            Log entry ID
+        """
+        try:
+            response = (
+                self.client.table("cooking_log")
+                .insert(log_data)
+                .execute()
+            )
+            
+            if response.data and len(response.data) > 0:
+                log_id = response.data[0]["id"]
+                logger.info(f"Logged cooking event: {log_data.get('recipe_name')}")
+                return log_id
+            else:
+                raise DatabaseException("No data returned after insert")
+        except Exception as e:
+            logger.error(f"Failed to log cooking event: {e}")
+            raise DatabaseException(f"Failed to log cooking event: {e}")
+    
+    def get_cooking_history(self, user_id: str, limit: int = 50) -> List[Dict]:
+        """
+        Get cooking history for a user
+        
+        Args:
+            user_id: User ID
+            limit: Maximum number of entries to return
+        
+        Returns:
+            List of cooking log dictionaries
+        """
+        try:
+            response = (
+                self.client.table("cooking_log")
+                .select("*")
+                .eq("user_id", user_id)
+                .order("cooked_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            return response.data if response.data else []
+        except Exception as e:
+            logger.error(f"Failed to get cooking history for user {user_id}: {e}")
+            raise DatabaseException(f"Failed to retrieve cooking history: {e}")
+    
+    # Ingredient Substitutions Methods
+    
+    def get_substitutions_for_ingredient(
+        self, ingredient: str, substitution_type: Optional[str] = None
+    ) -> List[Dict]:
+        """
+        Get substitutions for an ingredient
+        
+        Args:
+            ingredient: Ingredient name
+            substitution_type: Optional filter for type ('variant' or 'ingredient')
+        
+        Returns:
+            List of substitution dictionaries
+        """
+        try:
+            query = (
+                self.client.table("ingredient_substitutions")
+                .select("*")
+                .eq("ingredient", ingredient)
+            )
+            
+            if substitution_type:
+                query = query.eq("substitution_type", substitution_type)
+            
+            response = query.execute()
+            return response.data if response.data else []
+        except Exception as e:
+            logger.error(f"Failed to get substitutions for {ingredient}: {e}")
+            raise DatabaseException(f"Failed to retrieve substitutions: {e}")
+    
+    def store_substitution(self, sub_data: Dict) -> str:
+        """
+        Store an ingredient substitution
+        
+        Args:
+            sub_data: Substitution dictionary
+        
+        Returns:
+            Substitution ID
+        """
+        try:
+            # Use admin client for inserts (bypasses RLS)
+            client = self.admin_client if self.admin_client else self.client
+            
+            response = (
+                client.table("ingredient_substitutions")
+                .insert(sub_data)
+                .execute()
+            )
+            
+            if response.data and len(response.data) > 0:
+                sub_id = response.data[0]["id"]
+                logger.info(f"Stored substitution: {sub_data.get('ingredient')} -> {sub_data.get('substitute')}")
+                return sub_id
+            else:
+                raise DatabaseException("No data returned after insert")
+        except Exception as e:
+            logger.error(f"Failed to store substitution: {e}")
+            raise DatabaseException(f"Failed to store substitution: {e}")
+    
+    def update_receipt_status(self, receipt_id: str, status: str) -> None:
+        """
+        Update receipt processing status
+        
+        Args:
+            receipt_id: Receipt ID
+            status: New status
+        """
+        try:
+            self.client.table("receipts").update({
+                "status": status,
+                "processed_at": datetime.utcnow().isoformat() if status == "processed" else None
+            }).eq("id", receipt_id).execute()
+            
+            logger.info(f"Updated receipt {receipt_id} status to {status}")
+        except Exception as e:
+            logger.error(f"Failed to update receipt status: {e}")
+            raise DatabaseException(f"Failed to update receipt status: {e}")
 
 
 def create_supabase_service(

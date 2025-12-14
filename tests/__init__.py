@@ -1,2 +1,1 @@
-"""Test package for GrocerySync"""
-
+"""Tests package for GrocerySync backend"""

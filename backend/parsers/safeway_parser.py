@@ -270,6 +270,14 @@ class SafewayParser(BaseParser):
                     if regular_price:
                         savings = regular_price - price
                     
+                    # Extract quantity info from product name
+                    quantity_info = self._extract_quantity_info(product_name)
+                    
+                    # Calculate unit price
+                    unit_price = None
+                    if price and quantity and quantity > 0:
+                        unit_price = price / quantity
+                    
                     item = {
                         "name": product_name,
                         "price": price,
@@ -277,6 +285,8 @@ class SafewayParser(BaseParser):
                         "category": current_category,
                         "regular_price": regular_price,
                         "savings": savings,
+                        "quantity_info": quantity_info,
+                        "unit_price": unit_price,
                     }
                     items.append(item)
             
@@ -317,6 +327,7 @@ class SafewayParser(BaseParser):
             "REFRIG/FROZEN",
             "PRODUCE",
             "BAKERY",
+            "BAKED GOODS",
             "DELI",
             "SEAFOOD",
             "PHARMACY",
@@ -324,4 +335,63 @@ class SafewayParser(BaseParser):
             "HOUSEHOLD",
         ]
         return line.upper() in category_headers
+    
+    def _extract_quantity_info(self, product_name: str) -> Optional[Dict]:
+        """
+        Extract quantity/weight/volume information from product name
+        
+        Args:
+            product_name: Product name string
+        
+        Returns:
+            Dictionary with 'amount' and 'unit' keys, or None if not found
+        """
+        # Patterns to match various quantity formats
+        patterns = [
+            # Standard units: "8 Oz", "16oz", "1 lb", "1.5 lb"
+            r'(\d+\.?\d*)\s*(oz|ounce|lb|pound|kg|g|ml|l|count|pack)\b',
+            # Hyphenated format: "4-12oz", "4-12fz"
+            r'(\d+)-(\d+)\s*(oz|fz|fl\s*oz)\b',
+            # With "Count": "6 Count"
+            r'(\d+)\s*count\b',
+            # Per pound format: "@7.99/lb" (extract just the unit)
+            r'@\d+\.?\d*/(\w+)\b',
+        ]
+        
+        for pattern in patterns:
+            match = re.search(pattern, product_name, re.IGNORECASE)
+            if match:
+                groups = match.groups()
+                
+                # Handle hyphenated format (e.g., "4-12oz")
+                if len(groups) == 3 and groups[1]:
+                    # Use the second number as the unit amount (per package)
+                    return {
+                        'amount': float(groups[1]),
+                        'unit': groups[2].lower().replace('fz', 'oz').replace('fl oz', 'oz')
+                    }
+                # Handle standard format
+                elif len(groups) >= 2:
+                    unit = groups[1].lower()
+                    # Normalize units
+                    unit_map = {
+                        'ounce': 'oz',
+                        'pound': 'lb',
+                        'fz': 'oz',
+                        'fl oz': 'oz'
+                    }
+                    unit = unit_map.get(unit, unit)
+                    
+                    return {
+                        'amount': float(groups[0]),
+                        'unit': unit
+                    }
+                # Handle per pound format (just return the unit for reference)
+                elif len(groups) == 1 and groups[0]:
+                    return {
+                        'amount': 1,
+                        'unit': groups[0].lower()
+                    }
+        
+        return None
 
