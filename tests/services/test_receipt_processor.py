@@ -22,7 +22,11 @@ class TestReceiptProcessor:
         """Test successful receipt processing"""
         # Setup
         mock_supabase.get_receipt_items.return_value = sample_receipt_items
-        mock_normalization_service.normalize_product.return_value = sample_normalized_product
+        # Return a list of normalized products (one per item)
+        mock_normalization_service.normalize_products_batch.return_value = [
+            sample_normalized_product,
+            sample_normalized_product
+        ]
         mock_pantry_service.add_to_pantry = AsyncMock(return_value='pantry-1')
         mock_supabase.update_receipt_status.return_value = None
         
@@ -38,8 +42,8 @@ class TestReceiptProcessor:
         assert result['items_added_to_pantry'] == 2
         assert len(result['errors']) == 0
         
-        # Verify normalization was called for each item
-        assert mock_normalization_service.normalize_product.call_count == 2
+        # Verify batch normalization was called once with all items
+        assert mock_normalization_service.normalize_products_batch.call_count == 1
         
         # Verify pantry was updated for each item
         assert mock_pantry_service.add_to_pantry.call_count == 2
@@ -84,7 +88,11 @@ class TestReceiptProcessor:
         """Test receipt processing with some item errors"""
         # Setup
         mock_supabase.get_receipt_items.return_value = sample_receipt_items
-        mock_normalization_service.normalize_product.return_value = sample_normalized_product
+        # Return a list of normalized products (one per item)
+        mock_normalization_service.normalize_products_batch.return_value = [
+            sample_normalized_product,
+            sample_normalized_product
+        ]
         
         # Make pantry service fail for first item
         mock_pantry_service.add_to_pantry = AsyncMock(side_effect=[
@@ -118,7 +126,11 @@ class TestReceiptProcessor:
         # Setup
         receipt_ids = ['receipt-1', 'receipt-2']
         mock_supabase.get_receipt_items.return_value = sample_receipt_items
-        mock_normalization_service.normalize_product.return_value = sample_normalized_product
+        # Return a list of normalized products (one per item)
+        mock_normalization_service.normalize_products_batch.return_value = [
+            sample_normalized_product,
+            sample_normalized_product
+        ]
         mock_pantry_service.add_to_pantry = AsyncMock(return_value='pantry-1')
         mock_supabase.update_receipt_status.return_value = None
         
