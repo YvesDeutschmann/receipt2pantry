@@ -45,3 +45,12 @@ class ProviderNotFoundException(GrocerySyncException):
     """Exception raised when a provider is not found in registry"""
     pass
 
+
+class AIServiceException(GrocerySyncException):
+    """Exception for AI service errors (OpenAI, etc.)"""
+    pass
+
+
+class AIRateLimitException(AIServiceException):
+    """Exception raised when AI API rate limit is exceeded"""
+    pass

@@ -6,6 +6,7 @@ from backend.config import Config
 
 # Import parsers and providers to register them
 from backend.parsers import safeway_parser  # noqa: F401
+from backend.parsers import ai_parser  # noqa: F401
 from backend.providers import safeway_provider  # noqa: F401
 
 
@@ -19,6 +20,10 @@ class TestConfig(Config):
     SUPABASE_SERVICE_ROLE_KEY = None
     AWS_ACCESS_KEY_ID = None
     AWS_SECRET_ACCESS_KEY = None
+    OPENAI_API_KEY = None
+    OPENAI_MODEL = "gpt-4o-mini"
+    OPENAI_BATCH_SIZE = 20
+    OPENAI_TIMEOUT = 60
 
 
 @pytest.fixture

@@ -1,9 +1,13 @@
 """Product normalization service for mapping raw product names to normalized ingredients"""
 
 import re
-from typing import Dict, Optional
+from typing import Dict, List, Optional, TYPE_CHECKING
+
 from backend.services.supabase_service import SupabaseService
 from backend.utils.logger import get_logger
+
+if TYPE_CHECKING:
+    from backend.services.ai_service import AIService
 
 logger = get_logger(__name__)
 
@@ -11,14 +15,20 @@ logger = get_logger(__name__)
 class NormalizationService:
     """Service for normalizing product names to standard ingredients"""
     
-    def __init__(self, supabase: SupabaseService):
+    def __init__(
+        self,
+        supabase: SupabaseService,
+        ai_service: Optional["AIService"] = None
+    ):
         """
         Initialize NormalizationService
         
         Args:
             supabase: Supabase service instance
+            ai_service: Optional AI service for enhanced normalization
         """
         self.supabase = supabase
+        self.ai_service = ai_service
         self.cache = {}  # In-memory cache for frequently used mappings
     
     def normalize_product(self, raw_name: str, category: str) -> Dict:
@@ -278,18 +288,155 @@ class NormalizationService:
                     }
         
         return None
+    
+    def normalize_products_batch(
+        self,
+        products: List[Dict[str, str]],
+        use_ai: bool = True
+    ) -> List[Dict]:
+        """
+        Normalize a batch of products, using AI when available and cache for efficiency
+        
+        Args:
+            products: List of dicts with 'raw_name' and 'category' keys
+            use_ai: Whether to use AI for normalization (default True)
+        
+        Returns:
+            List of normalized product dictionaries in the same order
+        """
+        if not products:
+            return []
+        
+        results = [None] * len(products)
+        cache_misses = []
+        cache_miss_indices = []
+        
+        # Step 1: Check cache for each product
+        for i, product in enumerate(products):
+            raw_name = product.get('raw_name', '')
+            category = product.get('category', '')
+            
+            # Check in-memory cache
+            if raw_name in self.cache:
+                results[i] = self.cache[raw_name]
+                continue
+            
+            # Check database cache
+            cached = self.supabase.get_product_mapping(raw_name)
+            if cached:
+                self.cache[raw_name] = cached
+                results[i] = cached
+                continue
+            
+            # Track cache miss for batch processing
+            cache_misses.append(product)
+            cache_miss_indices.append(i)
+        
+        logger.info(
+            f"Batch normalization: {len(products)} products, "
+            f"{len(products) - len(cache_misses)} cache hits, "
+            f"{len(cache_misses)} cache misses"
+        )
+        
+        if not cache_misses:
+            return results
+        
+        # Step 2: Process cache misses
+        if use_ai and self.ai_service and self.ai_service.is_available:
+            # Use AI for batch normalization
+            # Process in chunks to respect API batch size limits
+            try:
+                batch_size = getattr(self.ai_service.config, 'OPENAI_BATCH_SIZE', 20)
+                all_ai_results = []
+                
+                # Process cache misses in batches
+                for batch_start in range(0, len(cache_misses), batch_size):
+                    batch_end = min(batch_start + batch_size, len(cache_misses))
+                    batch = cache_misses[batch_start:batch_end]
+                    
+                    logger.info(f"Processing AI batch {batch_start//batch_size + 1}: items {batch_start+1}-{batch_end}")
+                    batch_results = self.ai_service.normalize_products_batch(batch)
+                    all_ai_results.extend(batch_results)
+                
+                # Match AI results back to original positions
+                for idx, ai_result in zip(cache_miss_indices, all_ai_results):
+                    raw_name = products[idx].get('raw_name', '')
+                    
+                    # Add raw_name to result for storage
+                    ai_result['raw_name'] = raw_name
+                    
+                    # Store in caches
+                    try:
+                        self.supabase.store_product_mapping(ai_result)
+                    except Exception as e:
+                        logger.warning(f"Failed to store AI mapping for {raw_name}: {e}")
+                    
+                    self.cache[raw_name] = ai_result
+                    results[idx] = ai_result
+                
+                logger.info(f"AI normalized {len(all_ai_results)} products")
+                
+            except Exception as e:
+                logger.error(f"AI batch normalization failed: {e}, falling back to rules")
+                # Fall back to rule-based for failures
+                for idx, product in zip(cache_miss_indices, cache_misses):
+                    raw_name = product.get('raw_name', '')
+                    category = product.get('category', '')
+                    normalized = self._basic_normalization(raw_name, category)
+                    normalized['raw_name'] = raw_name
+                    
+                    try:
+                        self.supabase.store_product_mapping(normalized)
+                    except Exception as store_error:
+                        logger.warning(f"Failed to store mapping for {raw_name}: {store_error}")
+                    
+                    self.cache[raw_name] = normalized
+                    results[idx] = normalized
+        else:
+            # Use rule-based normalization
+            for idx, product in zip(cache_miss_indices, cache_misses):
+                raw_name = product.get('raw_name', '')
+                category = product.get('category', '')
+                normalized = self._basic_normalization(raw_name, category)
+                normalized['raw_name'] = raw_name
+                
+                try:
+                    self.supabase.store_product_mapping(normalized)
+                except Exception as e:
+                    logger.warning(f"Failed to store mapping for {raw_name}: {e}")
+                
+                self.cache[raw_name] = normalized
+                results[idx] = normalized
+            
+            logger.info(f"Rule-based normalized {len(cache_misses)} products")
+        
+        return results
+    
+    def set_ai_service(self, ai_service: "AIService") -> None:
+        """
+        Set the AI service for enhanced normalization
+        
+        Args:
+            ai_service: AIService instance
+        """
+        self.ai_service = ai_service
+        logger.info("AI service configured for normalization")
 
 
-def create_normalization_service(supabase: SupabaseService) -> NormalizationService:
+def create_normalization_service(
+    supabase: SupabaseService,
+    ai_service: Optional["AIService"] = None
+) -> NormalizationService:
     """
     Factory function to create NormalizationService
     
     Args:
         supabase: Supabase service instance
+        ai_service: Optional AI service for enhanced normalization
     
     Returns:
         Initialized NormalizationService instance
     """
-    return NormalizationService(supabase)
+    return NormalizationService(supabase, ai_service)
 
 

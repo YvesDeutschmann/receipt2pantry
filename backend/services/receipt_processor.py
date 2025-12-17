@@ -31,13 +31,21 @@ class ReceiptProcessor:
         self.normalizer = normalizer
         self.pantry = pantry
     
-    async def process_receipt(self, receipt_id: str, user_id: str) -> Dict:
+    async def process_receipt(
+        self,
+        receipt_id: str,
+        user_id: str,
+        use_ai: bool = True
+    ) -> Dict:
         """
         Process receipt through full workflow: parse -> normalize -> add to pantry
+        
+        Uses batch normalization for efficiency when AI is enabled.
         
         Args:
             receipt_id: Receipt ID
             user_id: User ID
+            use_ai: Whether to use AI for normalization (default True)
         
         Returns:
             Dictionary with processing results
@@ -55,35 +63,53 @@ class ReceiptProcessor:
                     'status': 'no_items',
                     'items_processed': 0,
                     'items_added_to_pantry': 0,
-                    'errors': []
+                    'errors': [],
+                    'ai_used': False
                 }
             
             logger.info(f"Found {len(items)} items in receipt")
             
-            # 2. Normalize and add each item to pantry
+            # 2. Prepare items for batch normalization
+            products_to_normalize = []
+            valid_items = []
+            
+            for item in items:
+                raw_name = item.get('raw_name') or item.get('name')
+                category = item.get('category', '')
+                
+                if not raw_name:
+                    logger.warning(f"Skipping item with no name: {item}")
+                    continue
+                
+                products_to_normalize.append({
+                    'raw_name': raw_name,
+                    'category': category
+                })
+                valid_items.append(item)
+            
+            # 3. Batch normalize all products at once
+            normalized_results = self.normalizer.normalize_products_batch(
+                products_to_normalize,
+                use_ai=use_ai
+            )
+            
+            # 4. Add normalized items to pantry
             items_processed = 0
             items_added = 0
             errors = []
             normalized_items = []
             
-            for item in items:
+            for item, normalized in zip(valid_items, normalized_results):
                 try:
                     raw_name = item.get('raw_name') or item.get('name')
-                    category = item.get('category', '')
                     
-                    if not raw_name:
-                        logger.warning(f"Skipping item with no name: {item}")
-                        continue
-                    
-                    # Normalize the product
-                    normalized = self.normalizer.normalize_product(raw_name, category)
                     normalized_items.append({
                         'raw_name': raw_name,
                         'normalized': normalized
                     })
                     
-                    # Extract quantity info
-                    quantity_info = item.get('quantity_info')
+                    # Extract quantity info (prefer from item, fallback to normalized)
+                    quantity_info = item.get('quantity_info') or normalized.get('quantity_info')
                     
                     # Determine quantity and unit for pantry
                     if quantity_info and quantity_info.get('amount') and quantity_info.get('unit'):
@@ -107,18 +133,26 @@ class ReceiptProcessor:
                     items_added += 1
                     
                 except Exception as e:
+                    raw_name = item.get('raw_name') or item.get('name', 'unknown')
                     error_msg = f"Failed to process item '{raw_name}': {str(e)}"
                     logger.error(error_msg)
                     errors.append(error_msg)
                     items_processed += 1
             
-            # 3. Update receipt status
+            # 5. Update receipt status
             if errors:
                 status = 'processed_with_errors'
             else:
                 status = 'processed'
             
             self.supabase.update_receipt_status(receipt_id, status)
+            
+            # Check if AI was actually used
+            ai_used = any(
+                n.get('source') == 'openai'
+                for n in normalized_results
+                if n
+            )
             
             result = {
                 'receipt_id': receipt_id,
@@ -127,12 +161,14 @@ class ReceiptProcessor:
                 'items_processed': items_processed,
                 'items_added_to_pantry': items_added,
                 'normalized_items': normalized_items,
-                'errors': errors
+                'errors': errors,
+                'ai_used': ai_used
             }
             
             logger.info(
                 f"Completed receipt processing for {receipt_id}: "
                 f"{items_added}/{len(items)} items added to pantry"
+                f"{' (with AI)' if ai_used else ''}"
             )
             
             return result

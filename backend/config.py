@@ -42,6 +42,13 @@ class Config:
     # CORS
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
     
+    # OpenAI
+    OPENAI_API_KEY: Optional[str] = os.getenv("OPENAI_API_KEY")
+    OPENAI_MODEL: str = os.getenv("OPENAI_MODEL", "gpt-4o-mini")
+    OPENAI_BATCH_SIZE: int = int(os.getenv("OPENAI_BATCH_SIZE", "20"))
+    OPENAI_MAX_RETRIES: int = int(os.getenv("OPENAI_MAX_RETRIES", "3"))
+    OPENAI_TIMEOUT: int = int(os.getenv("OPENAI_TIMEOUT", "60"))
+    
     @classmethod
     def validate(cls) -> None:
         """Validate that required configuration is present"""

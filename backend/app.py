@@ -41,6 +41,19 @@ def create_app(config=None):
     CORS(app, resources={r"/api/*": {"origins": cors_origins}})
     logger.info(f"CORS enabled for origins: {cors_origins}")
     
+    # Initialize AI service if configured (do this first so other services can use it)
+    ai_service = None
+    if config.OPENAI_API_KEY:
+        try:
+            from backend.services.ai_service import create_ai_service
+            ai_service = create_ai_service(config)
+            app.config["AI_SERVICE"] = ai_service
+            logger.info("AI service initialized")
+        except Exception as e:
+            logger.warning(f"Failed to initialize AI service: {e}")
+    else:
+        logger.info("OpenAI not configured (AI features disabled)")
+    
     # Initialize services (only if in production or explicitly configured)
     if config.SUPABASE_URL and config.SUPABASE_KEY:
         try:
@@ -63,9 +76,10 @@ def create_app(config=None):
             app.config["PANTRY_SERVICE"] = pantry_service
             logger.info("Pantry service initialized")
             
-            normalization_service = create_normalization_service(supabase_service)
+            # Initialize normalization service with AI if available
+            normalization_service = create_normalization_service(supabase_service, ai_service)
             app.config["NORMALIZATION_SERVICE"] = normalization_service
-            logger.info("Normalization service initialized")
+            logger.info("Normalization service initialized" + (" with AI" if ai_service else ""))
             
             receipt_processor = create_receipt_processor(
                 supabase_service,
@@ -132,6 +146,7 @@ def create_app(config=None):
     # This ensures @register_provider and @register_parser decorators are executed
     from backend.providers import safeway_provider  # noqa: F401
     from backend.parsers import safeway_parser  # noqa: F401
+    from backend.parsers import ai_parser  # noqa: F401
     
     # Register blueprints
     app.register_blueprint(health_bp, url_prefix="/api")
