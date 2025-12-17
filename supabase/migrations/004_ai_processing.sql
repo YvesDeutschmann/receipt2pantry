@@ -108,6 +108,10 @@ ORDER BY month DESC;
 -- Enable RLS on ai_processing_log
 ALTER TABLE ai_processing_log ENABLE ROW LEVEL SECURITY;
 
+-- Drop existing policies if they exist (idempotent)
+DROP POLICY IF EXISTS "Users can view own AI logs" ON ai_processing_log;
+DROP POLICY IF EXISTS "Service role can manage AI logs" ON ai_processing_log;
+
 -- Policy: Users can view their own AI processing logs
 CREATE POLICY "Users can view own AI logs"
     ON ai_processing_log
