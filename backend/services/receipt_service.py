@@ -140,6 +140,7 @@ def store_parsed_receipt(
     receipt_data: Dict,
     supabase_service,
     grocery_account_id: str = None,
+    household_id: str = None,
 ) -> str:
     """
     Store a parsed receipt in the database
@@ -150,6 +151,7 @@ def store_parsed_receipt(
         receipt_data: Parsed receipt data
         supabase_service: Supabase service instance
         grocery_account_id: Optional grocery account ID
+        household_id: Optional household ID for shared access
     
     Returns:
         Receipt ID
@@ -157,9 +159,15 @@ def store_parsed_receipt(
     logger.info(f"Storing receipt {receipt_data.get('order_id')} for user {user_id}")
     
     try:
+        # Get household_id if not provided
+        if not household_id:
+            household = supabase_service.get_user_household(user_id)
+            household_id = household["id"] if household else None
+        
         # Prepare receipt record
         receipt_record = {
             "user_id": user_id,
+            "household_id": household_id,
             "grocery_account_id": grocery_account_id,
             "provider": provider,
             "order_id": receipt_data["order_id"],

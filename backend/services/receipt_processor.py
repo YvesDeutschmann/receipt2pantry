@@ -35,7 +35,8 @@ class ReceiptProcessor:
         self,
         receipt_id: str,
         user_id: str,
-        use_ai: bool = True
+        use_ai: bool = True,
+        household_id: str = None
     ) -> Dict:
         """
         Process receipt through full workflow: parse -> normalize -> add to pantry
@@ -46,12 +47,18 @@ class ReceiptProcessor:
             receipt_id: Receipt ID
             user_id: User ID
             use_ai: Whether to use AI for normalization (default True)
+            household_id: Household ID for shared pantry (optional, looked up if not provided)
         
         Returns:
             Dictionary with processing results
         """
         try:
             logger.info(f"Starting receipt processing for receipt {receipt_id}")
+            
+            # Get household_id if not provided
+            if not household_id:
+                household = self.supabase.get_user_household(user_id)
+                household_id = household["id"] if household else None
             
             # 1. Get receipt items
             items = self.supabase.get_receipt_items(receipt_id)
@@ -120,13 +127,14 @@ class ReceiptProcessor:
                         quantity = item.get('quantity', 1)
                         unit = 'count'
                     
-                    # Add to pantry
+                    # Add to pantry (household-scoped if available)
                     await self.pantry.add_to_pantry(
                         user_id=user_id,
                         normalized_item=normalized,
                         quantity=quantity,
                         unit=unit,
-                        receipt_id=receipt_id
+                        receipt_id=receipt_id,
+                        household_id=household_id
                     )
                     
                     items_processed += 1
@@ -156,6 +164,7 @@ class ReceiptProcessor:
             
             result = {
                 'receipt_id': receipt_id,
+                'household_id': household_id,
                 'status': status,
                 'total_items': len(items),
                 'items_processed': items_processed,

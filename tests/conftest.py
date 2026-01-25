@@ -146,3 +146,51 @@ def test_receipt_id() -> str:
     return 'test-receipt-456'
 
 
+@pytest.fixture
+def test_household_id() -> str:
+    """Test household ID"""
+    return 'test-household-789'
+
+
+@pytest.fixture
+def sample_household() -> Dict:
+    """Sample household data for testing"""
+    return {
+        'id': 'test-household-789',
+        'name': 'Test Family',
+        'join_code': 'ABC123',
+        'created_by': 'test-user-123',
+        'created_at': '2025-01-01T00:00:00Z',
+        'role': 'owner',
+        'joined_at': '2025-01-01T00:00:00Z'
+    }
+
+
+@pytest.fixture
+def sample_household_members() -> List[Dict]:
+    """Sample household members for testing"""
+    return [
+        {
+            'id': 'member-1',
+            'household_id': 'test-household-789',
+            'user_id': 'test-user-123',
+            'role': 'owner',
+            'joined_at': '2025-01-01T00:00:00Z'
+        },
+        {
+            'id': 'member-2',
+            'household_id': 'test-household-789',
+            'user_id': 'test-user-456',
+            'role': 'member',
+            'joined_at': '2025-01-02T00:00:00Z'
+        }
+    ]
+
+
+@pytest.fixture
+def mock_household_service():
+    """Mock Household service for testing"""
+    from backend.services.household_service import HouseholdService
+    return Mock(spec=HouseholdService)
+
+

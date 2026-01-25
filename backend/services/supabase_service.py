@@ -639,6 +639,387 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Failed to update receipt status: {e}")
             raise DatabaseException(f"Failed to update receipt status: {e}")
+    
+    # =========================================================================
+    # Household Management Methods
+    # =========================================================================
+    
+    def get_user_household(self, user_id: str) -> Optional[Dict]:
+        """
+        Get the household a user belongs to
+        
+        Args:
+            user_id: User ID
+        
+        Returns:
+            Household dictionary with membership info or None
+        """
+        try:
+            # Get membership first
+            member_response = (
+                self.client.table("household_members")
+                .select("*, households(*)")
+                .eq("user_id", user_id)
+                .execute()
+            )
+            
+            if member_response.data and len(member_response.data) > 0:
+                membership = member_response.data[0]
+                household = membership.get("households", {})
+                return {
+                    "id": household.get("id"),
+                    "name": household.get("name"),
+                    "join_code": household.get("join_code"),
+                    "created_by": household.get("created_by"),
+                    "created_at": household.get("created_at"),
+                    "role": membership.get("role"),
+                    "joined_at": membership.get("joined_at")
+                }
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get household for user {user_id}: {e}")
+            raise DatabaseException(f"Failed to get user household: {e}")
+    
+    def get_household_by_code(self, join_code: str) -> Optional[Dict]:
+        """
+        Get a household by its join code
+        
+        Args:
+            join_code: Household join code
+        
+        Returns:
+            Household dictionary or None
+        """
+        try:
+            response = (
+                self.client.table("households")
+                .select("*")
+                .eq("join_code", join_code.upper())
+                .execute()
+            )
+            
+            if response.data and len(response.data) > 0:
+                return response.data[0]
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get household by code: {e}")
+            raise DatabaseException(f"Failed to get household by code: {e}")
+    
+    def get_household_by_id(self, household_id: str) -> Optional[Dict]:
+        """
+        Get a household by its ID
+        
+        Args:
+            household_id: Household UUID
+        
+        Returns:
+            Household dictionary or None
+        """
+        try:
+            response = (
+                self.client.table("households")
+                .select("*")
+                .eq("id", household_id)
+                .execute()
+            )
+            
+            if response.data and len(response.data) > 0:
+                return response.data[0]
+            return None
+        except Exception as e:
+            logger.error(f"Failed to get household {household_id}: {e}")
+            raise DatabaseException(f"Failed to get household: {e}")
+    
+    def create_household(self, user_id: str, name: str, join_code: str) -> Dict:
+        """
+        Create a new household
+        
+        Creates household and adds creator as owner. If membership creation fails,
+        the household is rolled back to prevent orphaned records.
+        
+        Args:
+            user_id: User ID of the creator
+            name: Household name
+            join_code: Generated join code
+        
+        Returns:
+            Created household dictionary
+        """
+        household_id = None
+        try:
+            # Create the household
+            household_response = (
+                self.client.table("households")
+                .insert({
+                    "name": name,
+                    "join_code": join_code.upper(),
+                    "created_by": user_id
+                })
+                .execute()
+            )
+            
+            if not household_response.data or len(household_response.data) == 0:
+                raise DatabaseException("No data returned after household creation")
+            
+            household = household_response.data[0]
+            household_id = household["id"]
+            
+            # Add creator as owner
+            try:
+                self.client.table("household_members").insert({
+                    "household_id": household_id,
+                    "user_id": user_id,
+                    "role": "owner"
+                }).execute()
+            except Exception as member_error:
+                # Membership insert failed - rollback by deleting the household
+                logger.error(f"Failed to add owner to household, rolling back: {member_error}")
+                try:
+                    self.client.table("households").delete().eq(
+                        "id", household_id
+                    ).execute()
+                    logger.info(f"Rolled back household {household_id} after membership failure")
+                except Exception as rollback_error:
+                    logger.error(
+                        f"Failed to rollback household {household_id}: {rollback_error}. "
+                        "Manual cleanup may be required."
+                    )
+                raise DatabaseException(f"Failed to create household membership: {member_error}")
+            
+            logger.info(f"Created household {household_id} for user {user_id}")
+            return household
+            
+        except DatabaseException:
+            # Re-raise DatabaseExceptions as-is
+            raise
+        except Exception as e:
+            # Clean up household if it was created but something else failed
+            if household_id:
+                try:
+                    self.client.table("households").delete().eq(
+                        "id", household_id
+                    ).execute()
+                    logger.info(f"Cleaned up household {household_id} after error")
+                except Exception as cleanup_error:
+                    logger.error(
+                        f"Failed to cleanup household {household_id}: {cleanup_error}. "
+                        "Manual cleanup may be required."
+                    )
+            logger.error(f"Failed to create household: {e}")
+            raise DatabaseException(f"Failed to create household: {e}")
+    
+    def add_household_member(
+        self, household_id: str, user_id: str, role: str = "member"
+    ) -> str:
+        """
+        Add a user to a household
+        
+        Args:
+            household_id: Household ID
+            user_id: User ID to add
+            role: Member role ('owner' or 'member')
+        
+        Returns:
+            Membership ID
+        """
+        try:
+            response = (
+                self.client.table("household_members")
+                .insert({
+                    "household_id": household_id,
+                    "user_id": user_id,
+                    "role": role
+                })
+                .execute()
+            )
+            
+            if response.data and len(response.data) > 0:
+                member_id = response.data[0]["id"]
+                logger.info(f"Added user {user_id} to household {household_id}")
+                return member_id
+            else:
+                raise DatabaseException("No data returned after adding member")
+                
+        except Exception as e:
+            logger.error(f"Failed to add household member: {e}")
+            raise DatabaseException(f"Failed to add household member: {e}")
+    
+    def remove_household_member(self, user_id: str) -> None:
+        """
+        Remove a user from their household
+        
+        Args:
+            user_id: User ID to remove
+        """
+        try:
+            self.client.table("household_members").delete().eq(
+                "user_id", user_id
+            ).execute()
+            
+            logger.info(f"Removed user {user_id} from household")
+        except Exception as e:
+            logger.error(f"Failed to remove household member: {e}")
+            raise DatabaseException(f"Failed to remove household member: {e}")
+    
+    def get_household_members(self, household_id: str) -> List[Dict]:
+        """
+        Get all members of a household
+        
+        Args:
+            household_id: Household ID
+        
+        Returns:
+            List of member dictionaries
+        """
+        try:
+            response = (
+                self.client.table("household_members")
+                .select("*")
+                .eq("household_id", household_id)
+                .order("joined_at", desc=False)
+                .execute()
+            )
+            return response.data if response.data else []
+        except Exception as e:
+            logger.error(f"Failed to get household members: {e}")
+            raise DatabaseException(f"Failed to get household members: {e}")
+    
+    def update_household(self, household_id: str, updates: Dict) -> None:
+        """
+        Update household details
+        
+        Args:
+            household_id: Household ID
+            updates: Dictionary of fields to update
+        """
+        try:
+            self.client.table("households").update(updates).eq(
+                "id", household_id
+            ).execute()
+            
+            logger.info(f"Updated household {household_id}")
+        except Exception as e:
+            logger.error(f"Failed to update household: {e}")
+            raise DatabaseException(f"Failed to update household: {e}")
+    
+    def delete_household(self, household_id: str) -> None:
+        """
+        Delete a household and all associated memberships
+        
+        Args:
+            household_id: Household ID
+        """
+        try:
+            self.client.table("households").delete().eq(
+                "id", household_id
+            ).execute()
+            
+            logger.info(f"Deleted household {household_id}")
+        except Exception as e:
+            logger.error(f"Failed to delete household: {e}")
+            raise DatabaseException(f"Failed to delete household: {e}")
+    
+    def is_join_code_unique(self, join_code: str) -> bool:
+        """
+        Check if a join code is unique
+        
+        Args:
+            join_code: Join code to check
+        
+        Returns:
+            True if unique, False otherwise
+        """
+        try:
+            response = (
+                self.client.table("households")
+                .select("id")
+                .eq("join_code", join_code.upper())
+                .execute()
+            )
+            return not response.data or len(response.data) == 0
+        except Exception as e:
+            logger.error(f"Failed to check join code uniqueness: {e}")
+            return False
+    
+    # =========================================================================
+    # Household-aware Data Access Methods
+    # =========================================================================
+    
+    def get_household_pantry(self, household_id: str) -> List[Dict]:
+        """
+        Get all pantry items for a household
+        
+        Args:
+            household_id: Household ID
+        
+        Returns:
+            List of pantry item dictionaries
+        """
+        try:
+            response = (
+                self.client.table("pantry_items")
+                .select("*")
+                .eq("household_id", household_id)
+                .gt("quantity", 0)
+                .order("base_ingredient", desc=False)
+                .execute()
+            )
+            return response.data if response.data else []
+        except Exception as e:
+            logger.error(f"Failed to get pantry for household {household_id}: {e}")
+            raise DatabaseException(f"Failed to retrieve household pantry: {e}")
+    
+    def get_household_receipts(self, household_id: str, limit: int = 50) -> List[Dict]:
+        """
+        Get receipts for a household
+        
+        Args:
+            household_id: Household ID
+            limit: Maximum number of receipts to return
+        
+        Returns:
+            List of receipt dictionaries
+        """
+        try:
+            response = (
+                self.client.table("receipts")
+                .select("*")
+                .eq("household_id", household_id)
+                .order("order_date", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            return response.data if response.data else []
+        except Exception as e:
+            logger.error(f"Failed to get receipts for household {household_id}: {e}")
+            raise DatabaseException(f"Failed to retrieve household receipts: {e}")
+    
+    def get_household_cooking_history(
+        self, household_id: str, limit: int = 50
+    ) -> List[Dict]:
+        """
+        Get cooking history for a household
+        
+        Args:
+            household_id: Household ID
+            limit: Maximum number of entries to return
+        
+        Returns:
+            List of cooking log dictionaries
+        """
+        try:
+            response = (
+                self.client.table("cooking_log")
+                .select("*")
+                .eq("household_id", household_id)
+                .order("cooked_at", desc=True)
+                .limit(limit)
+                .execute()
+            )
+            return response.data if response.data else []
+        except Exception as e:
+            logger.error(f"Failed to get cooking history for household {household_id}: {e}")
+            raise DatabaseException(f"Failed to retrieve household cooking history: {e}")
 
 
 def create_supabase_service(

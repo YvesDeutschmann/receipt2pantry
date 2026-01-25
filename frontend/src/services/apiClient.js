@@ -124,6 +124,68 @@ export const api = {
   cancelLoginSession: async (providerName, sessionId) => {
     await apiClient.delete(`/providers/${providerName}/login/${sessionId}`)
   },
+
+  // Household Management
+  getHousehold: async (userId) => {
+    const response = await apiClient.get('/households', {
+      headers: { 'X-User-Id': userId }
+    })
+    return response.data
+  },
+
+  createHousehold: async (userId, name) => {
+    const response = await apiClient.post('/households', 
+      { name },
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
+  joinHousehold: async (userId, joinCode) => {
+    const response = await apiClient.post('/households/join',
+      { join_code: joinCode },
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
+  leaveHousehold: async (userId) => {
+    const response = await apiClient.post('/households/leave',
+      {},
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
+  getHouseholdMembers: async (userId) => {
+    const response = await apiClient.get('/households/members', {
+      headers: { 'X-User-Id': userId }
+    })
+    return response.data
+  },
+
+  regenerateJoinCode: async (userId) => {
+    const response = await apiClient.post('/households/code',
+      {},
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
+  updateHouseholdName: async (userId, name) => {
+    const response = await apiClient.put('/households/name',
+      { name },
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
+  removeMember: async (userId, memberUserId) => {
+    const response = await apiClient.delete(`/households/members/${memberUserId}`, {
+      headers: { 'X-User-Id': userId }
+    })
+    return response.data
+  },
 }
 
 export default apiClient

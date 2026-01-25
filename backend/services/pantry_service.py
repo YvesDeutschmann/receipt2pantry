@@ -1,16 +1,16 @@
-"""Pantry management service for tracking user ingredient inventory"""
+"""Pantry management service for tracking household ingredient inventory"""
 
 from typing import Dict, List, Optional
 from datetime import datetime
 from backend.services.supabase_service import SupabaseService
-from backend.utils.exceptions import DatabaseException
+from backend.utils.exceptions import DatabaseException, ValidationException
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
 
 class PantryService:
-    """Service for managing user pantry inventory"""
+    """Service for managing household pantry inventory"""
     
     def __init__(self, supabase: SupabaseService):
         """
@@ -21,30 +21,68 @@ class PantryService:
         """
         self.supabase = supabase
     
+    def _get_household_id_for_user(self, user_id: str) -> Optional[str]:
+        """
+        Get the household ID for a user
+        
+        Args:
+            user_id: User ID
+        
+        Returns:
+            Household ID or None if user has no household
+        """
+        household = self.supabase.get_user_household(user_id)
+        return household["id"] if household else None
+    
+    def _get_pantry_items(
+        self, user_id: str, household_id: Optional[str] = None
+    ) -> List[Dict]:
+        """
+        Get pantry items, preferring household scope if available
+        
+        Args:
+            user_id: User ID (for legacy fallback)
+            household_id: Household ID (preferred)
+        
+        Returns:
+            List of pantry items
+        """
+        if household_id:
+            return self.supabase.get_household_pantry(household_id)
+        else:
+            # Fallback to user-scoped pantry (legacy)
+            return self.supabase.get_user_pantry(user_id)
+    
     async def add_to_pantry(
         self,
         user_id: str,
         normalized_item: Dict,
         quantity: float,
         unit: str,
-        receipt_id: str
+        receipt_id: str,
+        household_id: Optional[str] = None
     ) -> str:
         """
         Add or update pantry item with variant awareness
         
         Args:
-            user_id: User ID
+            user_id: User ID (who added the item)
             normalized_item: Normalized product dictionary with base_ingredient, variant, etc.
             quantity: Quantity to add
             unit: Unit of measurement
             receipt_id: Source receipt ID
+            household_id: Household ID (optional, will be looked up if not provided)
         
         Returns:
             Pantry item ID
         """
         try:
-            # Check if item already exists with same base_ingredient + variant
-            existing_items = self.supabase.get_user_pantry(user_id)
+            # Get household ID if not provided
+            if not household_id:
+                household_id = self._get_household_id_for_user(user_id)
+            
+            # Get existing items (household-scoped if available)
+            existing_items = self._get_pantry_items(user_id, household_id)
             
             existing_item = None
             for item in existing_items:
@@ -75,6 +113,7 @@ class PantryService:
                 # Insert new item
                 item_data = {
                     'user_id': user_id,
+                    'household_id': household_id,
                     'base_ingredient': normalized_item.get('base_ingredient'),
                     'variant': normalized_item.get('variant'),
                     'normalized_name': normalized_item.get('normalized_name'),
@@ -99,18 +138,25 @@ class PantryService:
             logger.error(f"Failed to add item to pantry: {e}")
             raise DatabaseException(f"Failed to add to pantry: {e}")
     
-    async def get_pantry_summary(self, user_id: str) -> Dict:
+    async def get_pantry_summary(
+        self, user_id: str, household_id: Optional[str] = None
+    ) -> Dict:
         """
         Get organized pantry with variants grouped
         
         Args:
             user_id: User ID
+            household_id: Household ID (optional, will be looked up if not provided)
         
         Returns:
             Dictionary with grouped pantry items
         """
         try:
-            items = self.supabase.get_user_pantry(user_id)
+            # Get household ID if not provided
+            if not household_id:
+                household_id = self._get_household_id_for_user(user_id)
+            
+            items = self._get_pantry_items(user_id, household_id)
             
             # Group by base_ingredient
             grouped = {}
@@ -127,7 +173,8 @@ class PantryService:
                 'total_items': len(items),
                 'unique_ingredients': len(grouped),
                 'items': items,
-                'grouped': list(grouped.values())
+                'grouped': list(grouped.values()),
+                'household_id': household_id
             }
         except Exception as e:
             logger.error(f"Failed to get pantry summary: {e}")
@@ -139,23 +186,29 @@ class PantryService:
         recipe_id: str,
         recipe_name: str,
         servings: int,
-        ingredients: List[Dict]
+        ingredients: List[Dict],
+        household_id: Optional[str] = None
     ) -> Dict:
         """
         Deduct ingredients when recipe is cooked
         
         Args:
-            user_id: User ID
+            user_id: User ID (who cooked)
             recipe_id: Recipe ID
             recipe_name: Recipe name
             servings: Number of servings cooked
             ingredients: List of ingredient dicts with 'name', 'amount', 'unit'
+            household_id: Household ID (optional, will be looked up if not provided)
         
         Returns:
             Dictionary with consumption results
         """
         try:
-            pantry_items = self.supabase.get_user_pantry(user_id)
+            # Get household ID if not provided
+            if not household_id:
+                household_id = self._get_household_id_for_user(user_id)
+            
+            pantry_items = self._get_pantry_items(user_id, household_id)
             consumed = []
             warnings = []
             
@@ -189,9 +242,10 @@ class PantryService:
                 else:
                     warnings.append(f"{ing_name} was not found in pantry (not deducted)")
             
-            # Log cooking event
+            # Log cooking event (household-scoped)
             log_data = {
                 'user_id': user_id,
+                'household_id': household_id,
                 'recipe_id': recipe_id,
                 'recipe_name': recipe_name,
                 'servings': servings,
@@ -218,7 +272,8 @@ class PantryService:
     async def check_ingredient_availability(
         self,
         user_id: str,
-        required_ingredients: List[Dict]
+        required_ingredients: List[Dict],
+        household_id: Optional[str] = None
     ) -> Dict:
         """
         Check what's available, missing, or substitutable
@@ -226,12 +281,17 @@ class PantryService:
         Args:
             user_id: User ID
             required_ingredients: List of required ingredient dicts with 'name', 'amount', 'unit'
+            household_id: Household ID (optional, will be looked up if not provided)
         
         Returns:
             Dictionary with availability analysis
         """
         try:
-            pantry_items = self.supabase.get_user_pantry(user_id)
+            # Get household ID if not provided
+            if not household_id:
+                household_id = self._get_household_id_for_user(user_id)
+            
+            pantry_items = self._get_pantry_items(user_id, household_id)
             
             available = []
             insufficient = []
@@ -312,7 +372,8 @@ class PantryService:
                 'available': available,
                 'insufficient': insufficient,
                 'missing': missing,
-                'substitutable': substitutable
+                'substitutable': substitutable,
+                'household_id': household_id
             }
             
         except Exception as e:
@@ -331,5 +392,3 @@ def create_pantry_service(supabase: SupabaseService) -> PantryService:
         Initialized PantryService instance
     """
     return PantryService(supabase)
-
-

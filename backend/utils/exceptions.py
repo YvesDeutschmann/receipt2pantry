@@ -54,3 +54,13 @@ class AIServiceException(GrocerySyncException):
 class AIRateLimitException(AIServiceException):
     """Exception raised when AI API rate limit is exceeded"""
     pass
+
+
+class ValidationException(GrocerySyncException):
+    """Exception raised when input validation fails"""
+    pass
+
+
+class AuthorizationException(GrocerySyncException):
+    """Exception raised when user is not authorized for an action"""
+    pass

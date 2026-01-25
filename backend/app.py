@@ -11,6 +11,7 @@ from backend.routes.health import health_bp
 from backend.routes.receipts import receipts_bp
 from backend.routes.providers import providers_bp
 from backend.routes.parsers import parsers_bp
+from backend.routes.households import households_bp
 
 
 def create_app(config=None):
@@ -61,6 +62,7 @@ def create_app(config=None):
             from backend.services.pantry_service import create_pantry_service
             from backend.services.normalization_service import create_normalization_service
             from backend.services.receipt_processor import create_receipt_processor
+            from backend.services.household_service import create_household_service
             
             # Initialize Supabase service
             supabase_service = create_supabase_service(
@@ -70,6 +72,11 @@ def create_app(config=None):
             )
             app.config["SUPABASE_SERVICE"] = supabase_service
             logger.info("Supabase service initialized")
+            
+            # Initialize household service
+            household_service = create_household_service(supabase_service)
+            app.config["HOUSEHOLD_SERVICE"] = household_service
+            logger.info("Household service initialized")
             
             # Initialize pantry management services
             pantry_service = create_pantry_service(supabase_service)
@@ -153,6 +160,7 @@ def create_app(config=None):
     app.register_blueprint(receipts_bp, url_prefix="/api")
     app.register_blueprint(providers_bp, url_prefix="/api")
     app.register_blueprint(parsers_bp, url_prefix="/api")
+    app.register_blueprint(households_bp, url_prefix="/api")
     logger.info("Routes registered")
     
     # Register error handlers
