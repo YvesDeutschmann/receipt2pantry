@@ -14,6 +14,7 @@ class TestReceiptProcessor:
         mock_supabase,
         mock_normalization_service,
         mock_pantry_service,
+        sample_household,
         sample_receipt_items,
         sample_normalized_product,
         test_receipt_id,
@@ -21,6 +22,7 @@ class TestReceiptProcessor:
     ):
         """Test successful receipt processing"""
         # Setup
+        mock_supabase.get_user_household.return_value = sample_household
         mock_supabase.get_receipt_items.return_value = sample_receipt_items
         # Return a list of normalized products (one per item)
         mock_normalization_service.normalize_products_batch.return_value = [
@@ -57,11 +59,13 @@ class TestReceiptProcessor:
         mock_supabase,
         mock_normalization_service,
         mock_pantry_service,
+        sample_household,
         test_receipt_id,
         test_user_id
     ):
         """Test processing receipt with no items"""
         # Setup
+        mock_supabase.get_user_household.return_value = sample_household
         mock_supabase.get_receipt_items.return_value = []
         
         processor = ReceiptProcessor(mock_supabase, mock_normalization_service, mock_pantry_service)
@@ -80,6 +84,7 @@ class TestReceiptProcessor:
         mock_supabase,
         mock_normalization_service,
         mock_pantry_service,
+        sample_household,
         sample_receipt_items,
         sample_normalized_product,
         test_receipt_id,
@@ -87,6 +92,7 @@ class TestReceiptProcessor:
     ):
         """Test receipt processing with some item errors"""
         # Setup
+        mock_supabase.get_user_household.return_value = sample_household
         mock_supabase.get_receipt_items.return_value = sample_receipt_items
         # Return a list of normalized products (one per item)
         mock_normalization_service.normalize_products_batch.return_value = [
@@ -118,6 +124,7 @@ class TestReceiptProcessor:
         mock_supabase,
         mock_normalization_service,
         mock_pantry_service,
+        sample_household,
         sample_receipt_items,
         sample_normalized_product,
         test_user_id
@@ -125,6 +132,7 @@ class TestReceiptProcessor:
         """Test batch processing multiple receipts"""
         # Setup
         receipt_ids = ['receipt-1', 'receipt-2']
+        mock_supabase.get_user_household.return_value = sample_household
         mock_supabase.get_receipt_items.return_value = sample_receipt_items
         # Return a list of normalized products (one per item)
         mock_normalization_service.normalize_products_batch.return_value = [
@@ -180,5 +188,71 @@ class TestReceiptProcessor:
         assert result['status'] == 'processed'
         assert result['total_items'] == 2
         assert result['provider'] == 'safeway'
+
+    @pytest.mark.asyncio
+    async def test_process_receipt_with_explicit_household_id(
+        self,
+        mock_supabase,
+        mock_normalization_service,
+        mock_pantry_service,
+        sample_receipt_items,
+        sample_normalized_product,
+        test_receipt_id,
+        test_user_id,
+        test_household_id,
+    ):
+        """When household_id is passed, get_user_household is not called."""
+        mock_supabase.get_receipt_items.return_value = sample_receipt_items
+        mock_normalization_service.normalize_products_batch.return_value = [
+            sample_normalized_product,
+            sample_normalized_product,
+        ]
+        mock_pantry_service.add_to_pantry = AsyncMock(return_value='pantry-1')
+        mock_supabase.update_receipt_status.return_value = None
+
+        processor = ReceiptProcessor(
+            mock_supabase, mock_normalization_service, mock_pantry_service
+        )
+        result = await processor.process_receipt(
+            test_receipt_id, test_user_id, household_id=test_household_id
+        )
+
+        mock_supabase.get_user_household.assert_not_called()
+        assert result['status'] == 'processed'
+        assert result['items_added_to_pantry'] == 2
+        # add_to_pantry should be called with household_id
+        calls = mock_pantry_service.add_to_pantry.call_args_list
+        for call in calls:
+            assert call.kwargs.get('household_id') == test_household_id
+
+    @pytest.mark.asyncio
+    async def test_process_receipt_no_household_still_processes(
+        self,
+        mock_supabase,
+        mock_normalization_service,
+        mock_pantry_service,
+        sample_receipt_items,
+        sample_normalized_product,
+        test_receipt_id,
+        test_user_id,
+    ):
+        """When user has no household (get_user_household returns None), processing still runs."""
+        mock_supabase.get_user_household.return_value = None
+        mock_supabase.get_receipt_items.return_value = sample_receipt_items
+        mock_normalization_service.normalize_products_batch.return_value = [
+            sample_normalized_product,
+            sample_normalized_product,
+        ]
+        mock_pantry_service.add_to_pantry = AsyncMock(return_value='pantry-1')
+        mock_supabase.update_receipt_status.return_value = None
+
+        processor = ReceiptProcessor(
+            mock_supabase, mock_normalization_service, mock_pantry_service
+        )
+        result = await processor.process_receipt(test_receipt_id, test_user_id)
+
+        mock_supabase.get_user_household.assert_called_once_with(test_user_id)
+        assert result['status'] == 'processed'
+        assert result['items_added_to_pantry'] == 2
 
 

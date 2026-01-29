@@ -125,6 +125,21 @@ export const api = {
     await apiClient.delete(`/providers/${providerName}/login/${sessionId}`)
   },
 
+  // Receipt Fetching
+  fetchReceipts: async (providerName, username, password, days = 14, userId = 'anonymous') => {
+    const body = { username, password, days, user_id: userId }
+    const response = await apiClient.post(`/providers/${providerName}/fetch-receipts`, body)
+    return response.data
+  },
+
+  fetchReceiptsAfterMfa: async (providerName, sessionId, days = 14) => {
+    const response = await apiClient.post(
+      `/providers/${providerName}/login/${sessionId}/fetch-receipts`,
+      { days }
+    )
+    return response.data
+  },
+
   // Household Management
   getHousehold: async (userId) => {
     const response = await apiClient.get('/households', {
@@ -184,6 +199,55 @@ export const api = {
     const response = await apiClient.delete(`/households/members/${memberUserId}`, {
       headers: { 'X-User-Id': userId }
     })
+    return response.data
+  },
+
+  // Pantry Management
+  getPantry: async (userId, householdId = null) => {
+    const params = householdId ? { household_id: householdId } : {}
+    const response = await apiClient.get('/pantry', {
+      params,
+      headers: { 'X-User-Id': userId }
+    })
+    return response.data
+  },
+
+  addPantryItem: async (userId, item) => {
+    const response = await apiClient.post('/pantry/items',
+      item,
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
+  updatePantryItem: async (userId, itemId, quantity) => {
+    const response = await apiClient.put(`/pantry/items/${itemId}`,
+      { quantity },
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
+  deletePantryItem: async (userId, itemId) => {
+    const response = await apiClient.delete(`/pantry/items/${itemId}`, {
+      headers: { 'X-User-Id': userId }
+    })
+    return response.data
+  },
+
+  consumeIngredients: async (userId, recipeData) => {
+    const response = await apiClient.post('/pantry/consume',
+      recipeData,
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
+  checkRecipeAvailability: async (userId, ingredients, householdId = null) => {
+    const response = await apiClient.post('/pantry/check-recipe',
+      { ingredients, household_id: householdId },
+      { headers: { 'X-User-Id': userId } }
+    )
     return response.data
   },
 }

@@ -62,7 +62,7 @@ class ReceiptProcessor:
             
             # 1. Get receipt items
             items = self.supabase.get_receipt_items(receipt_id)
-            
+
             if not items:
                 logger.warning(f"No items found for receipt {receipt_id}")
                 return {

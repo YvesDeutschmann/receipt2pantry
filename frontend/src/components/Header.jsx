@@ -10,7 +10,8 @@ function Header() {
   const [loading, setLoading] = useState(true)
   
   // For demo purposes - in production this would come from auth
-  const userId = localStorage.getItem('user_id') || 'demo-user'
+  // Use a valid UUID for demo purposes (no real auth yet)
+  const userId = localStorage.getItem('user_id') || '00000000-0000-0000-0000-000000000001'
   
   useEffect(() => {
     fetchHousehold()
@@ -52,6 +53,12 @@ function Header() {
                   className={`pb-4 pt-5 font-medium transition-colors ${isActive('/')}`}
                 >
                   Dashboard
+                </Link>
+                <Link
+                  to="/pantry"
+                  className={`pb-4 pt-5 font-medium transition-colors ${isActive('/pantry')}`}
+                >
+                  Pantry
                 </Link>
                 <Link
                   to="/providers"

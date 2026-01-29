@@ -48,13 +48,6 @@ class TestIntegrationWorkflow:
             assert 'category' in item
             assert 'quantity_info' in item
             assert 'unit_price' in item
-            
-            print(f"\nParsed item: {item['name']}")
-            print(f"  Category: {item['category']}")
-            print(f"  Price: ${item['price']}")
-            print(f"  Quantity: {item['quantity']}")
-            print(f"  Quantity Info: {item['quantity_info']}")
-            print(f"  Unit Price: ${item['unit_price']}")
     
     def test_parse_real_receipt_2(self):
         """Test parsing actual Safeway receipt 2"""
@@ -94,7 +87,7 @@ class TestIntegrationWorkflow:
                 assert result['unit'] == expected_unit, f"Wrong unit for: {product_name}"
             else:
                 # Items without explicit quantity might still parse (that's ok)
-                print(f"No quantity expected for: {product_name}, got: {result}")
+                pass
     
     def test_normalization_of_parsed_items(self, mock_supabase):
         """Test normalizing items parsed from real receipt"""
@@ -122,11 +115,6 @@ class TestIntegrationWorkflow:
             assert 'base_ingredient' in normalized
             assert 'normalized_name' in normalized
             assert 'category' in normalized
-            
-            print(f"\nNormalized: {item['name']}")
-            print(f"  -> Base: {normalized['base_ingredient']}")
-            print(f"  -> Variant: {normalized.get('variant')}")
-            print(f"  -> Full name: {normalized['normalized_name']}")
     
     def test_category_headers_recognized(self):
         """Test that all category headers in receipts are recognized"""

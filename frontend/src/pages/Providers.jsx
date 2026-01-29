@@ -5,6 +5,7 @@ import CredentialsModal from '../components/CredentialsModal'
 import MfaDialog from '../components/MfaDialog'
 
 function Providers() {
+  const userId = localStorage.getItem('user_id') || '00000000-0000-0000-0000-000000000001'
   const [providers, setProviders] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -13,6 +14,12 @@ function Providers() {
   const [credentialsModalOpen, setCredentialsModalOpen] = useState(false)
   const [selectedProvider, setSelectedProvider] = useState(null)
   const [testingConnection, setTestingConnection] = useState(false)
+  
+  // Fetch Receipts state
+  const [fetchMode, setFetchMode] = useState(false) // true = fetch receipts, false = test connection
+  const [fetchingReceipts, setFetchingReceipts] = useState(false)
+  const [fetchedReceipts, setFetchedReceipts] = useState(null)
+  const [receiptError, setReceiptError] = useState(null)
 
 
   // MFA Dialog state
@@ -58,42 +65,84 @@ function Providers() {
 
   const handleTestConnection = (provider) => {
     setSelectedProvider(provider)
+    setFetchMode(false)
+    setCredentialsModalOpen(true)
+  }
+
+  const handleFetchReceipts = (provider) => {
+    setSelectedProvider(provider)
+    setFetchMode(true)
+    setFetchedReceipts(null)
+    setReceiptError(null)
     setCredentialsModalOpen(true)
   }
 
   const handleCredentialsSubmit = async (username, password) => {
-    setTestingConnection(true)
-    
-    try {
-      const response = await api.testProviderConnection(
-        selectedProvider,
-        username,
-        password
-      )
+    if (fetchMode) {
+      // Fetch receipts mode
+      setFetchingReceipts(true)
+      setReceiptError(null)
+      
+      try {
+        const response = await api.fetchReceipts(
+          selectedProvider,
+          username,
+          password,
+          14, // Last 14 days
+          userId
+        )
 
-      if (response.status === 'success') {
-        // Connection successful
-        setCredentialsModalOpen(false)
-        alert(`Successfully connected to ${selectedProvider}!`)
-      } else if (response.status === 'mfa_required') {
-        // MFA required - device verification is handled automatically
-        console.log('MFA required, creating session:', response.session_id)
-        setCredentialsModalOpen(false)
-        setMfaSession({
-          sessionId: response.session_id,
-          provider: response.provider,
-          expiresAt: response.expires_at
-        })
-        
-        // Start polling for session status - MFA dialog will open when state changes to "awaiting_code"
-        console.log('Starting polling for MFA session:', response.session_id)
-        startStatusPolling(response.provider, response.session_id)
+        if (response.status === 'success') {
+          setCredentialsModalOpen(false)
+          setFetchedReceipts(response.receipts)
+          alert(`Fetched ${response.count} receipts from ${selectedProvider}!`)
+        } else if (response.status === 'mfa_required') {
+          setCredentialsModalOpen(false)
+          setMfaSession({
+            sessionId: response.session_id,
+            provider: response.provider,
+            expiresAt: response.expires_at,
+            fetchAfterMfa: true
+          })
+          startStatusPolling(response.provider, response.session_id)
+        }
+      } catch (err) {
+        const errorMessage = err.response?.data?.error || 'Failed to fetch receipts'
+        setReceiptError(errorMessage)
+        alert(`Failed to fetch receipts: ${errorMessage}`)
+      } finally {
+        setFetchingReceipts(false)
       }
-    } catch (err) {
-      const errorMessage = err.response?.data?.error || 'Connection test failed'
-      alert(`Connection failed: ${errorMessage}`)
-    } finally {
-      setTestingConnection(false)
+    } else {
+      // Test connection mode (original behavior)
+      setTestingConnection(true)
+      
+      try {
+        const response = await api.testProviderConnection(
+          selectedProvider,
+          username,
+          password
+        )
+
+        if (response.status === 'success') {
+          setCredentialsModalOpen(false)
+          alert(`Successfully connected to ${selectedProvider}!`)
+        } else if (response.status === 'mfa_required') {
+          setCredentialsModalOpen(false)
+          setMfaSession({
+            sessionId: response.session_id,
+            provider: response.provider,
+            expiresAt: response.expires_at,
+            fetchAfterMfa: false
+          })
+          startStatusPolling(response.provider, response.session_id)
+        }
+      } catch (err) {
+        const errorMessage = err.response?.data?.error || 'Connection test failed'
+        alert(`Connection failed: ${errorMessage}`)
+      } finally {
+        setTestingConnection(false)
+      }
     }
   }
 
@@ -118,10 +167,32 @@ function Providers() {
 
       if (response.status === 'success') {
         // MFA verification successful
-        setMfaDialogOpen(false)
-        setMfaSession(null)
         stopStatusPolling()
-        alert(`Successfully connected to ${mfaSession.provider}!`)
+        
+        // Check if we should fetch receipts after MFA
+        if (mfaSession.fetchAfterMfa) {
+          setMfaDialogOpen(false)
+          alert('MFA successful! Fetching receipts...')
+          
+          try {
+            const receiptsResponse = await api.fetchReceiptsAfterMfa(
+              mfaSession.provider,
+              mfaSession.sessionId,
+              14
+            )
+            setFetchedReceipts(receiptsResponse.receipts)
+            alert(`Fetched ${receiptsResponse.count} receipts!`)
+          } catch (fetchErr) {
+            const fetchError = fetchErr.response?.data?.error || 'Failed to fetch receipts'
+            setReceiptError(fetchError)
+            alert(`MFA succeeded but receipt fetch failed: ${fetchError}`)
+          }
+          setMfaSession(null)
+        } else {
+          setMfaDialogOpen(false)
+          setMfaSession(null)
+          alert(`Successfully connected to ${mfaSession.provider}!`)
+        }
       }
     } catch (err) {
       const errorMessage = err.response?.data?.error || 'MFA verification failed'
@@ -161,19 +232,12 @@ function Providers() {
     // Clear any existing polling
     stopStatusPolling()
 
-    console.log('Starting status polling for session:', sessionId, 'provider:', provider)
     setPollingActive(true)
 
     // Poll every 2 seconds
     pollingIntervalRef.current = setInterval(async () => {
       try {
-        console.log('Polling for session status...', provider, sessionId)
-        console.log('Polling interval ID:', pollingIntervalRef.current)
-        
         const status = await api.getLoginStatus(provider, sessionId)
-        console.log('Session status response:', status)
-        console.log('Current MFA dialog open state:', mfaDialogOpenRef.current)
-        console.log('MFA session data:', mfaSession)
         
         // Validate response format
         if (!status || typeof status.status !== 'string') {
@@ -183,35 +247,24 @@ function Providers() {
         
         if (status.status === 'expired') {
           // Session expired
-          console.log('Session expired, stopping polling')
           setMfaError('Session expired. Please try again.')
           setTimeout(() => {
             handleMfaCancel()
           }, 2000)
         } else if (status.status === 'completed') {
           // Login completed (should have been handled by submit response)
-          console.log('Session completed, stopping polling')
           setMfaDialogOpen(false)
           setMfaSession(null)
           stopStatusPolling()
         } else if (status.status === 'failed') {
           // Login failed
-          console.log('Session failed:', status.error_message)
           setMfaError(status.error_message || 'Login failed')
         } else if (status.status === 'awaiting_code') {
           // Device verification completed, now waiting for MFA code
-          console.log('Session state is awaiting_code, opening MFA dialog. Current dialog state:', mfaDialogOpenRef.current)
           if (!mfaDialogOpenRef.current) {
-            console.log('Opening MFA dialog...')
             setMfaDialogOpen(true)
             setMfaError(null)
-          } else {
-            console.log('MFA dialog already open, skipping')
           }
-        } else if (status.status === 'awaiting_device_verification') {
-          console.log('Session still awaiting device verification...')
-        } else {
-          console.log('Unknown session status:', status.status)
         }
         // Note: 'awaiting_device_verification' state is handled automatically by browser automation
       } catch (err) {
@@ -226,7 +279,6 @@ function Providers() {
         
         // If it's a 404 error, the session might not exist
         if (err.response?.status === 404) {
-          console.log('Session not found, stopping polling')
           setMfaError('Session not found or expired')
           stopStatusPolling()
         }
@@ -236,7 +288,6 @@ function Providers() {
 
   const stopStatusPolling = () => {
     if (pollingIntervalRef.current) {
-      console.log('Stopping status polling')
       clearInterval(pollingIntervalRef.current)
       pollingIntervalRef.current = null
       setPollingActive(false)
@@ -270,24 +321,69 @@ function Providers() {
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {providers.map((provider) => (
-            <ProviderCard
-              key={provider}
-              provider={provider}
-              status="inactive"
-              onTest={handleTestConnection}
-              onConfigure={handleConfigure}
-            />
-          ))}
-          {providers.length === 0 && (
-            <div className="card col-span-2">
-              <p className="text-center text-gray-600">
-                No providers available yet.
-              </p>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {providers.map((provider) => (
+              <div key={provider} className="card">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold capitalize">{provider}</h3>
+                  <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-600">
+                    Not Connected
+                  </span>
+                </div>
+                <p className="text-gray-600 text-sm mb-4">
+                  Connect your {provider} account to automatically fetch receipts.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleTestConnection(provider)}
+                    className="btn btn-secondary flex-1"
+                  >
+                    Test Connection
+                  </button>
+                  <button
+                    onClick={() => handleFetchReceipts(provider)}
+                    className="btn btn-primary flex-1"
+                  >
+                    Fetch Receipts
+                  </button>
+                </div>
+              </div>
+            ))}
+            {providers.length === 0 && (
+              <div className="card col-span-2">
+                <p className="text-center text-gray-600">
+                  No providers available yet.
+                </p>
+              </div>
+            )}
+          </div>
+
+          {/* Fetched Receipts Display */}
+          {fetchedReceipts && fetchedReceipts.length > 0 && (
+            <div className="mt-8">
+              <h2 className="text-xl font-bold mb-4">Fetched Receipts ({fetchedReceipts.length})</h2>
+              <div className="space-y-4">
+                {fetchedReceipts.map((receipt, idx) => (
+                  <div key={idx} className="card">
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <p className="font-semibold">{receipt.order_id || `Order ${idx + 1}`}</p>
+                        <p className="text-sm text-gray-600">{receipt.order_date}</p>
+                      </div>
+                      <p className="font-bold text-green-600">${receipt.total_amount != null ? Number(receipt.total_amount).toFixed(2) : 'N/A'}</p>
+                    </div>
+                    {receipt.items && (
+                      <div className="mt-2 text-sm text-gray-500">
+                        {receipt.items.length} items
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
           )}
-        </div>
+        </>
       )}
 
       {/* Polling Status Indicator */}
@@ -308,7 +404,9 @@ function Providers() {
         onSubmit={handleCredentialsSubmit}
         onCancel={handleCredentialsCancel}
         provider={selectedProvider || ''}
-        loading={testingConnection}
+        loading={testingConnection || fetchingReceipts}
+        title={fetchMode ? 'Fetch Receipts' : 'Test Connection'}
+        submitText={fetchMode ? 'Fetch Receipts' : 'Test Connection'}
       />
 
       {/* MFA Dialog */}

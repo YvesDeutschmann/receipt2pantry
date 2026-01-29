@@ -12,6 +12,7 @@ from backend.routes.receipts import receipts_bp
 from backend.routes.providers import providers_bp
 from backend.routes.parsers import parsers_bp
 from backend.routes.households import households_bp
+from backend.routes.pantry import pantry_bp
 
 
 def create_app(config=None):
@@ -161,6 +162,7 @@ def create_app(config=None):
     app.register_blueprint(providers_bp, url_prefix="/api")
     app.register_blueprint(parsers_bp, url_prefix="/api")
     app.register_blueprint(households_bp, url_prefix="/api")
+    app.register_blueprint(pantry_bp, url_prefix="/api")
     logger.info("Routes registered")
     
     # Register error handlers

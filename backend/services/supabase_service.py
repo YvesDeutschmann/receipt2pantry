@@ -68,8 +68,10 @@ class SupabaseService:
             Receipt ID
         """
         try:
+            # Use admin_client to bypass RLS for server-side receipt inserts
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("receipts")
+                client.table("receipts")
                 .insert(receipt_data)
                 .execute()
             )
@@ -82,6 +84,35 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Failed to store receipt: {e}")
             raise DatabaseException(f"Failed to store receipt: {e}")
+
+    def store_receipt_with_items(self, receipt_data: Dict, items: List[Dict]) -> str:
+        """
+        Store a receipt and its items in a single transaction.
+        Rolls back entirely if any insert fails (e.g. duplicate order_id).
+
+        Args:
+            receipt_data: Receipt row as dict (user_id, provider, order_id, etc.)
+            items: List of receipt item dicts (name, category, price, quantity, etc.)
+
+        Returns:
+            Receipt ID (UUID string)
+        """
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            response = client.rpc(
+                "store_receipt_with_items",
+                {"p_receipt": receipt_data, "p_items": items},
+            ).execute()
+            if response.data is None:
+                raise DatabaseException("RPC store_receipt_with_items returned no data")
+            # PostgREST may return scalar or single-element array
+            raw = response.data[0] if isinstance(response.data, list) and response.data else response.data
+            receipt_id = str(raw)
+            logger.info(f"Stored receipt with items in transaction, ID: {receipt_id}")
+            return receipt_id
+        except Exception as e:
+            logger.error(f"Failed to store receipt with items: {e}")
+            raise DatabaseException(f"Failed to store receipt with items: {e}")
     
     def store_receipt_items(self, items: List[Dict]) -> int:
         """
@@ -94,8 +125,10 @@ class SupabaseService:
             Number of items stored
         """
         try:
+            # Use admin_client to bypass RLS for server-side receipt item inserts
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("receipt_items")
+                client.table("receipt_items")
                 .insert(items)
                 .execute()
             )
@@ -436,8 +469,10 @@ class SupabaseService:
             List of receipt item dictionaries
         """
         try:
+            # Use admin_client to bypass RLS when called from backend (no user JWT)
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("receipt_items")
+                client.table("receipt_items")
                 .select("*")
                 .eq("receipt_id", receipt_id)
                 .execute()
@@ -451,16 +486,28 @@ class SupabaseService:
         """
         Insert or update a pantry item
         
+        Uses the appropriate conflict target:
+        - household_id set: unique_household_ingredient_variant (005)
+          ON (household_id, base_ingredient, variant, unit) WHERE household_id IS NOT NULL
+        - household_id NULL: unique_user_ingredient_variant_null_household (008)
+          ON (user_id, base_ingredient, variant, unit) WHERE household_id IS NULL
+        
         Args:
-            item_data: Pantry item dictionary
+            item_data: Pantry item dictionary (must include user_id when household_id is None)
         
         Returns:
             Item ID
         """
         try:
+            # Use admin_client to bypass RLS for backend operations
+            client = self.admin_client if self.admin_client else self.client
+            if item_data.get("household_id") is not None:
+                on_conflict = "household_id,base_ingredient,variant,unit"
+            else:
+                on_conflict = "user_id,base_ingredient,variant,unit"
             response = (
-                self.client.table("pantry_items")
-                .upsert(item_data, on_conflict="user_id,base_ingredient,variant,unit")
+                client.table("pantry_items")
+                .upsert(item_data, on_conflict=on_conflict)
                 .execute()
             )
             
@@ -654,10 +701,12 @@ class SupabaseService:
         Returns:
             Household dictionary with membership info or None
         """
+        # Use admin_client to bypass RLS for backend operations
+        client = self.admin_client if self.admin_client else self.client
         try:
             # Get membership first
             member_response = (
-                self.client.table("household_members")
+                client.table("household_members")
                 .select("*, households(*)")
                 .eq("user_id", user_id)
                 .execute()
@@ -746,10 +795,12 @@ class SupabaseService:
             Created household dictionary
         """
         household_id = None
+        # Use admin_client to bypass RLS for backend operations
+        client = self.admin_client if self.admin_client else self.client
         try:
             # Create the household
             household_response = (
-                self.client.table("households")
+                client.table("households")
                 .insert({
                     "name": name,
                     "join_code": join_code.upper(),
@@ -766,7 +817,7 @@ class SupabaseService:
             
             # Add creator as owner
             try:
-                self.client.table("household_members").insert({
+                client.table("household_members").insert({
                     "household_id": household_id,
                     "user_id": user_id,
                     "role": "owner"
@@ -775,7 +826,7 @@ class SupabaseService:
                 # Membership insert failed - rollback by deleting the household
                 logger.error(f"Failed to add owner to household, rolling back: {member_error}")
                 try:
-                    self.client.table("households").delete().eq(
+                    client.table("households").delete().eq(
                         "id", household_id
                     ).execute()
                     logger.info(f"Rolled back household {household_id} after membership failure")
@@ -796,7 +847,7 @@ class SupabaseService:
             # Clean up household if it was created but something else failed
             if household_id:
                 try:
-                    self.client.table("households").delete().eq(
+                    client.table("households").delete().eq(
                         "id", household_id
                     ).execute()
                     logger.info(f"Cleaned up household {household_id} after error")
@@ -955,9 +1006,11 @@ class SupabaseService:
         Returns:
             List of pantry item dictionaries
         """
+        # Use admin_client to bypass RLS for backend operations
+        client = self.admin_client if self.admin_client else self.client
         try:
             response = (
-                self.client.table("pantry_items")
+                client.table("pantry_items")
                 .select("*")
                 .eq("household_id", household_id)
                 .gt("quantity", 0)

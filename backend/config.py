@@ -17,10 +17,13 @@ class Config:
     FLASK_SECRET_KEY: str = os.getenv("FLASK_SECRET_KEY", "dev-secret-key-change-in-production")
     FLASK_PORT: int = int(os.getenv("FLASK_PORT", "5000"))
     
-    # Supabase
+    # Supabase (supports both legacy anon/service_role keys and new publishable/secret keys)
+    # Prefer new key names only when old key is not in environment (avoid masking empty-string config)
     SUPABASE_URL: Optional[str] = os.getenv("SUPABASE_URL")
-    SUPABASE_KEY: Optional[str] = os.getenv("SUPABASE_KEY")
-    SUPABASE_SERVICE_ROLE_KEY: Optional[str] = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    _supabase_key = os.getenv("SUPABASE_KEY")
+    SUPABASE_KEY: Optional[str] = _supabase_key if _supabase_key is not None else os.getenv("SUPABASE_PUBLIC_KEY")
+    _service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    SUPABASE_SERVICE_ROLE_KEY: Optional[str] = _service_role_key if _service_role_key is not None else os.getenv("SUPABASE_SECRET_KEY")
     
     # AWS Secrets Manager
     AWS_REGION: str = os.getenv("AWS_REGION", "us-west-2")

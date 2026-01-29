@@ -144,7 +144,7 @@ class AIParser(BaseParser):
                 "name": item.get("name") or item.get("raw_name", "Unknown"),
                 "raw_name": item.get("raw_name") or item.get("name", "Unknown"),
                 "price": float(item.get("price", 0)),
-                "quantity": int(item.get("quantity", 1)),
+                "quantity": float(item.get("quantity", 1)),
                 "category": item.get("category", "GROCERY"),
                 "regular_price": item.get("regular_price"),
                 "savings": None,
@@ -180,7 +180,7 @@ class AIParser(BaseParser):
             "order_id": order_id,
             "order_date": order_date,
             "total_amount": float(total_amount),
-            "num_items": sum(item["quantity"] for item in items),
+            "num_items": int(round(sum(item["quantity"] for item in items))),
             "items": items,
             "metadata": {
                 "parser": "ai",

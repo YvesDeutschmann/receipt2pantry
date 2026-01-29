@@ -98,11 +98,11 @@ class PantryService:
                 
                 self.supabase.update_pantry_quantity(existing_item['id'], new_quantity)
                 
-                # Update last_receipt_id
-                self.supabase.client.table('pantry_items').update({
-                    'last_receipt_id': receipt_id,
-                    'added_at': datetime.utcnow().isoformat()
-                }).eq('id', existing_item['id']).execute()
+                # Update last_receipt_id (only if provided)
+                update_data = {'added_at': datetime.utcnow().isoformat()}
+                if receipt_id:
+                    update_data['last_receipt_id'] = receipt_id
+                self.supabase.client.table('pantry_items').update(update_data).eq('id', existing_item['id']).execute()
                 
                 logger.info(
                     f"Updated pantry: {normalized_item.get('normalized_name')} "
@@ -122,9 +122,11 @@ class PantryService:
                     'product_type': normalized_item.get('product_type'),
                     'category': normalized_item.get('category'),
                     'tags': normalized_item.get('tags', []),
-                    'last_receipt_id': receipt_id,
                     'metadata': {}
                 }
+                # Only set last_receipt_id if provided (not for manual entries)
+                if receipt_id:
+                    item_data['last_receipt_id'] = receipt_id
                 
                 item_id = self.supabase.upsert_pantry_item(item_data)
                 

@@ -111,11 +111,6 @@ class SafewayReceiptParser:
         # Extract the text content and clean it up
         text_content = email_content[text_start:text_end]
         
-        # Debug: Print the extracted text content
-        # print(f"DEBUG: Extracted text content length: {len(text_content)}")
-        # print(f"DEBUG: First 500 chars: {text_content[:500]}")
-        # print(f"DEBUG: Last 500 chars: {text_content[-500:]}")
-        
         # Remove HTML-like content and URLs
         lines = text_content.split('\n')
         cleaned_lines = []
@@ -160,7 +155,6 @@ class SafewayReceiptParser:
             # Look for product names
             if self._is_product_name(line):
                 product_name = line
-                # print(f"DEBUG: Found product: {product_name}")  # Debug line
                 
                 # Look ahead for price, quantity, and regular price
                 price = None

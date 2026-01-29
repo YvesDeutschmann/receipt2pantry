@@ -8,7 +8,8 @@ function Settings() {
   const [householdModalOpen, setHouseholdModalOpen] = useState(false)
   
   // For demo purposes - in production this would come from auth
-  const userId = localStorage.getItem('user_id') || 'demo-user'
+  // Use a valid UUID for demo purposes (no real auth yet)
+  const userId = localStorage.getItem('user_id') || '00000000-0000-0000-0000-000000000001'
 
   useEffect(() => {
     fetchHousehold()

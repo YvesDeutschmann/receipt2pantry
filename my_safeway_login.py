@@ -321,10 +321,6 @@ class MySafewayLogin:
                 order = orders.nth(info["index"])
                 order.locator("div[aria-label='View details']").click()
 
-                # if order_key in processed_orders:
-                #     logger.info(f"Order {key_string} already processed, skipping...")
-                #     continue  # skip already processed
-
                 # Click by the paragraph text inside the button
                 self.page.locator('button:has(p:has-text("Receipt"))').click()
 

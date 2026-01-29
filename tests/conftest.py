@@ -192,5 +192,3 @@ def mock_household_service():
     """Mock Household service for testing"""
     from backend.services.household_service import HouseholdService
     return Mock(spec=HouseholdService)
-
-

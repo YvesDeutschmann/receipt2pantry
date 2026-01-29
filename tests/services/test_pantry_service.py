@@ -10,11 +10,12 @@ class TestPantryService:
     
     @pytest.mark.asyncio
     async def test_add_to_pantry_new_item(
-        self, mock_supabase, sample_normalized_product, test_user_id, test_receipt_id
+        self, mock_supabase, sample_household, sample_normalized_product, test_user_id, test_receipt_id
     ):
         """Test adding a new item to pantry"""
-        # Setup
-        mock_supabase.get_user_pantry.return_value = []
+        # Setup: user has a household; pantry is empty
+        mock_supabase.get_user_household.return_value = sample_household
+        mock_supabase.get_household_pantry.return_value = []
         mock_supabase.upsert_pantry_item.return_value = 'pantry-item-1'
         
         service = PantryService(mock_supabase)
@@ -34,10 +35,10 @@ class TestPantryService:
     
     @pytest.mark.asyncio
     async def test_add_to_pantry_existing_item(
-        self, mock_supabase, sample_normalized_product, test_user_id, test_receipt_id
+        self, mock_supabase, sample_household, sample_normalized_product, test_user_id, test_receipt_id
     ):
         """Test adding to existing pantry item (quantity update)"""
-        # Setup
+        # Setup: user has a household; pantry has one matching item
         existing_item = {
             'id': 'pantry-1',
             'base_ingredient': 'butter',
@@ -45,7 +46,8 @@ class TestPantryService:
             'unit': 'lb',
             'quantity': 1.0
         }
-        mock_supabase.get_user_pantry.return_value = [existing_item]
+        mock_supabase.get_user_household.return_value = sample_household
+        mock_supabase.get_household_pantry.return_value = [existing_item]
         mock_supabase.update_pantry_quantity.return_value = None
         mock_supabase.client = Mock()
         mock_supabase.client.table.return_value.update.return_value.eq.return_value.execute.return_value = None
@@ -66,10 +68,11 @@ class TestPantryService:
         mock_supabase.update_pantry_quantity.assert_called_once_with('pantry-1', 2.0)
     
     @pytest.mark.asyncio
-    async def test_get_pantry_summary(self, mock_supabase, sample_pantry_items, test_user_id):
+    async def test_get_pantry_summary(self, mock_supabase, sample_household, sample_pantry_items, test_user_id):
         """Test getting pantry summary"""
-        # Setup
-        mock_supabase.get_user_pantry.return_value = sample_pantry_items
+        # Setup: user has a household; pantry has items
+        mock_supabase.get_user_household.return_value = sample_household
+        mock_supabase.get_household_pantry.return_value = sample_pantry_items
         
         service = PantryService(mock_supabase)
         
@@ -84,11 +87,12 @@ class TestPantryService:
     
     @pytest.mark.asyncio
     async def test_consume_ingredients(
-        self, mock_supabase, sample_pantry_items, test_user_id
+        self, mock_supabase, sample_household, sample_pantry_items, test_user_id
     ):
         """Test consuming ingredients when recipe is cooked"""
-        # Setup
-        mock_supabase.get_user_pantry.return_value = sample_pantry_items
+        # Setup: user has a household; pantry has items
+        mock_supabase.get_user_household.return_value = sample_household
+        mock_supabase.get_household_pantry.return_value = sample_pantry_items
         mock_supabase.update_pantry_quantity.return_value = None
         mock_supabase.log_cooking_event.return_value = 'log-1'
         
@@ -116,11 +120,12 @@ class TestPantryService:
     
     @pytest.mark.asyncio
     async def test_check_ingredient_availability(
-        self, mock_supabase, sample_pantry_items, test_user_id
+        self, mock_supabase, sample_household, sample_pantry_items, test_user_id
     ):
         """Test checking ingredient availability"""
-        # Setup
-        mock_supabase.get_user_pantry.return_value = sample_pantry_items
+        # Setup: user has a household; pantry has items
+        mock_supabase.get_user_household.return_value = sample_household
+        mock_supabase.get_household_pantry.return_value = sample_pantry_items
         mock_supabase.get_substitutions_for_ingredient.return_value = []
         
         service = PantryService(mock_supabase)
@@ -141,5 +146,43 @@ class TestPantryService:
         assert len(result['available']) == 1
         assert len(result['missing']) == 1
         assert result['missing'][0]['ingredient'] == 'flour'
+
+    @pytest.mark.asyncio
+    async def test_get_pantry_summary_no_household_uses_user_pantry(
+        self, mock_supabase, sample_pantry_items, test_user_id
+    ):
+        """When user has no household, service uses get_user_pantry (legacy fallback)."""
+        mock_supabase.get_user_household.return_value = None
+        mock_supabase.get_user_pantry.return_value = sample_pantry_items
+
+        service = PantryService(mock_supabase)
+        result = await service.get_pantry_summary(test_user_id)
+
+        mock_supabase.get_user_household.assert_called_once_with(test_user_id)
+        mock_supabase.get_user_pantry.assert_called_once_with(test_user_id)
+        assert result['total_items'] == 2
+        assert result['household_id'] is None
+
+    @pytest.mark.asyncio
+    async def test_add_to_pantry_no_household_uses_user_pantry(
+        self, mock_supabase, sample_normalized_product, test_user_id, test_receipt_id
+    ):
+        """When user has no household, add_to_pantry uses user-scoped pantry."""
+        mock_supabase.get_user_household.return_value = None
+        mock_supabase.get_user_pantry.return_value = []
+        mock_supabase.upsert_pantry_item.return_value = 'pantry-item-1'
+
+        service = PantryService(mock_supabase)
+        result = await service.add_to_pantry(
+            user_id=test_user_id,
+            normalized_item=sample_normalized_product,
+            quantity=1.0,
+            unit='lb',
+            receipt_id=test_receipt_id,
+        )
+
+        mock_supabase.get_user_household.assert_called_once_with(test_user_id)
+        mock_supabase.get_user_pantry.assert_called_once_with(test_user_id)
+        assert result == 'pantry-item-1'
 
 

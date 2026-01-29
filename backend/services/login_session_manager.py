@@ -166,13 +166,32 @@ class LoginSessionManager:
             
             session["retry_count"] += 1
             return session["retry_count"]
-    
-    def terminate_session(self, session_id: str) -> bool:
+
+    _ALLOWED_METADATA_KEYS = frozenset({"fetch_receipts_after_mfa", "fetch_days"})
+
+    def update_session_metadata(self, session_id: str, **kwargs) -> bool:
+        """
+        Update metadata on the stored session (e.g. fetch_receipts_after_mfa, fetch_days).
+
+        Only allowed keys are written. Returns False if session not found.
+        """
+        with self._lock:
+            session = self._sessions.get(session_id)
+            if session is None:
+                logger.warning(f"Cannot update metadata: session {session_id} not found")
+                return False
+            for k, v in kwargs.items():
+                if k in self._ALLOWED_METADATA_KEYS:
+                    session[k] = v
+            return True
+
+    def terminate_session(self, session_id: str, skip_browser_cleanup: bool = False) -> bool:
         """
         Terminate and remove a session, cleaning up browser resources.
         
         Args:
             session_id: Session ID to terminate
+            skip_browser_cleanup: If True, only remove from storage (caller ran cleanup in executor)
             
         Returns:
             True if session was terminated, False if not found
@@ -184,8 +203,8 @@ class LoginSessionManager:
                 logger.warning(f"Cannot terminate: session {session_id} not found")
                 return False
         
-        # Cleanup browser resources outside the lock
-        self._cleanup_browser_resources(session)
+        if not skip_browser_cleanup:
+            self._cleanup_browser_resources(session)
         
         logger.info(f"Terminated session {session_id}")
         return True
