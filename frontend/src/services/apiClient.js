@@ -250,6 +250,23 @@ export const api = {
     )
     return response.data
   },
+
+  // Recipes
+  getRecipes: async (userId, householdId = null) => {
+    const params = householdId ? { household_id: householdId } : {}
+    const response = await apiClient.get('/recipes', {
+      params,
+      headers: { 'X-User-Id': userId }
+    })
+    return response.data
+  },
+
+  getRecipeDetails: async (userId, recipeId) => {
+    const response = await apiClient.get(`/recipes/${recipeId}`, {
+      headers: { 'X-User-Id': userId }
+    })
+    return response.data
+  },
 }
 
 export default apiClient

@@ -13,6 +13,7 @@ from backend.routes.providers import providers_bp
 from backend.routes.parsers import parsers_bp
 from backend.routes.households import households_bp
 from backend.routes.pantry import pantry_bp
+from backend.routes.recipes import recipes_bp
 
 
 def create_app(config=None):
@@ -83,6 +84,18 @@ def create_app(config=None):
             pantry_service = create_pantry_service(supabase_service)
             app.config["PANTRY_SERVICE"] = pantry_service
             logger.info("Pantry service initialized")
+            
+            # Initialize recipe service (requires pantry service)
+            if config.SPOONACULAR_API_KEY:
+                try:
+                    from backend.services.recipe_service import create_recipe_service
+                    recipe_service = create_recipe_service(pantry_service, config)
+                    app.config["RECIPE_SERVICE"] = recipe_service
+                    logger.info("Recipe service initialized")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize Recipe service: {e}")
+            else:
+                logger.info("Spoonacular API key not configured (Recipe features disabled)")
             
             # Initialize normalization service with AI if available
             normalization_service = create_normalization_service(supabase_service, ai_service)
@@ -163,6 +176,7 @@ def create_app(config=None):
     app.register_blueprint(parsers_bp, url_prefix="/api")
     app.register_blueprint(households_bp, url_prefix="/api")
     app.register_blueprint(pantry_bp, url_prefix="/api")
+    app.register_blueprint(recipes_bp, url_prefix="/api")
     logger.info("Routes registered")
     
     # Register error handlers

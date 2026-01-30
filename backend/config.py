@@ -52,6 +52,11 @@ class Config:
     OPENAI_MAX_RETRIES: int = int(os.getenv("OPENAI_MAX_RETRIES", "3"))
     OPENAI_TIMEOUT: int = int(os.getenv("OPENAI_TIMEOUT", "60"))
     
+    # Spoonacular
+    SPOONACULAR_API_KEY: Optional[str] = os.getenv("SPOONACULAR_API_KEY")
+    SPOONACULAR_BASE_URL: str = os.getenv("SPOONACULAR_BASE_URL", "https://api.spoonacular.com")
+    SPOONACULAR_TIMEOUT: int = int(os.getenv("SPOONACULAR_TIMEOUT", "30"))
+    
     @classmethod
     def validate(cls) -> None:
         """Validate that required configuration is present"""

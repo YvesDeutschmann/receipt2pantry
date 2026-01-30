@@ -61,6 +61,12 @@ function Header() {
                   Pantry
                 </Link>
                 <Link
+                  to="/recipes"
+                  className={`pb-4 pt-5 font-medium transition-colors ${isActive('/recipes')}`}
+                >
+                  Recipe Ideas
+                </Link>
+                <Link
                   to="/providers"
                   className={`pb-4 pt-5 font-medium transition-colors ${isActive('/providers')}`}
                 >
