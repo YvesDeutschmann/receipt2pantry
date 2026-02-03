@@ -14,6 +14,7 @@ from backend.routes.parsers import parsers_bp
 from backend.routes.households import households_bp
 from backend.routes.pantry import pantry_bp
 from backend.routes.recipes import recipes_bp
+from backend.routes.meal_plan import meal_plan_bp
 
 
 def create_app(config=None):
@@ -86,6 +87,7 @@ def create_app(config=None):
             logger.info("Pantry service initialized")
             
             # Initialize recipe service (requires pantry service)
+            recipe_service = None
             if config.SPOONACULAR_API_KEY:
                 try:
                     from backend.services.recipe_service import create_recipe_service
@@ -96,6 +98,26 @@ def create_app(config=None):
                     logger.warning(f"Failed to initialize Recipe service: {e}")
             else:
                 logger.info("Spoonacular API key not configured (Recipe features disabled)")
+            
+            # Initialize meal plan service (requires pantry, recipe, and household services)
+            if recipe_service:
+                try:
+                    from backend.services.meal_plan_service import create_meal_plan_service
+                    from backend.services.shopping_list_service import create_shopping_list_service
+                    
+                    meal_plan_service = create_meal_plan_service(
+                        supabase_service, pantry_service, recipe_service, household_service
+                    )
+                    app.config["MEAL_PLAN_SERVICE"] = meal_plan_service
+                    logger.info("Meal plan service initialized")
+                    
+                    shopping_list_service = create_shopping_list_service(supabase_service)
+                    app.config["SHOPPING_LIST_SERVICE"] = shopping_list_service
+                    logger.info("Shopping list service initialized")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize Meal plan services: {e}")
+            else:
+                logger.info("Meal plan features disabled (Recipe service required)")
             
             # Initialize normalization service with AI if available
             normalization_service = create_normalization_service(supabase_service, ai_service)
@@ -177,6 +199,7 @@ def create_app(config=None):
     app.register_blueprint(households_bp, url_prefix="/api")
     app.register_blueprint(pantry_bp, url_prefix="/api")
     app.register_blueprint(recipes_bp, url_prefix="/api")
+    app.register_blueprint(meal_plan_bp, url_prefix="/api")
     logger.info("Routes registered")
     
     # Register error handlers

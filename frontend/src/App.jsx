@@ -5,6 +5,7 @@ import Pantry from './pages/Pantry'
 import Providers from './pages/Providers'
 import Settings from './pages/Settings'
 import Recipes from './pages/Recipes'
+import MealPlan from './pages/MealPlan'
 
 function App() {
   return (
@@ -16,6 +17,7 @@ function App() {
             <Route path="/" element={<Dashboard />} />
             <Route path="/pantry" element={<Pantry />} />
             <Route path="/recipes" element={<Recipes />} />
+            <Route path="/meal-plan" element={<MealPlan />} />
             <Route path="/providers" element={<Providers />} />
             <Route path="/settings" element={<Settings />} />
           </Routes>

@@ -267,6 +267,121 @@ export const api = {
     })
     return response.data
   },
+
+  // Meal Planning
+  mealPlan: {
+    startWizard: async (userId, data) => {
+      const response = await apiClient.post('/meal-plan/wizard/start', data, {
+        headers: { 'X-User-Id': userId }
+      })
+      return response.data
+    },
+
+    getSuggestions: async (sessionId, mealType, threshold = 0.9) => {
+      const response = await apiClient.get(
+        `/meal-plan/wizard/${sessionId}/suggestions`,
+        { params: { meal_type: mealType, threshold } }
+      )
+      return response.data
+    },
+
+    acceptRecipe: async (sessionId, data) => {
+      const response = await apiClient.post(
+        `/meal-plan/wizard/${sessionId}/accept`,
+        data
+      )
+      return response.data
+    },
+
+    softRejectRecipe: async (sessionId, recipeId) => {
+      const response = await apiClient.post(
+        `/meal-plan/wizard/${sessionId}/soft-reject`,
+        { recipe_id: recipeId }
+      )
+      return response.data
+    },
+
+    banRecipe: async (sessionId, recipeId, recipeName, userId) => {
+      const response = await apiClient.post(
+        `/meal-plan/wizard/${sessionId}/ban`,
+        { recipe_id: recipeId, recipe_name: recipeName },
+        { headers: { 'X-User-Id': userId } }
+      )
+      return response.data
+    },
+
+    unbanRecipe: async (sessionId, recipeId, userId) => {
+      const response = await apiClient.delete(
+        `/meal-plan/wizard/${sessionId}/ban/${recipeId}`,
+        { headers: { 'X-User-Id': userId } }
+      )
+      return response.data
+    },
+
+    markLeftover: async (sessionId, data) => {
+      const response = await apiClient.post(
+        `/meal-plan/wizard/${sessionId}/mark-leftover`,
+        data
+      )
+      return response.data
+    },
+
+    completeWizard: async (sessionId) => {
+      const response = await apiClient.post(
+        `/meal-plan/wizard/${sessionId}/complete`
+      )
+      return response.data
+    },
+
+    getMealPlan: async (userId, startDate, endDate, householdId = null) => {
+      const params = {
+        start_date: startDate,
+        end_date: endDate
+      }
+      if (householdId) params.household_id = householdId
+      const response = await apiClient.get('/meal-plan', {
+        params,
+        headers: { 'X-User-Id': userId }
+      })
+      return response.data
+    },
+
+    updateMeal: async (mealId, updates) => {
+      const response = await apiClient.patch(`/meal-plan/${mealId}`, updates)
+      return response.data
+    },
+
+    deleteMeal: async (mealId) => {
+      await apiClient.delete(`/meal-plan/${mealId}`)
+    },
+
+    swapMeals: async (mealId1, mealId2) => {
+      const response = await apiClient.post(
+        `/meal-plan/${mealId1}/swap/${mealId2}`
+      )
+      return response.data
+    }
+  },
+
+  // Shopping List
+  shoppingList: {
+    get: async (userId, includePurchased = false, householdId = null) => {
+      const params = { include_purchased: includePurchased }
+      if (householdId) params.household_id = householdId
+      const response = await apiClient.get('/shopping-list', {
+        params,
+        headers: { 'X-User-Id': userId }
+      })
+      return response.data
+    },
+
+    markPurchased: async (itemId) => {
+      const response = await apiClient.post(
+        `/shopping-list/${itemId}/purchased`
+      )
+      return response.data
+    }
+  },
 }
 
 export default apiClient

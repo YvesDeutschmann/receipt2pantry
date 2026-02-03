@@ -67,6 +67,12 @@ function Header() {
                   Recipe Ideas
                 </Link>
                 <Link
+                  to="/meal-plan"
+                  className={`pb-4 pt-5 font-medium transition-colors ${isActive('/meal-plan')}`}
+                >
+                  Meal Plan
+                </Link>
+                <Link
                   to="/providers"
                   className={`pb-4 pt-5 font-medium transition-colors ${isActive('/providers')}`}
                 >

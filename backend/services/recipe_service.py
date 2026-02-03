@@ -98,7 +98,7 @@ class RecipeService:
             raise ValidationException(f"Failed to get pantry ingredients: {e}")
     
     def get_recipes_by_pantry(
-        self, household_id: Optional[str], user_id: str
+        self, household_id: Optional[str], user_id: str, available_ingredients: Optional[List[str]] = None
     ) -> List[Dict]:
         """
         Get recipe suggestions based on pantry items
@@ -106,6 +106,7 @@ class RecipeService:
         Args:
             household_id: Household ID (optional)
             user_id: User ID
+            available_ingredients: Optional list of ingredient names (for session pantry)
         
         Returns:
             List of recipe dictionaries with id, title, image, missedIngredientCount
@@ -114,11 +115,14 @@ class RecipeService:
             raise ValidationException("Spoonacular API key not configured")
         
         try:
-            # Get ingredients from pantry
-            ingredients = self._get_ingredients_from_pantry(household_id, user_id)
+            # Use provided ingredients or get from pantry
+            if available_ingredients:
+                ingredients = available_ingredients
+            else:
+                ingredients = self._get_ingredients_from_pantry(household_id, user_id)
             
             if not ingredients:
-                logger.info("No ingredients found in pantry")
+                logger.info("No ingredients found")
                 return []
             
             # Check cache
@@ -136,7 +140,7 @@ class RecipeService:
             params = {
                 "apiKey": self.api_key,
                 "ingredients": ingredients_str,
-                "number": 12,  # Number of recipes to return
+                "number": 20,  # Number of recipes to return (increased for more alternatives)
                 "ranking": 2,  # Maximize used ingredients
                 "ignorePantry": False  # Include pantry staples
             }
@@ -238,6 +242,57 @@ class RecipeService:
         except Exception as e:
             logger.error(f"Unexpected error getting recipe details: {e}")
             raise AIServiceException(f"Failed to get recipe details: {e}")
+    
+    def scale_recipe(self, recipe_details: Dict, target_servings: int) -> Dict:
+        """
+        Scale recipe ingredients to target number of servings
+        
+        Args:
+            recipe_details: Recipe dictionary with servings and extendedIngredients
+            target_servings: Target number of servings
+        
+        Returns:
+            Recipe dictionary with scaled ingredients and updated servings
+        """
+        try:
+            original_servings = recipe_details.get("servings", 1)
+            if original_servings <= 0:
+                original_servings = 1
+            
+            if target_servings <= 0:
+                target_servings = 1
+            
+            # Calculate scaling factor
+            scale_factor = target_servings / original_servings
+            
+            # Create scaled copy
+            scaled_recipe = recipe_details.copy()
+            scaled_recipe["servings"] = target_servings
+            
+            # Scale ingredients
+            if "extendedIngredients" in scaled_recipe:
+                scaled_ingredients = []
+                for ingredient in scaled_recipe["extendedIngredients"]:
+                    scaled_ingredient = ingredient.copy()
+                    # Scale amount if present
+                    if "amount" in scaled_ingredient:
+                        scaled_ingredient["amount"] = round(
+                            scaled_ingredient["amount"] * scale_factor, 2
+                        )
+                    scaled_ingredients.append(scaled_ingredient)
+                scaled_recipe["extendedIngredients"] = scaled_ingredients
+            
+            logger.info(
+                f"Scaled recipe {recipe_details.get('id')} from {original_servings} "
+                f"to {target_servings} servings (factor: {scale_factor:.2f})"
+            )
+            
+            return scaled_recipe
+            
+        except Exception as e:
+            logger.error(f"Failed to scale recipe: {e}")
+            # Return original recipe if scaling fails
+            return recipe_details
 
 
 def create_recipe_service(pantry_service: PantryService, config: Config) -> RecipeService:
