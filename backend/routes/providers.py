@@ -6,8 +6,9 @@ from datetime import datetime, timezone, timedelta
 from flask import Blueprint, jsonify, request, current_app
 from backend.providers.provider_registry import ProviderRegistry
 from backend.services.receipt_service import store_fetched_receipts
+from backend.services.connection_code_manager import get_connection_code_manager
 from backend.utils.logger import get_logger
-from backend.utils.exceptions import ProviderNotFoundException, AuthenticationException, MFARequiredException
+from backend.utils.exceptions import ProviderNotFoundException, AuthenticationException, MFARequiredException, ProviderException
 
 # Thread pool for running Playwright operations (avoids asyncio conflicts)
 _playwright_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="playwright")
@@ -164,6 +165,154 @@ def get_provider_status(provider_name):
     except Exception as e:
         logger.error(f"Error getting provider status: {e}")
         return jsonify({"error": "Internal server error"}), 500
+
+
+@providers_bp.route("/providers/<provider_name>/fetch-receipts", methods=["POST"])
+def fetch_receipts_with_stored_credentials(provider_name):
+    """
+    Fetch receipts using stored credentials (for token-based providers like Costco)
+    
+    Body:
+        {
+            "user_id": "uuid",     // Required
+            "days": 90             // Optional: days of history (default: 90)
+        }
+    """
+    try:
+        data = request.get_json()
+        user_id = data.get("user_id")
+        days = data.get("days", 90)
+        
+        if not user_id:
+            return jsonify({"error": "user_id is required"}), 400
+        
+        # Check if provider is registered
+        if not ProviderRegistry.is_registered(provider_name):
+            return jsonify({"error": f"Provider {provider_name} not found"}), 404
+        
+        # Get stored credentials
+        supabase_service = current_app.config.get("SUPABASE_SERVICE")
+        secrets_service = current_app.config.get("SECRETS_SERVICE")
+        
+        if not supabase_service or not secrets_service:
+            return jsonify({"error": "Required services not available"}), 503
+        
+        account = supabase_service.get_grocery_account(user_id, provider_name)
+        if not account or not account.get("is_active"):
+            return jsonify({"error": f"No active {provider_name} account found. Please connect your account first."}), 404
+        
+        vault_key_id = account.get("vault_key_id")
+        if not vault_key_id:
+            return jsonify({"error": "Account credentials not found"}), 404
+        
+        # Get credentials from secrets service
+        credentials = secrets_service.retrieve_user_credentials(user_id, provider_name)
+        if not credentials:
+            return jsonify({"error": "Failed to retrieve stored credentials"}), 500
+        
+        # For Costco, use the token-based API
+        if provider_name == "costco":
+            provider = ProviderRegistry.get_provider(provider_name)
+            id_token = credentials.get("idToken")
+            # Use clientIdentifier for API requests (different from Azure B2C clientId)
+            client_identifier = credentials.get("clientIdentifier")
+            
+            if not id_token:
+                return jsonify({"error": "Stored credentials missing required token"}), 500
+            
+            logger.info(f"Fetching {provider_name} receipts with stored credentials (days={days})")
+            
+            # Try to fetch receipts, with automatic token refresh on expiration
+            try:
+                receipts = provider.fetch_receipts_via_api(id_token, days=days, client_identifier=client_identifier)
+            except (AuthenticationException, ProviderException) as e:
+                # Check if this is an authentication error (403, 401, or expired message)
+                error_str = str(e).lower()
+                is_auth_error = "403" in str(e) or "401" in str(e) or "expired" in error_str or "invalid" in error_str
+                
+                if is_auth_error:
+                    # First check if token is actually expired by examining the JWT
+                    token_is_expired = provider._is_token_expired(id_token, buffer_seconds=0)
+                    
+                    # Log token expiry details for debugging
+                    try:
+                        payload = provider._decode_jwt_payload(id_token)
+                        exp = payload.get('exp')
+                        if exp:
+                            expiry_time = datetime.fromtimestamp(exp)
+                            time_until_expiry = expiry_time - datetime.now()
+                            logger.info(f"Token expiry check - Expires at: {expiry_time}, Time until expiry: {time_until_expiry}, Is expired: {token_is_expired}")
+                        else:
+                            logger.warning("Token has no expiry claim")
+                    except Exception as log_error:
+                        logger.debug(f"Could not log token expiry details: {log_error}")
+                    
+                    if not token_is_expired:
+                        # Token is valid - this is a different API error, not token-related
+                        logger.error(f"Costco API returned auth error (status: {str(e)}) but token is still valid. This may be due to bot detection or rate limiting.")
+                        raise  # Re-raise the original error
+                    
+                    # Token is truly expired, attempt refresh
+                    refresh_token = credentials.get("refreshToken")
+                    if not refresh_token:
+                        logger.warning(f"Token expired but no refresh token available for user {user_id}")
+                        return jsonify({
+                            "error": "Token expired and no refresh token available. Please reconnect your account.",
+                            "expired_credentials": True
+                        }), 401
+                    
+                    # Attempt token refresh
+                    logger.info(f"Token expired, attempting refresh for user {user_id}")
+                    try:
+                        refresh_token_client_id = credentials.get("refreshTokenClientId")
+                        # Pass id_token to determine correct endpoint
+                        new_tokens = provider._refresh_id_token(refresh_token, id_token=id_token, client_id=refresh_token_client_id)
+                        
+                        # Update stored credentials with new tokens
+                        credentials.update(new_tokens)
+                        # Preserve refreshTokenClientId if it wasn't updated
+                        if "refreshTokenClientId" not in new_tokens and refresh_token_client_id:
+                            credentials["refreshTokenClientId"] = refresh_token_client_id
+                        
+                        secrets_service.store_user_credentials(user_id, provider_name, credentials)
+                        logger.info(f"Successfully refreshed and stored new tokens for user {user_id}")
+                        
+                        # Retry API call with new token
+                        receipts = provider.fetch_receipts_via_api(
+                            new_tokens["idToken"], 
+                            days=days, 
+                            client_identifier=client_identifier
+                        )
+                    except AuthenticationException as refresh_error:
+                        logger.error(f"Token refresh failed for user {user_id}: {refresh_error}")
+                        return jsonify({
+                            "error": f"Token refresh failed: {str(refresh_error)}. Please reconnect your account.",
+                            "expired_credentials": True
+                        }), 401
+                else:
+                    # Re-raise if it's not an expiration error
+                    raise
+            
+            # Store receipts
+            store_result = _store_and_process_fetched_receipts(user_id, provider_name, receipts)
+            
+            return jsonify({
+                "status": "success",
+                "provider": provider_name,
+                "receipts": receipts,
+                "count": len(receipts),
+                "receipts_stored": store_result["receipts_stored"],
+                "items_added_to_pantry": store_result["items_added_to_pantry"]
+            }), 200
+        else:
+            return jsonify({"error": f"Stored credential fetching not yet supported for {provider_name}"}), 501
+    
+    except AuthenticationException as e:
+        logger.error(f"Authentication error: {e}")
+        return jsonify({"error": str(e), "expired_credentials": True}), 401
+    except Exception as e:
+        logger.error(f"Error fetching receipts with stored credentials: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
 
 @providers_bp.route("/providers/<provider_name>/test", methods=["POST"])
@@ -830,5 +979,319 @@ def fetch_receipts_after_mfa(provider_name, session_id):
     
     except Exception as e:
         logger.error(f"Unexpected error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@providers_bp.route("/providers/costco/fetch-receipts-with-token", methods=["POST"])
+def fetch_costco_receipts_with_token():
+    """
+    Fetch Costco receipts directly using a provided idToken (bypasses login/bot detection)
+    
+    This endpoint allows users to provide their Costco token directly from their browser's
+    network requests, bypassing the need for automated login which is blocked by bot detection.
+    
+    Body:
+        {
+            "idToken": "eyJ...",           // Required: JWT token from costco-x-authorization header
+            "clientIdentifier": "uuid",    // Optional: client-identifier header value
+            "days": 90,                    // Optional: days of history (default: 90)
+            "userId": "uuid"               // Optional: user ID for storing receipts
+        }
+    
+    Returns:
+        {
+            "status": "success",
+            "receipts": [...],
+            "count": N,
+            "receipts_stored": N,
+            "items_added_to_pantry": N
+        }
+    """
+    try:
+        data = request.get_json() or {}
+        
+        id_token = data.get("idToken") or data.get("id_token")
+        if not id_token:
+            return jsonify({
+                "error": "idToken is required. Get it from the costco-x-authorization header in browser network requests"
+            }), 400
+        
+        days = data.get("days", 90)
+        user_id = data.get("userId") or data.get("user_id")
+        client_identifier = data.get("clientIdentifier") or data.get("client_identifier")
+        
+        # Create provider instance (no browser needed for API approach)
+        from backend.providers.costco_provider import CostcoProvider
+        provider = CostcoProvider(headless=True)
+        
+        try:
+            # Fetch receipts via API
+            logger.info(f"Fetching Costco receipts via API with provided token (days={days}, client_id={'provided' if client_identifier else 'random'})")
+            receipts = provider.fetch_receipts_via_api(id_token, days=days, client_identifier=client_identifier)
+            
+            logger.info(f"Fetched {len(receipts)} receipts via direct API")
+            
+            # Store receipts if user_id provided
+            if _is_valid_user_id(user_id):
+                store_result = _store_and_process_fetched_receipts(user_id, "costco", receipts)
+                return jsonify({
+                    "status": "success",
+                    "provider": "costco",
+                    "receipts": receipts,
+                    "count": len(receipts),
+                    "receipts_stored": store_result["receipts_stored"],
+                    "receipt_ids": store_result["receipt_ids"],
+                    "items_added_to_pantry": store_result["items_added_to_pantry"],
+                    "errors": store_result.get("errors", []),
+                }), 200
+            else:
+                return jsonify({
+                    "status": "success",
+                    "provider": "costco",
+                    "receipts": receipts,
+                    "count": len(receipts),
+                    "message": "Receipts fetched but not stored (no valid userId provided)"
+                }), 200
+                
+        except AuthenticationException as auth_err:
+            return jsonify({
+                "error": str(auth_err),
+                "hint": "Your token may have expired. Get a fresh idToken from localStorage on costco.com after logging in."
+            }), 401
+            
+        except Exception as e:
+            logger.error(f"Error fetching receipts via API: {e}", exc_info=True)
+            return jsonify({"error": f"Failed to fetch receipts: {str(e)}"}), 500
+            
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@providers_bp.route("/providers/costco/connection-code", methods=["GET"])
+def get_costco_connection_code():
+    """
+    Generate a connection code for user-assisted Costco token extraction
+    
+    Query params:
+        user_id: User ID (required)
+    
+    Returns:
+        {
+            "connection_code": "abc123...",
+            "expires_at": "2025-02-04T12:00:00Z",
+            "expires_in_seconds": 600
+        }
+    """
+    try:
+        user_id = request.args.get("user_id")
+        if not user_id:
+            return jsonify({"error": "user_id is required"}), 400
+        
+        if not _is_valid_user_id(user_id):
+            return jsonify({"error": "Invalid user_id format"}), 400
+        
+        # Generate connection code
+        code_manager = get_connection_code_manager()
+        connection_code = code_manager.generate_code(user_id)
+        code_info = code_manager.get_code_info(connection_code)
+        
+        expires_at = code_info["expires_at"]
+        expires_in_seconds = int((expires_at - datetime.now(timezone.utc)).total_seconds())
+        
+        logger.info(f"Generated connection code for user {user_id}")
+        
+        return jsonify({
+            "connection_code": connection_code,
+            "expires_at": expires_at.isoformat(),
+            "expires_in_seconds": expires_in_seconds
+        }), 200
+    
+    except Exception as e:
+        logger.error(f"Error generating connection code: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@providers_bp.route("/providers/costco/connect", methods=["POST"])
+def connect_costco_with_tokens():
+    """
+    Connect Costco account using tokens extracted from user's browser
+    
+    Body:
+        {
+            "connection_code": "abc123...",  // Required: connection code from /connection-code
+            "idToken": "eyJ...",              // Required: JWT idToken from localStorage
+            "clientId": "uuid",               // Optional: clientID from localStorage
+            "refreshToken": "...",            // Optional: refresh token from MSAL storage
+            "refreshTokenClientId": "uuid"    // Optional: client ID for refresh token
+        }
+    
+    Returns:
+        {
+            "status": "success",
+            "message": "Costco account connected successfully"
+        }
+    """
+    try:
+        if not request.is_json:
+            return jsonify({"error": "Request body must be JSON"}), 400
+        
+        data = request.get_json(silent=True)
+        if not data:
+            return jsonify({"error": "Request body is required"}), 400
+        
+        connection_code = data.get("connection_code")
+        id_token = data.get("idToken") or data.get("id_token")
+        
+        if not connection_code:
+            return jsonify({"error": "connection_code is required"}), 400
+        
+        if not id_token:
+            return jsonify({"error": "idToken is required"}), 400
+        
+        # Validate connection code
+        code_manager = get_connection_code_manager()
+        code_info = code_manager.get_code_info(connection_code)
+        
+        if not code_info:
+            return jsonify({"error": "Invalid or expired connection code"}), 404
+        
+        if code_info["status"] == "expired":
+            return jsonify({"error": "Connection code has expired"}), 410
+        
+        if code_info["status"] == "connected":
+            return jsonify({"error": "Connection code already used"}), 400
+        
+        user_id = code_info["user_id"]
+        
+        # Validate JWT token (decode to check structure)
+        try:
+            from backend.providers.costco_provider import CostcoProvider
+            provider = CostcoProvider(headless=True)
+            
+            # Decode JWT to extract username/email
+            payload = provider._decode_jwt_payload(id_token)
+            if not payload:
+                raise AuthenticationException("Invalid token format")
+            
+            # Extract username from token (email is typically in 'email' or 'preferred_username' claim)
+            username = payload.get("email") or payload.get("preferred_username") or payload.get("sub", "unknown")
+            
+            # Check if token is expired
+            if provider._is_token_expired(id_token):
+                return jsonify({
+                    "error": "Token has expired. Please get a fresh token from Costco.com"
+                }), 400
+            
+            # Prepare credentials for storage
+            credentials = {
+                "idToken": id_token,
+            }
+            
+            # Add optional fields
+            if data.get("clientId"):
+                credentials["clientId"] = data["clientId"]
+            if data.get("clientIdentifier"):
+                credentials["clientIdentifier"] = data["clientIdentifier"]
+            if data.get("refreshToken"):
+                credentials["refreshToken"] = data["refreshToken"]
+            if data.get("refreshTokenClientId"):
+                credentials["refreshTokenClientId"] = data["refreshTokenClientId"]
+            
+            # Store credentials using secrets service
+            secrets_service = current_app.config.get("SECRETS_SERVICE")
+            if not secrets_service:
+                return jsonify({"error": "Secrets service not configured"}), 503
+            
+            vault_key_id = secrets_service.store_user_credentials(
+                user_id=user_id,
+                provider="costco",
+                credentials=credentials
+            )
+            
+            # Create or update grocery account
+            supabase_service = current_app.config.get("SUPABASE_SERVICE")
+            if not supabase_service:
+                return jsonify({"error": "Database service not available"}), 503
+            
+            account_id = supabase_service.create_or_update_grocery_account(
+                user_id=user_id,
+                provider="costco",
+                username=str(username),
+                vault_key_id=vault_key_id
+            )
+            
+            # Update login timestamp
+            supabase_service.update_grocery_account_login(account_id, success=True, mfa_required=False)
+            
+            # Mark connection code as connected
+            code_manager.mark_connected(connection_code)
+            
+            logger.info(f"Successfully connected Costco account for user {user_id}")
+            
+            return jsonify({
+                "status": "success",
+                "message": "Costco account connected successfully",
+                "account_id": account_id
+            }), 200
+            
+        except AuthenticationException as auth_err:
+            logger.error(f"Authentication error: {auth_err}")
+            return jsonify({"error": str(auth_err)}), 401
+        except Exception as e:
+            logger.error(f"Error connecting Costco account: {e}", exc_info=True)
+            return jsonify({"error": f"Failed to connect account: {str(e)}"}), 500
+    
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}", exc_info=True)
+        return jsonify({"error": "Internal server error"}), 500
+
+
+@providers_bp.route("/providers/costco/connection/<connection_code>/status", methods=["GET"])
+def get_costco_connection_status(connection_code):
+    """
+    Get the status of a Costco connection code
+    
+    Returns:
+        {
+            "status": "pending" | "connected" | "expired" | "not_found",
+            "expires_at": "2025-02-04T12:00:00Z",
+            "time_remaining_seconds": 300
+        }
+    """
+    try:
+        code_manager = get_connection_code_manager()
+        code_info = code_manager.get_code_info(connection_code)
+        
+        if not code_info:
+            return jsonify({
+                "status": "not_found",
+                "message": "Connection code not found"
+            }), 404
+        
+        status = code_info["status"]
+        expires_at = code_info["expires_at"]
+        
+        # Calculate time remaining
+        now = datetime.now(timezone.utc)
+        if now > expires_at:
+            time_remaining = 0
+            status = "expired"
+        else:
+            time_remaining = int((expires_at - now).total_seconds())
+        
+        response_data = {
+            "status": status,
+            "expires_at": expires_at.isoformat(),
+            "time_remaining_seconds": max(0, time_remaining)
+        }
+        
+        if code_info.get("connected_at"):
+            response_data["connected_at"] = code_info["connected_at"].isoformat()
+        
+        return jsonify(response_data), 200
+    
+    except Exception as e:
+        logger.error(f"Error getting connection status: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
 

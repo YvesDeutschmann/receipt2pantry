@@ -14,8 +14,9 @@ def test_list_providers(client):
     assert "count" in data
     assert isinstance(data["providers"], list)
     
-    # Safeway should be registered
+    # Safeway and Costco should be registered
     assert "safeway" in data["providers"]
+    assert "costco" in data["providers"]
 
 
 def test_get_provider_status_missing_user_id(client):

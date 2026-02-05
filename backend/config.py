@@ -52,6 +52,11 @@ class Config:
     OPENAI_MAX_RETRIES: int = int(os.getenv("OPENAI_MAX_RETRIES", "3"))
     OPENAI_TIMEOUT: int = int(os.getenv("OPENAI_TIMEOUT", "60"))
     
+    # Google Gemini
+    GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
+    GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+    COSTCO_AI_MODEL: str = os.getenv("COSTCO_AI_MODEL", "auto")  # openai, gemini, or auto
+    
     # Spoonacular
     SPOONACULAR_API_KEY: Optional[str] = os.getenv("SPOONACULAR_API_KEY")
     SPOONACULAR_BASE_URL: str = os.getenv("SPOONACULAR_BASE_URL", "https://api.spoonacular.com")

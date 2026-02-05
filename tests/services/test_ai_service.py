@@ -17,6 +17,9 @@ class TestAIService:
         config.OPENAI_MODEL = "gpt-4o-mini"
         config.OPENAI_BATCH_SIZE = 20
         config.OPENAI_TIMEOUT = 60
+        config.GEMINI_API_KEY = None  # No Gemini key for tests
+        config.GEMINI_MODEL = "gemini-1.5-flash"
+        config.COSTCO_AI_MODEL = "auto"
         return config
     
     @pytest.fixture
@@ -27,6 +30,9 @@ class TestAIService:
         config.OPENAI_MODEL = "gpt-4o-mini"
         config.OPENAI_BATCH_SIZE = 20
         config.OPENAI_TIMEOUT = 60
+        config.GEMINI_API_KEY = None  # No Gemini key for tests
+        config.GEMINI_MODEL = "gemini-1.5-flash"
+        config.COSTCO_AI_MODEL = "auto"
         return config
     
     def test_init_with_api_key(self, mock_config):

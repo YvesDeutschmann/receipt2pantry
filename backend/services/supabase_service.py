@@ -151,8 +151,10 @@ class SupabaseService:
             Grocery account dictionary or None if not found
         """
         try:
+            # Use admin_client to bypass RLS for server-side operations
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("grocery_accounts")
+                client.table("grocery_accounts")
                 .select("*")
                 .eq("user_id", user_id)
                 .eq("provider", provider)
@@ -166,6 +168,54 @@ class SupabaseService:
             logger.error(f"Failed to get grocery account: {e}")
             raise DatabaseException(f"Failed to retrieve grocery account: {e}")
     
+    def create_or_update_grocery_account(
+        self, user_id: str, provider: str, username: str, vault_key_id: str
+    ) -> str:
+        """
+        Create or update a grocery account using UPSERT
+        
+        Args:
+            user_id: User ID
+            provider: Provider name (e.g., 'costco', 'safeway')
+            username: Username/email for the account
+            vault_key_id: Reference to AWS Secrets Manager secret ARN
+        
+        Returns:
+            Grocery account ID
+        """
+        try:
+            # Use admin_client to bypass RLS for server-side operations
+            client = self.admin_client if self.admin_client else self.client
+            
+            # Use upsert to handle both create and update in one operation
+            account_data = {
+                "user_id": user_id,
+                "provider": provider,
+                "username": username,
+                "vault_key_id": vault_key_id,
+                "is_active": True,
+                "mfa_required": False,
+                "updated_at": datetime.utcnow().isoformat(),
+            }
+            
+            # Upsert: Insert or update on conflict (user_id, provider)
+            response = (
+                client.table("grocery_accounts")
+                .upsert(account_data, on_conflict="user_id,provider")
+                .execute()
+            )
+            
+            if response.data and len(response.data) > 0:
+                account_id = response.data[0]["id"]
+                logger.info(f"Upserted grocery account {account_id} for {user_id}/{provider}")
+            else:
+                raise DatabaseException("No data returned after upsert")
+            
+            return account_id
+        except Exception as e:
+            logger.error(f"Failed to create/update grocery account: {e}")
+            raise DatabaseException(f"Failed to create/update grocery account: {e}")
+    
     def update_grocery_account_login(
         self, account_id: str, success: bool, mfa_required: bool = False
     ) -> None:
@@ -178,6 +228,8 @@ class SupabaseService:
             mfa_required: Whether MFA was required
         """
         try:
+            # Use admin_client to bypass RLS for server-side operations
+            client = self.admin_client if self.admin_client else self.client
             update_data = {
                 "mfa_required": mfa_required,
                 "updated_at": datetime.utcnow().isoformat(),
@@ -186,7 +238,7 @@ class SupabaseService:
             if success:
                 update_data["last_successful_login"] = datetime.utcnow().isoformat()
             
-            self.client.table("grocery_accounts").update(update_data).eq(
+            client.table("grocery_accounts").update(update_data).eq(
                 "id", account_id
             ).execute()
             
