@@ -1089,7 +1089,7 @@ class CostcoProvider(PlaywrightProvider):
                                     total_amount = float(total_match.group(1))
                         
                         receipts.append({
-                            'order_id': order_id or f"COSTCO_{i}_{int(time.time())}",
+                            'order_id': order_id or f"COSTCO_{idx}_{int(time.time())}",
                             'order_date': final_date.strftime('%Y-%m-%d'),
                             'total_amount': total_amount,
                             'num_items': len(receipt_data.get('items', [])),
@@ -1102,14 +1102,14 @@ class CostcoProvider(PlaywrightProvider):
                         
                         logger.info(f"Extracted receipt {order_id} with {len(receipt_data.get('items', []))} items")
                     else:
-                        logger.warning(f"No items found in receipt modal for card {i}")
+                        logger.warning(f"No items found in receipt modal for card {card_index}")
                     
                     # Close modal
                     self._close_receipt_modal()
                     time.sleep(1)
                     
                 except Exception as e:
-                    logger.warning(f"Failed to process receipt card {i}: {e}", exc_info=True)
+                    logger.warning(f"Failed to process receipt card {card_index}: {e}", exc_info=True)
                     # Try to close modal if it's open
                     try:
                         self._close_receipt_modal()
