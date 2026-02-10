@@ -61,15 +61,7 @@ class ReceiptProcessor:
                 household_id = household["id"] if household else None
             
             # 1. Get receipt items
-            # #region agent log
-            try:import requests,json,time;requests.post('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',json={'location':'receipt_processor.py:before_get_items','message':'before get_receipt_items','data':{'receipt_id':receipt_id},'timestamp':time.time()*1000,'sessionId':'debug-session','hypothesisId':'A'})
-            except:pass
-            # #endregion
             items = self.supabase.get_receipt_items(receipt_id)
-            # #region agent log
-            try:import requests,json,time;requests.post('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',json={'location':'receipt_processor.py:after_get_items','message':'after get_receipt_items','data':{'receipt_id':receipt_id,'items_count':len(items) if items else 0,'items_sample':items[:2] if items else None},'timestamp':time.time()*1000,'sessionId':'debug-session','hypothesisId':'A'})
-            except:pass
-            # #endregion
 
             if not items:
                 logger.warning(f"No items found for receipt {receipt_id}")
@@ -103,18 +95,10 @@ class ReceiptProcessor:
                 valid_items.append(item)
             
             # 3. Batch normalize all products at once
-            # #region agent log
-            try:import requests,json,time;requests.post('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',json={'location':'receipt_processor.py:before_normalize','message':'before normalize_products_batch','data':{'products_count':len(products_to_normalize),'use_ai':use_ai,'products_sample':products_to_normalize[:2] if products_to_normalize else None},'timestamp':time.time()*1000,'sessionId':'debug-session','hypothesisId':'C'})
-            except:pass
-            # #endregion
             normalized_results = self.normalizer.normalize_products_batch(
                 products_to_normalize,
                 use_ai=use_ai
             )
-            # #region agent log
-            try:import requests,json,time;requests.post('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',json={'location':'receipt_processor.py:after_normalize','message':'after normalize_products_batch','data':{'normalized_count':len(normalized_results) if normalized_results else 0,'normalized_sample':normalized_results[:2] if normalized_results else None},'timestamp':time.time()*1000,'sessionId':'debug-session','hypothesisId':'C'})
-            except:pass
-            # #endregion
             
             # 4. Add normalized items to pantry
             items_processed = 0
@@ -144,10 +128,6 @@ class ReceiptProcessor:
                         unit = 'count'
                     
                     # Add to pantry (household-scoped if available)
-                    # #region agent log
-                    try:import requests,json,time;requests.post('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',json={'location':'receipt_processor.py:before_add_pantry','message':'before add_to_pantry','data':{'user_id':user_id,'normalized_name':normalized.get('normalized_name'),'quantity':quantity,'unit':unit,'household_id':household_id},'timestamp':time.time()*1000,'sessionId':'debug-session','hypothesisId':'D'})
-                    except:pass
-                    # #endregion
                     await self.pantry.add_to_pantry(
                         user_id=user_id,
                         normalized_item=normalized,
@@ -156,10 +136,6 @@ class ReceiptProcessor:
                         receipt_id=receipt_id,
                         household_id=household_id
                     )
-                    # #region agent log
-                    try:import requests,json,time;requests.post('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',json={'location':'receipt_processor.py:after_add_pantry','message':'after add_to_pantry success','data':{'user_id':user_id,'normalized_name':normalized.get('normalized_name')},'timestamp':time.time()*1000,'sessionId':'debug-session','hypothesisId':'D'})
-                    except:pass
-                    # #endregion
                     
                     items_processed += 1
                     items_added += 1
@@ -168,10 +144,6 @@ class ReceiptProcessor:
                     raw_name = item.get('raw_name') or item.get('name', 'unknown')
                     error_msg = f"Failed to process item '{raw_name}': {str(e)}"
                     logger.error(error_msg)
-                    # #region agent log
-                    try:import requests,json,time;requests.post('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',json={'location':'receipt_processor.py:add_pantry_exception','message':'exception in add_to_pantry','data':{'raw_name':raw_name,'error':str(e),'error_type':type(e).__name__},'timestamp':time.time()*1000,'sessionId':'debug-session','hypothesisId':'D'})
-                    except:pass
-                    # #endregion
                     errors.append(error_msg)
                     items_processed += 1
             

@@ -77,11 +77,6 @@ class PantryService:
             Pantry item ID
         """
         try:
-            # #region agent log
-            try:import requests,json,time;requests.post('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',json={'location':'pantry_service.py:add_entry','message':'add_to_pantry entry','data':{'user_id':user_id,'normalized_name':normalized_item.get('normalized_name'),'quantity':quantity,'unit':unit,'receipt_id':receipt_id,'household_id':household_id},'timestamp':time.time()*1000,'sessionId':'debug-session','hypothesisId':'D,E'})
-            except:pass
-            # #endregion
-            
             # Get household ID if not provided
             if not household_id:
                 household_id = self._get_household_id_for_user(user_id)
@@ -134,17 +129,7 @@ class PantryService:
                 if receipt_id:
                     item_data['last_receipt_id'] = receipt_id
                 
-                # #region agent log
-                try:import requests,json,time;requests.post('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',json={'location':'pantry_service.py:before_upsert','message':'before upsert_pantry_item','data':{'item_data_keys':list(item_data.keys()),'normalized_name':item_data.get('normalized_name'),'quantity':item_data.get('quantity')},'timestamp':time.time()*1000,'sessionId':'debug-session','hypothesisId':'E'})
-                except:pass
-                # #endregion
-                
                 item_id = self.supabase.upsert_pantry_item(item_data)
-                
-                # #region agent log
-                try:import requests,json,time;requests.post('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',json={'location':'pantry_service.py:after_upsert','message':'after upsert_pantry_item','data':{'item_id':item_id},'timestamp':time.time()*1000,'sessionId':'debug-session','hypothesisId':'E'})
-                except:pass
-                # #endregion
                 
                 logger.info(
                     f"Added to pantry: {normalized_item.get('normalized_name')} "
