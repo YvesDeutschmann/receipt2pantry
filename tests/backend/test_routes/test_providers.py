@@ -53,3 +53,27 @@ def test_test_provider_connection_invalid_provider(client):
     data = json.loads(response.data)
     assert "error" in data
 
+
+def test_fetch_receipts_with_stored_credentials_missing_body(client):
+    """Stored-credentials fetch should handle missing JSON body gracefully."""
+    response = client.post('/api/providers/costco/fetch-receipts')
+
+    assert response.status_code == 400
+
+    data = json.loads(response.data)
+    assert "error" in data
+
+
+def test_fetch_receipts_with_stored_credentials_invalid_json(client):
+    """Stored-credentials fetch should handle invalid JSON without 500s."""
+    response = client.post(
+        '/api/providers/costco/fetch-receipts',
+        data='{',
+        content_type='application/json'
+    )
+
+    assert response.status_code == 400
+
+    data = json.loads(response.data)
+    assert "error" in data
+
