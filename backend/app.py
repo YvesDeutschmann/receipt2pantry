@@ -1,7 +1,6 @@
 """Flask application factory"""
 
-import os
-from flask import Flask, send_file
+from flask import Flask
 from flask_cors import CORS
 from backend.config import get_config
 from backend.utils.logger import setup_logger, get_logger
@@ -218,9 +217,6 @@ def create_app(config=None):
     app.register_blueprint(recipes_bp, url_prefix="/api")
     app.register_blueprint(meal_plan_bp, url_prefix="/api")
     
-    # Register static HTML routes for token submitter
-    register_static_routes(app)
-    
     logger.info("Routes registered")
     
     # Register error handlers
@@ -228,21 +224,6 @@ def create_app(config=None):
     
     logger.info("GrocerySync backend initialized successfully")
     return app
-
-
-def register_static_routes(app):
-    """Register routes for serving static HTML pages"""
-    backend_dir = os.path.dirname(os.path.abspath(__file__))
-    
-    @app.route("/token-submitter")
-    def token_submitter():
-        """Serve the token submitter page"""
-        return send_file(os.path.join(backend_dir, "token_submitter.html"))
-    
-    @app.route("/connection-monitor")
-    def connection_monitor():
-        """Serve the connection monitor page"""
-        return send_file(os.path.join(backend_dir, "connection_monitor.html"))
 
 
 def register_error_handlers(app):
