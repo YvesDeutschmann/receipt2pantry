@@ -13,6 +13,11 @@ from typing import Dict, List, Optional
 
 from backend.providers.playwright_provider import PlaywrightProvider
 from backend.providers.provider_registry import register_provider
+from backend.utils.costco_receipt_extraction import (
+    extract_costco_order_date,
+    extract_costco_order_id,
+    extract_costco_total,
+)
 from backend.utils.exceptions import AuthenticationException, ProviderException, MFARequiredException
 from backend.utils.logger import get_logger
 
@@ -1150,55 +1155,18 @@ class CostcoProvider(PlaywrightProvider):
     
     def _extract_order_id(self, receipt_text: str) -> str:
         """Extract order/transaction ID from receipt text"""
-        # Look for transaction ID pattern (long number)
-        match = re.search(r'(\d{20,})', receipt_text)
-        if match:
-            return match.group(1)
-        
+        extracted_order_id = extract_costco_order_id(receipt_text)
+        if extracted_order_id:
+            return extracted_order_id
+
         # Fallback: generate from hash
         return f"COSTCO_{hashlib.md5(receipt_text.encode()).hexdigest()[:12]}"
     
     def _extract_order_date(self, receipt_text: str, fallback_date: Optional[datetime] = None) -> Optional[datetime]:
         """Extract order date from receipt text"""
-        # Look for date patterns in receipt
-        date_patterns = [
-            r'(\d{1,2}/\d{1,2}/\d{4})',
-            r'(\d{4}-\d{2}-\d{2})',
-            r'(\w{3} \d{1,2}, \d{4})'
-        ]
-        
-        for pattern in date_patterns:
-            match = re.search(pattern, receipt_text)
-            if match:
-                date_str = match.group(1)
-                try:
-                    if '/' in date_str:
-                        return datetime.strptime(date_str, '%m/%d/%Y')
-                    elif '-' in date_str:
-                        return datetime.strptime(date_str, '%Y-%m-%d')
-                    else:
-                        return datetime.strptime(date_str, '%b %d, %Y')
-                except ValueError:
-                    continue
-        
-        return fallback_date or datetime.now()
+        return extract_costco_order_date(receipt_text) or fallback_date or datetime.now()
     
     def _extract_total(self, receipt_text: str) -> float:
         """Extract total amount from receipt text"""
-        # Look for TOTAL line
-        total_patterns = [
-            r'TOTAL\s+\$?(\d+\.\d{2})',
-            r'\*\*\*\*\s+TOTAL\s+\$?(\d+\.\d{2})',
-            r'AMOUNT:\s+\$?(\d+\.\d{2})'
-        ]
-        
-        for pattern in total_patterns:
-            match = re.search(pattern, receipt_text, re.IGNORECASE)
-            if match:
-                try:
-                    return float(match.group(1))
-                except ValueError:
-                    continue
-        
-        return 0.0
+        return extract_costco_total(receipt_text)
     

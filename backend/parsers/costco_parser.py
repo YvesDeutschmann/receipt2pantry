@@ -7,6 +7,11 @@ from datetime import datetime
 from backend.parsers.base_parser import BaseParser
 from backend.parsers.parser_registry import register_parser
 from backend.services.ai_service import AIService, create_ai_service
+from backend.utils.costco_receipt_extraction import (
+    extract_costco_order_date,
+    extract_costco_order_id,
+    extract_costco_total,
+)
 from backend.utils.exceptions import ParserException, AIServiceException
 from backend.utils.logger import get_logger
 
@@ -215,53 +220,15 @@ class CostcoParser(BaseParser):
     
     def _extract_order_id(self, receipt_text: str) -> str:
         """Extract order ID from receipt text"""
-        # Look for transaction ID pattern (long number)
-        match = re.search(r'(\d{20,})', receipt_text)
-        if match:
-            return match.group(1)
-        return self._generate_order_id()
+        return extract_costco_order_id(receipt_text) or self._generate_order_id()
     
     def _extract_order_date(self, receipt_text: str) -> Optional[datetime]:
         """Extract order date from receipt text"""
-        date_patterns = [
-            r'(\d{1,2}/\d{1,2}/\d{4})',
-            r'(\d{4}-\d{2}-\d{2})',
-            r'(\w{3} \d{1,2}, \d{4})'
-        ]
-        
-        for pattern in date_patterns:
-            match = re.search(pattern, receipt_text)
-            if match:
-                date_str = match.group(1)
-                try:
-                    if '/' in date_str:
-                        return datetime.strptime(date_str, '%m/%d/%Y')
-                    elif '-' in date_str:
-                        return datetime.strptime(date_str, '%Y-%m-%d')
-                    else:
-                        return datetime.strptime(date_str, '%b %d, %Y')
-                except ValueError:
-                    continue
-        
-        return None
+        return extract_costco_order_date(receipt_text)
     
     def _extract_total(self, receipt_text: str) -> float:
         """Extract total amount from receipt text"""
-        total_patterns = [
-            r'TOTAL\s+\$?(\d+\.\d{2})',
-            r'\*\*\*\*\s+TOTAL\s+\$?(\d+\.\d{2})',
-            r'AMOUNT:\s+\$?(\d+\.\d{2})'
-        ]
-        
-        for pattern in total_patterns:
-            match = re.search(pattern, receipt_text, re.IGNORECASE)
-            if match:
-                try:
-                    return float(match.group(1))
-                except ValueError:
-                    continue
-        
-        return 0.0
+        return extract_costco_total(receipt_text)
     
     def validate(self, parsed_data: Dict) -> bool:
         """Validate parsed receipt data"""
