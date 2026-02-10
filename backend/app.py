@@ -151,17 +151,31 @@ def create_app(config=None):
             logger.info("AWS Secrets Manager initialized")
         except Exception as e:
             logger.warning(f"Failed to initialize Secrets Manager: {e}")
-            # Fallback to mock
+            # Fallback to Supabase Vault if available, otherwise mock
+            supabase_service = app.config.get("SUPABASE_SERVICE")
+            if supabase_service and supabase_service.admin_client:
+                from backend.services.secrets_service import SupabaseVaultService
+                secrets_service = SupabaseVaultService(supabase_service.admin_client)
+                app.config["SECRETS_SERVICE"] = secrets_service
+                logger.info("Using Supabase Vault Service")
+            else:
+                from backend.services.secrets_service import create_secrets_service
+                secrets_service = create_secrets_service(use_mock=True)
+                app.config["SECRETS_SERVICE"] = secrets_service
+                logger.info("Using mock Secrets Service")
+    else:
+        # Use Supabase Vault if available, otherwise mock service
+        supabase_service = app.config.get("SUPABASE_SERVICE")
+        if supabase_service and supabase_service.admin_client:
+            from backend.services.secrets_service import SupabaseVaultService
+            secrets_service = SupabaseVaultService(supabase_service.admin_client)
+            app.config["SECRETS_SERVICE"] = secrets_service
+            logger.info("Using Supabase Vault Service (development mode)")
+        else:
             from backend.services.secrets_service import create_secrets_service
             secrets_service = create_secrets_service(use_mock=True)
             app.config["SECRETS_SERVICE"] = secrets_service
-            logger.info("Using mock Secrets Service")
-    else:
-        # Use mock service for development
-        from backend.services.secrets_service import create_secrets_service
-        secrets_service = create_secrets_service(use_mock=True)
-        app.config["SECRETS_SERVICE"] = secrets_service
-        logger.info("Using mock Secrets Service (development mode)")
+            logger.info("Using mock Secrets Service (development mode)")
     
     # Initialize Login Session Manager for MFA flows
     from backend.services.login_session_manager import LoginSessionManager
@@ -188,7 +202,9 @@ def create_app(config=None):
     # Import providers and parsers to register them
     # This ensures @register_provider and @register_parser decorators are executed
     from backend.providers import safeway_provider  # noqa: F401
+    from backend.providers import costco_provider  # noqa: F401
     from backend.parsers import safeway_parser  # noqa: F401
+    from backend.parsers import costco_parser  # noqa: F401
     from backend.parsers import ai_parser  # noqa: F401
     
     # Register blueprints
@@ -200,6 +216,7 @@ def create_app(config=None):
     app.register_blueprint(pantry_bp, url_prefix="/api")
     app.register_blueprint(recipes_bp, url_prefix="/api")
     app.register_blueprint(meal_plan_bp, url_prefix="/api")
+    
     logger.info("Routes registered")
     
     # Register error handlers
@@ -244,7 +261,8 @@ def main():
             host="0.0.0.0",
             port=config.FLASK_PORT,
             debug=config.DEBUG,
-            threaded=False  # Disable threading to work with Playwright sync API
+            threaded=True,  # Enable threading for concurrent requests
+            use_reloader=False  # Disable reloader to prevent double initialization
         )
     finally:
         # Cleanup on shutdown

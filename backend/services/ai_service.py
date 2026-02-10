@@ -13,6 +13,13 @@ from tenacity import (
     retry_if_exception_type,
 )
 
+try:
+    import google.generativeai as genai
+    GEMINI_AVAILABLE = True
+except ImportError:
+    GEMINI_AVAILABLE = False
+    genai = None
+
 from backend.config import Config
 from backend.utils.logger import get_logger
 from backend.utils.exceptions import AIServiceException, AIRateLimitException
@@ -32,6 +39,7 @@ class AIService:
         """
         self.config = config or Config
         self.client: Optional[OpenAI] = None
+        self.gemini_client: Optional[Any] = None
         self.total_tokens_used = 0
         self.total_requests = 0
         
@@ -42,12 +50,31 @@ class AIService:
             )
             logger.info("AIService initialized with OpenAI client")
         else:
-            logger.warning("AIService initialized without API key - AI features disabled")
+            logger.warning("AIService initialized without OpenAI API key")
+        
+        if GEMINI_AVAILABLE and self.config.GEMINI_API_KEY:
+            # Check if GEMINI_API_KEY is actually a string (not a Mock object)
+            if isinstance(self.config.GEMINI_API_KEY, str) and self.config.GEMINI_API_KEY:
+                genai.configure(api_key=self.config.GEMINI_API_KEY)
+                # Check if GEMINI_MODEL is a string (not a Mock object)
+                model_name = getattr(self.config, 'GEMINI_MODEL', 'gemini-1.5-flash')
+                if isinstance(model_name, str):
+                    self.gemini_client = genai.GenerativeModel(model_name)
+                    logger.info(f"AIService initialized with Gemini client (model: {model_name})")
+                else:
+                    logger.warning("GEMINI_MODEL is not a valid string, skipping Gemini initialization")
+            else:
+                logger.warning("AIService initialized without valid Gemini API key")
+        else:
+            if not GEMINI_AVAILABLE:
+                logger.warning("Gemini library not available - install google-generativeai")
+            elif not self.config.GEMINI_API_KEY:
+                logger.warning("AIService initialized without Gemini API key")
     
     @property
     def is_available(self) -> bool:
-        """Check if AI service is available"""
-        return self.client is not None
+        """Check if AI service is available (either OpenAI or Gemini)"""
+        return self.client is not None or self.gemini_client is not None
     
     def get_usage_stats(self) -> Dict:
         """Get usage statistics"""
@@ -296,6 +323,199 @@ If you cannot identify the store, return "unknown"."""
         
         store = response.get("content", "").strip().lower()
         return store if store != "unknown" else None
+    
+    def _call_gemini(
+        self,
+        prompt: str,
+        system_instruction: Optional[str] = None,
+        temperature: float = 0.1
+    ) -> Dict:
+        """
+        Make a call to Gemini API
+        
+        Args:
+            prompt: User prompt
+            system_instruction: Optional system instruction
+            temperature: Temperature for response generation
+        
+        Returns:
+            Parsed response content
+        
+        Raises:
+            AIServiceException: If the API call fails
+        """
+        if not self.gemini_client:
+            raise AIServiceException("Gemini client not initialized - missing API key")
+        
+        try:
+            generation_config = {
+                "temperature": temperature,
+                "response_mime_type": "application/json",
+            }
+            
+            full_prompt = prompt
+            if system_instruction:
+                full_prompt = f"{system_instruction}\n\n{prompt}"
+            
+            response = self.gemini_client.generate_content(
+                full_prompt,
+                generation_config=generation_config
+            )
+            
+            self.total_requests += 1
+            
+            # Parse JSON response
+            try:
+                content = response.text
+                return json.loads(content)
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON response from Gemini: {e}")
+                logger.debug(f"Response text: {response.text[:500]}")
+                raise AIServiceException(f"Invalid JSON response from Gemini: {e}")
+            
+        except Exception as e:
+            logger.error(f"Gemini API error: {e}")
+            raise AIServiceException(f"Failed to call Gemini: {e}")
+    
+    def parse_costco_receipt(self, receipt_text: str, model: str = "auto") -> Dict:
+        """
+        Parse Costco receipt text using AI (OpenAI or Gemini)
+        
+        Args:
+            receipt_text: Extracted text from Costco PDF receipt
+            model: Model to use ("openai", "gemini", or "auto" for automatic selection)
+        
+        Returns:
+            Dictionary with parsed receipt data:
+            {
+                "store_name": str,
+                "order_id": str,
+                "order_date": str,
+                "items": List[Dict],
+                "subtotal": float,
+                "tax": float,
+                "total": float
+            }
+        
+        Raises:
+            AIServiceException: If parsing fails
+        """
+        # Determine which model to use
+        if model == "auto":
+            # Use config preference, fallback to available model
+            preferred = self.config.COSTCO_AI_MODEL.lower()
+            if preferred == "openai" and self.client:
+                model = "openai"
+            elif preferred == "gemini" and self.gemini_client:
+                model = "gemini"
+            elif self.gemini_client:
+                model = "gemini"  # Prefer Gemini for Costco if available
+            elif self.client:
+                model = "openai"
+            else:
+                raise AIServiceException("No AI service available (neither OpenAI nor Gemini configured)")
+        elif model == "openai" and not self.client:
+            raise AIServiceException("OpenAI not available")
+        elif model == "gemini" and not self.gemini_client:
+            raise AIServiceException("Gemini not available")
+        
+        system_prompt = """You are a Costco receipt parsing assistant. Costco receipts have cryptic abbreviated product names that need to be expanded.
+
+Key Costco abbreviations:
+- KS = Kirkland Signature (Costco's store brand)
+- CHKN = Chicken
+- ORG = Organic
+- REFRIG = Refrigerated
+- FROZ = Frozen
+- JPNSE = Japanese
+- GNOCCHI = Gnocchi
+- PSTA = Pasta
+- SAUSGE = Sausage
+- TRISCUIT = Triscuit
+- YGRT = Yogurt
+- STRBRY = Strawberry
+- BLUEBERRIES = Blueberries
+- AVOCADO = Avocado
+- SWTPOTATO = Sweet Potato
+- BANANAS = Bananas
+
+Receipt format:
+- Lines starting with "E" followed by numbers are items: "E [item_code] [abbreviated_name] [price] [tax_flag]"
+- Discount lines: "[code] / [code] [amount]-"
+- Totals: "SUBTOTAL", "TAX", "TOTAL"
+
+For each line item, extract:
+- name: Full expanded product name (e.g., "KS BACON" -> "Kirkland Signature Bacon")
+- raw_name: The original abbreviated name from receipt
+- price: The price paid
+- quantity: Usually 1 unless specified
+- category: Product category (GROCERY, MEAT, PRODUCE, DAIRY, BAKERY, FROZEN, BEVERAGES, HOUSEHOLD, HEALTH & BEAUTY, DELI, SEAFOOD)
+- quantity_info: Extract any quantity/weight info from name if present
+
+Return valid JSON only. If you cannot parse something, make your best guess or omit it."""
+
+        user_prompt = f"""Parse this Costco receipt and extract all items:
+
+{receipt_text[:10000]}
+
+Return JSON with this structure:
+{{
+    "store_name": "Costco",
+    "order_id": "transaction ID from receipt",
+    "order_date": "YYYY-MM-DD",
+    "items": [
+        {{
+            "name": "Full Product Name",
+            "raw_name": "KS BACON",
+            "price": 16.49,
+            "quantity": 1,
+            "category": "MEAT",
+            "quantity_info": null
+        }}
+    ],
+    "subtotal": 593.12,
+    "tax": 4.37,
+    "total": 597.49
+}}"""
+
+        try:
+            if model == "gemini":
+                logger.info("Parsing Costco receipt with Gemini")
+                return self._call_gemini(
+                    prompt=user_prompt,
+                    system_instruction=system_prompt,
+                    temperature=0.1
+                )
+            else:  # openai
+                logger.info("Parsing Costco receipt with OpenAI")
+                return self._call_openai(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.1
+                )
+        except Exception as e:
+            # Try fallback if primary model fails
+            if model == "gemini" and self.client:
+                logger.warning(f"Gemini parsing failed, falling back to OpenAI: {e}")
+                return self._call_openai(
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_prompt}
+                    ],
+                    response_format={"type": "json_object"},
+                    temperature=0.1
+                )
+            elif model == "openai" and self.gemini_client:
+                logger.warning(f"OpenAI parsing failed, falling back to Gemini: {e}")
+                return self._call_gemini(
+                    prompt=user_prompt,
+                    system_instruction=system_prompt,
+                    temperature=0.1
+                )
+            raise
 
 
 def create_ai_service(config: Optional[Config] = None) -> AIService:

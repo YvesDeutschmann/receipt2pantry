@@ -3,10 +3,12 @@ import { api } from '../services/apiClient'
 import ProviderCard from '../components/ProviderCard'
 import CredentialsModal from '../components/CredentialsModal'
 import MfaDialog from '../components/MfaDialog'
+import CostcoConnectPage from '../components/CostcoConnectPage'
 
 function Providers() {
   const userId = localStorage.getItem('user_id') || '00000000-0000-0000-0000-000000000001'
   const [providers, setProviders] = useState([])
+  const [providerStatuses, setProviderStatuses] = useState({}) // { providerName: { configured, active } }
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -28,6 +30,9 @@ function Providers() {
   const [mfaLoading, setMfaLoading] = useState(false)
   const [mfaError, setMfaError] = useState(null)
   const [pollingActive, setPollingActive] = useState(false)
+
+  // Costco Connect Page state
+  const [showCostcoConnect, setShowCostcoConnect] = useState(false)
 
   // Update ref when dialog state changes
   useEffect(() => {
@@ -53,13 +58,53 @@ function Providers() {
     try {
       setLoading(true)
       const data = await api.listProviders()
-      setProviders(data.providers || [])
+      const providerList = data.providers || []
+      setProviders(providerList)
+      
+      // Fetch status for each provider
+      const statuses = {}
+      await Promise.all(
+        providerList.map(async (provider) => {
+          try {
+            const status = await api.getProviderStatus(provider, userId)
+            statuses[provider] = status
+          } catch (err) {
+            console.error(`Failed to get status for ${provider}:`, err)
+            statuses[provider] = { configured: false, active: false }
+          }
+        })
+      )
+      setProviderStatuses(statuses)
       setError(null)
     } catch (err) {
       setError('Failed to load providers')
       console.error(err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleFetchWithStoredCredentials = async (provider) => {
+    setFetchingReceipts(true)
+    setFetchedReceipts(null)
+    setReceiptError(null)
+    
+    try {
+      const response = await api.fetchReceiptsWithStoredCredentials(provider, userId, 14)
+      setFetchedReceipts(response.receipts)
+      alert(`✅ Fetched ${response.count} receipts from ${provider}! Added ${response.items_added_to_pantry} items to pantry.`)
+    } catch (err) {
+      const errorMessage = err.response?.data?.error || 'Failed to fetch receipts'
+      setReceiptError(errorMessage)
+      
+      // If credentials expired, show reconnect option
+      if (err.response?.data?.expired_credentials) {
+        alert(`⚠️  Your ${provider} credentials have expired. Please reconnect your account.`)
+      } else {
+        alert(`❌ Failed to fetch receipts: ${errorMessage}`)
+      }
+    } finally {
+      setFetchingReceipts(false)
     }
   }
 
@@ -299,6 +344,35 @@ function Providers() {
     // Future: Open configuration modal
   }
 
+  const handleConnectCostco = () => {
+    setShowCostcoConnect(true)
+  }
+
+  const handleCostcoConnectSuccess = async () => {
+    setShowCostcoConnect(false)
+    // Small delay to ensure backend transaction is committed
+    await new Promise(resolve => setTimeout(resolve, 300))
+    // Force immediate status refresh
+    await fetchProviders()
+    console.log('Provider statuses after refresh:', providerStatuses)
+    alert('Costco account connected successfully!')
+  }
+
+  const handleCostcoConnectCancel = () => {
+    setShowCostcoConnect(false)
+  }
+
+  // Show Costco Connect page if requested
+  if (showCostcoConnect) {
+    return (
+      <CostcoConnectPage
+        userId={userId}
+        onSuccess={handleCostcoConnectSuccess}
+        onCancel={handleCostcoConnectCancel}
+      />
+    )
+  }
+
   return (
     <div>
       <div className="mb-8">
@@ -323,33 +397,76 @@ function Providers() {
       ) : (
         <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {providers.map((provider) => (
-              <div key={provider} className="card">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold capitalize">{provider}</h3>
-                  <span className="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-600">
-                    Not Connected
-                  </span>
+            {providers.map((provider) => {
+              const status = providerStatuses[provider] || {}
+              const isConnected = status.configured && status.active
+              
+              return (
+                <div key={provider} className="card">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="text-lg font-semibold capitalize">{provider}</h3>
+                    <span className={`px-2 py-1 text-xs rounded-full ${
+                      isConnected 
+                        ? 'bg-green-100 text-green-800' 
+                        : 'bg-gray-100 text-gray-600'
+                    }`}>
+                      {isConnected ? '✓ Connected' : 'Not Connected'}
+                    </span>
+                  </div>
+                  <p className="text-gray-600 text-sm mb-4">
+                    {isConnected 
+                      ? `Your ${provider} account is connected and ready to fetch receipts.`
+                      : `Connect your ${provider} account to automatically fetch receipts.`
+                    }
+                  </p>
+                  <div className="flex gap-2">
+                    {provider === 'costco' ? (
+                      <>
+                        {isConnected ? (
+                          <>
+                            <button
+                              onClick={() => handleFetchWithStoredCredentials(provider)}
+                              className="btn btn-primary flex-1"
+                              disabled={fetchingReceipts}
+                            >
+                              {fetchingReceipts ? 'Fetching...' : 'Fetch Receipts'}
+                            </button>
+                            <button
+                              onClick={handleConnectCostco}
+                              className="btn btn-secondary"
+                            >
+                              Reconnect
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            onClick={handleConnectCostco}
+                            className="btn btn-primary flex-1"
+                          >
+                            Connect Costco Account
+                          </button>
+                        )}
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleTestConnection(provider)}
+                          className="btn btn-secondary flex-1"
+                        >
+                          Test Connection
+                        </button>
+                        <button
+                          onClick={() => handleFetchReceipts(provider)}
+                          className="btn btn-primary flex-1"
+                        >
+                          Fetch Receipts
+                        </button>
+                      </>
+                    )}
+                  </div>
                 </div>
-                <p className="text-gray-600 text-sm mb-4">
-                  Connect your {provider} account to automatically fetch receipts.
-                </p>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => handleTestConnection(provider)}
-                    className="btn btn-secondary flex-1"
-                  >
-                    Test Connection
-                  </button>
-                  <button
-                    onClick={() => handleFetchReceipts(provider)}
-                    className="btn btn-primary flex-1"
-                  >
-                    Fetch Receipts
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
             {providers.length === 0 && (
               <div className="card col-span-2">
                 <p className="text-center text-gray-600">

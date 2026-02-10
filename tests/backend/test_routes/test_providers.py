@@ -14,8 +14,9 @@ def test_list_providers(client):
     assert "count" in data
     assert isinstance(data["providers"], list)
     
-    # Safeway should be registered
+    # Safeway and Costco should be registered
     assert "safeway" in data["providers"]
+    assert "costco" in data["providers"]
 
 
 def test_get_provider_status_missing_user_id(client):
@@ -49,6 +50,30 @@ def test_test_provider_connection_invalid_provider(client):
     
     assert response.status_code == 404
     
+    data = json.loads(response.data)
+    assert "error" in data
+
+
+def test_fetch_receipts_with_stored_credentials_missing_body(client):
+    """Stored-credentials fetch should handle missing JSON body gracefully."""
+    response = client.post('/api/providers/costco/fetch-receipts')
+
+    assert response.status_code == 400
+
+    data = json.loads(response.data)
+    assert "error" in data
+
+
+def test_fetch_receipts_with_stored_credentials_invalid_json(client):
+    """Stored-credentials fetch should handle invalid JSON without 500s."""
+    response = client.post(
+        '/api/providers/costco/fetch-receipts',
+        data='{',
+        content_type='application/json'
+    )
+
+    assert response.status_code == 400
+
     data = json.loads(response.data)
     assert "error" in data
 

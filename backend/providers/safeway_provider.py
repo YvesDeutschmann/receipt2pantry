@@ -1,34 +1,25 @@
 """Safeway provider implementation"""
 
-import asyncio
 import hashlib
 import json
 import os
-import random
 import re
 import time
 import urllib.parse
-import concurrent.futures
 import requests
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
-from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext
-from backend.providers.base_provider import BaseProvider
+from backend.providers.playwright_provider import PlaywrightProvider
 from backend.providers.provider_registry import register_provider
 from backend.utils.exceptions import AuthenticationException, ProviderException, MFARequiredException
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Thread pool for running Playwright sync API outside of asyncio event loop
-_playwright_executor = concurrent.futures.ThreadPoolExecutor(max_workers=4, thread_name_prefix="playwright")
-
 
 @register_provider("safeway")
-class SafewayProvider(BaseProvider):
+class SafewayProvider(PlaywrightProvider):
     """Safeway grocery provider automation"""
-    
-    SESSION_FILE = "session.json"
     
     def __init__(self, headless: bool = True, timeout: int = 30000):
         """
@@ -38,185 +29,22 @@ class SafewayProvider(BaseProvider):
             headless: Run browser in headless mode
             timeout: Default timeout for operations in milliseconds
         """
-        self.headless = headless
-        self.timeout = timeout
-        self.browser: Browser = None
-        self.context: BrowserContext = None
-        self.page: Page = None
-        self._playwright = None
+        super().__init__(headless=headless, timeout=timeout)
+    
+    def _get_session_file(self) -> str:
+        """Get the session file path for Safeway"""
+        return "session.json"
     
     @property
     def provider_name(self) -> str:
         return "safeway"
     
     def _start_browser(self) -> None:
-        """Start Playwright browser"""
-        if self.browser:
-            return
+        """Start Playwright browser with Safeway-specific initialization"""
+        # Call parent to set up browser with anti-detection measures
+        super()._start_browser()
         
-        logger.info("Starting browser for Safeway provider")
-        
-        # Clear any asyncio event loop in this thread to avoid conflicts
-        # This is needed when running in Flask debug mode
-        import asyncio
-        try:
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                # Create a new event loop for this thread
-                asyncio.set_event_loop(asyncio.new_event_loop())
-        except RuntimeError:
-            # No event loop in this thread, which is fine
-            pass
-        
-        self._playwright = sync_playwright().start()
-        
-        self.browser = self._playwright.chromium.launch(
-            headless=self.headless,
-            args=[
-                '--no-sandbox',
-                '--disable-dev-shm-usage',
-                '--disable-blink-features=AutomationControlled',
-                '--incognito',  # Start in incognito mode for fresh session
-                '--disable-web-security',
-                '--disable-features=VizDisplayCompositor',
-                '--disable-ipc-flooding-protection',
-                '--disable-renderer-backgrounding',
-                '--disable-backgrounding-occluded-windows',
-                '--disable-client-side-phishing-detection',
-                '--disable-sync',
-                '--disable-default-apps',
-                '--disable-extensions',
-                '--disable-plugins',
-                '--disable-translate',
-                '--disable-background-timer-throttling',
-                '--disable-backgrounding-occluded-windows',
-                '--disable-renderer-backgrounding',
-                '--disable-features=TranslateUI',
-                '--disable-ipc-flooding-protection',
-                '--no-first-run',
-                '--no-default-browser-check',
-                '--disable-logging',
-                '--disable-gpu-logging',
-                '--silent',
-                '--disable-gpu',
-                '--disable-software-rasterizer',
-                '--disable-background-networking',
-                '--disable-background-timer-throttling',
-                '--disable-client-side-phishing-detection',
-                '--disable-default-apps',
-                '--disable-hang-monitor',
-                '--disable-prompt-on-repost',
-                '--disable-sync',
-                '--disable-web-resources',
-                '--metrics-recording-only',
-                '--no-report-upload',
-                '--safebrowsing-disable-auto-update',
-                '--enable-automation',
-                '--password-store=basic',
-                '--use-mock-keychain'
-            ]
-        )
-        
-        # Generate random device fingerprint for each session
-        # Random viewport sizes (common resolutions)
-        viewports = [
-            {'width': 1366, 'height': 768},
-            {'width': 1920, 'height': 1080},
-            {'width': 1440, 'height': 900},
-            {'width': 1536, 'height': 864},
-            {'width': 1280, 'height': 720},
-            {'width': 1600, 'height': 900}
-        ]
-        
-        # Random user agents (current Chrome versions - Jan 2026)
-        user_agents = [
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/129.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36'
-        ]
-        
-        # Random timezones
-        timezones = [
-            'America/New_York',
-            'America/Chicago', 
-            'America/Denver',
-            'America/Los_Angeles',
-            'America/Phoenix',
-            'Europe/London',
-            'Europe/Paris',
-            'Asia/Tokyo'
-        ]
-        
-        # Random locales
-        locales = [
-            'en-US',
-            'en-GB',
-            'en-CA',
-            'en-AU',
-            'fr-FR',
-            'de-DE',
-            'es-ES'
-        ]
-        
-        # Select random values
-        viewport = random.choice(viewports)
-        user_agent = random.choice(user_agents)
-        timezone = random.choice(timezones)
-        locale = random.choice(locales)
-        
-        # Load existing session if available
-        if os.path.exists(self.SESSION_FILE):
-            self.context = self.browser.new_context(
-                viewport=viewport,
-                user_agent=user_agent,
-                timezone_id=timezone,
-                locale=locale,
-                storage_state=self.SESSION_FILE
-            )
-        else:
-            self.context = self.browser.new_context(
-                viewport=viewport,
-                user_agent=user_agent,
-                timezone_id=timezone,
-                locale=locale
-            )
-        
-        self.context.set_default_timeout(self.timeout)
-        
-        # Anti-bot detection: hide webdriver flag and other automation signals
-        self.context.add_init_script("""
-            // Hide webdriver flag
-            Object.defineProperty(navigator, 'webdriver', {get: () => undefined});
-            
-            // Hide automation-related Chrome properties
-            window.chrome = { runtime: {} };
-            
-            // Mock plugins (real browsers have plugins)
-            Object.defineProperty(navigator, 'plugins', {
-                get: () => [
-                    { name: 'Chrome PDF Plugin', filename: 'internal-pdf-viewer' },
-                    { name: 'Chrome PDF Viewer', filename: 'mhjfbmdgcfjbbpaeojofohoefgiehjai' },
-                    { name: 'Native Client', filename: 'internal-nacl-plugin' }
-                ]
-            });
-            
-            // Mock languages
-            Object.defineProperty(navigator, 'languages', {get: () => ['en-US', 'en']});
-            
-            // Hide automation in permissions
-            const originalQuery = window.navigator.permissions.query;
-            window.navigator.permissions.query = (parameters) => (
-                parameters.name === 'notifications' ?
-                    Promise.resolve({ state: Notification.permission }) :
-                    originalQuery(parameters)
-            );
-        """)
-        
-        self.page = self.context.new_page()
-        
-        # Clear browser data for fresh testing
+        # Safeway-specific: Clear browser data for fresh testing
         try:
             # Clear cookies and storage
             self.page.context.clear_cookies()
@@ -243,84 +71,11 @@ class SafewayProvider(BaseProvider):
         except Exception as e:
             logger.warning(f"Could not clear browser data: {e}")
         
-        # Force fresh session by navigating to Safeway
+        # Safeway-specific: Force fresh session by navigating to Safeway
         try:
             self.page.goto("https://www.safeway.com/")
         except Exception as e:
             logger.warning(f"Could not navigate to Safeway: {e}")
-        
-        # Inject random fingerprint to simulate different device
-        try:
-            # Generate additional random values for enhanced fingerprinting
-            screen_width = random.randint(1024, 2560)
-            screen_height = random.randint(768, 1440)
-            hardware_cores = random.randint(2, 16)
-            device_memory = random.choice([2, 4, 8, 16])
-            connection_type = random.choice(['4g', '3g', 'slow-2g'])
-            downlink_speed = round(random.uniform(0.5, 10.0), 1)
-            rtt_latency = random.randint(50, 200)
-            plugin_count = random.randint(0, 5)
-            platform = random.choice(['Win32', 'MacIntel', 'Linux x86_64'])
-            
-            # Randomize additional browser properties
-            fingerprint_script = f"""
-            () => {{
-                // Randomize screen properties
-                Object.defineProperty(screen, 'width', {{ value: {screen_width} }});
-                Object.defineProperty(screen, 'height', {{ value: {screen_height} }});
-                Object.defineProperty(screen, 'availWidth', {{ value: {screen_width} }});
-                Object.defineProperty(screen, 'availHeight', {{ value: {screen_height - 40} }});
-                Object.defineProperty(screen, 'colorDepth', {{ value: {random.choice([24, 32])} }});
-                Object.defineProperty(screen, 'pixelDepth', {{ value: {random.choice([24, 32])} }});
-                
-                // Randomize timezone
-                Object.defineProperty(Intl.DateTimeFormat.prototype, 'resolvedOptions', {{
-                    value: function() {{ return {{ timeZone: '{timezone}' }}; }}
-                }});
-                
-                // Randomize language
-                Object.defineProperty(navigator, 'language', {{ value: '{locale}' }});
-                Object.defineProperty(navigator, 'languages', {{ value: ['{locale}', 'en'] }});
-                
-                // Randomize platform
-                Object.defineProperty(navigator, 'platform', {{ value: '{platform}' }});
-                
-                // Randomize hardware concurrency
-                Object.defineProperty(navigator, 'hardwareConcurrency', {{ value: {hardware_cores} }});
-                
-                // Randomize memory
-                Object.defineProperty(navigator, 'deviceMemory', {{ value: {device_memory} }});
-                
-                // Randomize connection
-                Object.defineProperty(navigator, 'connection', {{
-                    value: {{
-                        effectiveType: '{connection_type}',
-                        downlink: {downlink_speed},
-                        rtt: {rtt_latency}
-                    }}
-                }});
-                
-                // Randomize plugins
-                Object.defineProperty(navigator, 'plugins', {{
-                    value: {{
-                        length: {plugin_count},
-                        item: function() {{ return null; }},
-                        namedItem: function() {{ return null; }}
-                    }}
-                }});
-                
-                // Randomize webgl vendor/renderer
-                const getParameter = WebGLRenderingContext.prototype.getParameter;
-                WebGLRenderingContext.prototype.getParameter = function(parameter) {{
-                    if (parameter === 37445) return 'Intel Inc.';
-                    if (parameter === 37446) return 'Intel(R) Iris(TM) Graphics 6100';
-                    return getParameter.call(this, parameter);
-                }};
-            }}
-            """
-            self.page.evaluate(fingerprint_script)
-        except Exception as e:
-            logger.warning(f"Could not apply fingerprint randomization: {e}")
     
     def login(self, credentials: Dict, session_id: Optional[str] = None) -> bool:
         """
@@ -363,7 +118,7 @@ class SafewayProvider(BaseProvider):
                 raise AuthenticationException("Login verification failed")
             
             # Save session
-            self.context.storage_state(path=self.SESSION_FILE)
+            self.context.storage_state(path=self._get_session_file())
             logger.info("Login successful")
             return True
         
@@ -2021,16 +1776,4 @@ class SafewayProvider(BaseProvider):
             logger.error(f"MFA verification error: {e}", exc_info=True)
         return False
     
-    def cleanup(self) -> None:
-        """Cleanup browser resources"""
-        if self.browser:
-            self.browser.close()
-            self.browser = None
-        
-        if self._playwright:
-            self._playwright.stop()
-            self._playwright = None
-        
-        self.context = None
-        self.page = None
 

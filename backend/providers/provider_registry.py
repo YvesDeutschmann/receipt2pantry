@@ -91,6 +91,8 @@ def register_provider(provider_name: str):
             ...
     """
     def decorator(provider_class: Type[BaseProvider]):
+        # Set provider_name as a class attribute for use in browser profiles
+        provider_class.provider_name = provider_name
         ProviderRegistry.register(provider_name, provider_class)
         return provider_class
     return decorator
