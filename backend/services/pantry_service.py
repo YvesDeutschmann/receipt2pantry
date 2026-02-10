@@ -102,7 +102,8 @@ class PantryService:
                 update_data = {'added_at': datetime.utcnow().isoformat()}
                 if receipt_id:
                     update_data['last_receipt_id'] = receipt_id
-                self.supabase.client.table('pantry_items').update(update_data).eq('id', existing_item['id']).execute()
+                client = self.supabase.admin_client if self.supabase.admin_client else self.supabase.client
+                client.table('pantry_items').update(update_data).eq('id', existing_item['id']).execute()
                 
                 logger.info(
                     f"Updated pantry: {normalized_item.get('normalized_name')} "

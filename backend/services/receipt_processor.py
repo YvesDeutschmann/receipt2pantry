@@ -243,8 +243,9 @@ class ReceiptProcessor:
             Dictionary with status information
         """
         try:
-            # Get receipt
-            response = self.supabase.client.table("receipts").select("*").eq("id", receipt_id).execute()
+            # Get receipt (use admin_client to bypass RLS when called from backend)
+            client = self.supabase.admin_client if self.supabase.admin_client else self.supabase.client
+            response = client.table("receipts").select("*").eq("id", receipt_id).execute()
             
             if not response.data or len(response.data) == 0:
                 return {

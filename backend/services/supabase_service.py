@@ -44,8 +44,9 @@ class SupabaseService:
             List of receipt dictionaries
         """
         try:
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("receipts")
+                client.table("receipts")
                 .select("*")
                 .eq("user_id", user_id)
                 .order("order_date", desc=True)
@@ -56,6 +57,24 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Failed to get receipts for user {user_id}: {e}")
             raise DatabaseException(f"Failed to retrieve receipts: {e}")
+    
+    def get_receipt_by_order_id(self, order_id: str) -> Optional[Dict]:
+        """
+        Get receipt by order_id
+        
+        Args:
+            order_id: Order ID to search for
+            
+        Returns:
+            Receipt dict or None if not found
+        """
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            result = client.table("receipts").select("*").eq("order_id", order_id).execute()
+            return result.data[0] if result.data else None
+        except Exception as e:
+            logger.error(f"Failed to get receipt by order_id {order_id}: {e}")
+            raise DatabaseException(f"Failed to get receipt by order_id: {e}")
     
     def store_receipt(self, receipt_data: Dict) -> str:
         """
@@ -279,8 +298,9 @@ class SupabaseService:
                 "completed_at": datetime.utcnow().isoformat(),
             }
             
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("automation_logs")
+                client.table("automation_logs")
                 .insert(log_data)
                 .execute()
             )
@@ -319,7 +339,8 @@ class SupabaseService:
                 "expires_at": expires_at.isoformat(),
             }
             
-            self.client.table("login_sessions").insert(session_data).execute()
+            client = self.admin_client if self.admin_client else self.client
+            client.table("login_sessions").insert(session_data).execute()
             logger.info(f"Created login session record: {session_id}")
         except Exception as e:
             logger.error(f"Failed to create login session: {e}")
@@ -345,7 +366,8 @@ class SupabaseService:
             if state == "completed":
                 update_data["completed_at"] = datetime.utcnow().isoformat()
             
-            self.client.table("login_sessions").update(update_data).eq(
+            client = self.admin_client if self.admin_client else self.client
+            client.table("login_sessions").update(update_data).eq(
                 "id", session_id
             ).execute()
             
@@ -365,8 +387,9 @@ class SupabaseService:
             Session dictionary or None if not found
         """
         try:
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("login_sessions")
+                client.table("login_sessions")
                 .select("*")
                 .eq("id", session_id)
                 .execute()
@@ -389,9 +412,9 @@ class SupabaseService:
         try:
             now = datetime.utcnow().isoformat()
             
-            # Delete expired sessions
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("login_sessions")
+                client.table("login_sessions")
                 .delete()
                 .lt("expires_at", now)
                 .execute()
@@ -418,8 +441,9 @@ class SupabaseService:
             Product mapping dictionary or None if not found
         """
         try:
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("product_mappings")
+                client.table("product_mappings")
                 .select("*")
                 .eq("raw_name", raw_name)
                 .execute()
@@ -473,8 +497,9 @@ class SupabaseService:
             List of product mapping dictionaries
         """
         try:
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("product_mappings")
+                client.table("product_mappings")
                 .select("*")
                 .limit(limit)
                 .execute()
@@ -497,8 +522,9 @@ class SupabaseService:
             List of pantry item dictionaries
         """
         try:
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("pantry_items")
+                client.table("pantry_items")
                 .select("*")
                 .eq("user_id", user_id)
                 .gt("quantity", 0)
@@ -582,7 +608,8 @@ class SupabaseService:
             quantity: New quantity
         """
         try:
-            self.client.table("pantry_items").update({
+            client = self.admin_client if self.admin_client else self.client
+            client.table("pantry_items").update({
                 "quantity": quantity
             }).eq("id", item_id).execute()
             
@@ -599,7 +626,8 @@ class SupabaseService:
             item_id: Pantry item ID
         """
         try:
-            self.client.table("pantry_items").delete().eq("id", item_id).execute()
+            client = self.admin_client if self.admin_client else self.client
+            client.table("pantry_items").delete().eq("id", item_id).execute()
             logger.info(f"Deleted pantry item {item_id}")
         except Exception as e:
             logger.error(f"Failed to delete pantry item: {e}")
@@ -618,8 +646,9 @@ class SupabaseService:
             Log entry ID
         """
         try:
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("cooking_log")
+                client.table("cooking_log")
                 .insert(log_data)
                 .execute()
             )
@@ -646,8 +675,9 @@ class SupabaseService:
             List of cooking log dictionaries
         """
         try:
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("cooking_log")
+                client.table("cooking_log")
                 .select("*")
                 .eq("user_id", user_id)
                 .order("cooked_at", desc=True)
@@ -675,8 +705,9 @@ class SupabaseService:
             List of substitution dictionaries
         """
         try:
+            client = self.admin_client if self.admin_client else self.client
             query = (
-                self.client.table("ingredient_substitutions")
+                client.table("ingredient_substitutions")
                 .select("*")
                 .eq("ingredient", ingredient)
             )
@@ -729,7 +760,8 @@ class SupabaseService:
             status: New status
         """
         try:
-            self.client.table("receipts").update({
+            client = self.admin_client if self.admin_client else self.client
+            client.table("receipts").update({
                 "status": status,
                 "processed_at": datetime.utcnow().isoformat() if status == "processed" else None
             }).eq("id", receipt_id).execute()
@@ -792,8 +824,9 @@ class SupabaseService:
             Household dictionary or None
         """
         try:
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("households")
+                client.table("households")
                 .select("*")
                 .eq("join_code", join_code.upper())
                 .execute()
@@ -817,8 +850,9 @@ class SupabaseService:
             Household dictionary or None
         """
         try:
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("households")
+                client.table("households")
                 .select("*")
                 .eq("id", household_id)
                 .execute()
@@ -926,8 +960,9 @@ class SupabaseService:
             Membership ID
         """
         try:
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("household_members")
+                client.table("household_members")
                 .insert({
                     "household_id": household_id,
                     "user_id": user_id,
@@ -955,7 +990,8 @@ class SupabaseService:
             user_id: User ID to remove
         """
         try:
-            self.client.table("household_members").delete().eq(
+            client = self.admin_client if self.admin_client else self.client
+            client.table("household_members").delete().eq(
                 "user_id", user_id
             ).execute()
             
@@ -975,8 +1011,9 @@ class SupabaseService:
             List of member dictionaries
         """
         try:
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("household_members")
+                client.table("household_members")
                 .select("*")
                 .eq("household_id", household_id)
                 .order("joined_at", desc=False)
@@ -996,7 +1033,8 @@ class SupabaseService:
             updates: Dictionary of fields to update
         """
         try:
-            self.client.table("households").update(updates).eq(
+            client = self.admin_client if self.admin_client else self.client
+            client.table("households").update(updates).eq(
                 "id", household_id
             ).execute()
             
@@ -1013,7 +1051,8 @@ class SupabaseService:
             household_id: Household ID
         """
         try:
-            self.client.table("households").delete().eq(
+            client = self.admin_client if self.admin_client else self.client
+            client.table("households").delete().eq(
                 "id", household_id
             ).execute()
             
@@ -1033,8 +1072,9 @@ class SupabaseService:
             True if unique, False otherwise
         """
         try:
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("households")
+                client.table("households")
                 .select("id")
                 .eq("join_code", join_code.upper())
                 .execute()
@@ -1086,8 +1126,9 @@ class SupabaseService:
             List of receipt dictionaries
         """
         try:
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("receipts")
+                client.table("receipts")
                 .select("*")
                 .eq("household_id", household_id)
                 .order("order_date", desc=True)
@@ -1113,8 +1154,9 @@ class SupabaseService:
             List of cooking log dictionaries
         """
         try:
+            client = self.admin_client if self.admin_client else self.client
             response = (
-                self.client.table("cooking_log")
+                client.table("cooking_log")
                 .select("*")
                 .eq("household_id", household_id)
                 .order("cooked_at", desc=True)
