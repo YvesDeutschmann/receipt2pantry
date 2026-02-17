@@ -30,6 +30,48 @@ def test_costco_provider_initialization():
     assert provider.page is None
 
 
+def test_costco_provider_parse_api_receipt_without_transaction_barcode():
+    """Test that missing transactionBarcode generates unique order_id fallback"""
+    provider = CostcoProvider()
+    
+    raw1 = {
+        "transactionDateTime": "2025-01-15T14:30:00",
+        "warehouseName": "Costco #123",
+        "total": 50.00,
+        "itemArray": [{"itemDescription01": "Item A", "amount": 50.00}],
+    }
+    raw2 = {
+        "transactionDateTime": "2025-01-15T14:30:00",
+        "warehouseName": "Costco #123",
+        "total": 50.00,
+        "itemArray": [{"itemDescription01": "Item B", "amount": 50.00}],
+    }
+    
+    receipt1 = provider._parse_api_receipt(raw1)
+    receipt2 = provider._parse_api_receipt(raw2)
+    
+    assert receipt1["order_id"].startswith("COSTCO_")
+    assert receipt2["order_id"].startswith("COSTCO_")
+    assert receipt1["order_id"] != receipt2["order_id"], "Different receipts must get unique order_ids"
+
+
+def test_costco_provider_parse_api_receipt_with_transaction_barcode():
+    """Test that transactionBarcode is used when present"""
+    provider = CostcoProvider()
+    
+    raw = {
+        "transactionBarcode": "21074700600732601231155",
+        "transactionDateTime": "2025-01-15T14:30:00",
+        "warehouseName": "Costco",
+        "total": 50.00,
+        "itemArray": [],
+    }
+    
+    receipt = provider._parse_api_receipt(raw)
+    assert receipt["order_id"] == "21074700600732601231155"
+    assert receipt["transaction_id"] == "21074700600732601231155"
+
+
 def test_costco_provider_extract_order_id():
     """Test order ID extraction from receipt text"""
     provider = CostcoProvider()

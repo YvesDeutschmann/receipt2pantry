@@ -128,9 +128,9 @@ class PantryService:
                 # Only set last_receipt_id if provided (not for manual entries)
                 if receipt_id:
                     item_data['last_receipt_id'] = receipt_id
-                
+
                 item_id = self.supabase.upsert_pantry_item(item_data)
-                
+
                 logger.info(
                     f"Added to pantry: {normalized_item.get('normalized_name')} "
                     f"({quantity} {unit})"

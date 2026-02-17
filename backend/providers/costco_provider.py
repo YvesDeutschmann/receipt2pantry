@@ -367,21 +367,32 @@ class CostcoProvider(PlaywrightProvider):
                     'name': name,
                     'quantity': float(item.get('unit', 1) or 1),
                     'unit_price': 0,  # Not available in basic query
-                    'total_price': float(item.get('amount', 0) or 0),
+                    'price': float(item.get('amount', 0) or 0),  # Fixed: use 'price' instead of 'total_price'
                     'item_number': item.get('itemNumber', ''),
+                    'category': 'GROCERY',  # Default category
                 })
             
             # Calculate totals
             total = float(raw.get('total', 0))
             
+            # Use transactionBarcode when present; otherwise generate unique fallback to avoid
+            # UNIQUE(order_id) constraint violations when multiple receipts lack this field
+            order_id = raw.get('transactionBarcode', '').strip()
+            if not order_id:
+                fallback_data = json.dumps(raw, sort_keys=True, default=str)
+                order_id = f"COSTCO_{hashlib.md5(fallback_data.encode()).hexdigest()[:12]}"
+            
             receipt = {
                 'store_name': raw.get('warehouseName', 'Costco'),
                 'store_location': raw.get('warehouseName', ''),
+                'order_id': order_id,
+                'order_date': trans_date.strftime('%Y-%m-%d'),  # Fixed: add order_date field
+                'total_amount': total,  # Fixed: use total_amount instead of total
                 'date': trans_date.strftime('%Y-%m-%d'),
                 'time': trans_date.strftime('%H:%M:%S'),
                 'total': total,
                 'items': items,
-                'transaction_id': raw.get('transactionBarcode', ''),
+                'transaction_id': order_id,
                 'receipt_type': raw.get('receiptType', 'warehouse'),
                 'document_type': raw.get('documentType', ''),
                 'raw_data': raw,  # Keep raw data for debugging
