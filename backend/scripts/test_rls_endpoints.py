@@ -80,7 +80,7 @@ def run_tests():
     try:
         rec = supabase.get_receipt_by_order_id("nonexistent-order-id-12345")
         ok = rec is None  # Expect None for nonexistent
-        results.append(("get_receipt_by_order_id", True, "OK", "returns None for nonexistent"))
+        results.append(("get_receipt_by_order_id", ok, "OK", "returns None for nonexistent"))
         print("   -> OK (no RLS block)")
     except Exception as e:
         ok = False

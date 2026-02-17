@@ -99,7 +99,7 @@ class ReceiptProcessor:
                 products_to_normalize,
                 use_ai=use_ai
             )
-
+            
             # 4. Add normalized items to pantry
             items_processed = 0
             items_added = 0
@@ -136,7 +136,7 @@ class ReceiptProcessor:
                         receipt_id=receipt_id,
                         household_id=household_id
                     )
-
+                    
                     items_processed += 1
                     items_added += 1
                     
