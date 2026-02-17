@@ -69,22 +69,10 @@ class SupabaseService:
             Receipt dict or None if not found
         """
         try:
-            # #region agent log
-            try:import requests,json,time;requests.post('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',json={'location':'supabase_service.py:get_receipt_by_order_id','message':'querying database for order_id','data':{'order_id':order_id},'timestamp':time.time()*1000,'sessionId':'debug-session','hypothesisId':'B'})
-            except:pass
-            # #endregion
             client = self.admin_client if self.admin_client else self.client
             result = client.table("receipts").select("*").eq("order_id", order_id).execute()
-            # #region agent log
-            try:import requests,json,time;requests.post('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',json={'location':'supabase_service.py:get_receipt_by_order_id_result','message':'database query result','data':{'order_id':order_id,'result_count':len(result.data) if result.data else 0,'first_result':result.data[0] if result.data else None},'timestamp':time.time()*1000,'sessionId':'debug-session','hypothesisId':'B'})
-            except:pass
-            # #endregion
             return result.data[0] if result.data else None
         except Exception as e:
-            # #region agent log
-            try:import requests,json,time;requests.post('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',json={'location':'supabase_service.py:get_receipt_by_order_id_error','message':'database query exception','data':{'order_id':order_id,'error':str(e),'error_type':type(e).__name__},'timestamp':time.time()*1000,'sessionId':'debug-session','hypothesisId':'B'})
-            except:pass
-            # #endregion
             logger.error(f"Failed to get receipt by order_id {order_id}: {e}")
             raise DatabaseException(f"Failed to get receipt by order_id: {e}")
     

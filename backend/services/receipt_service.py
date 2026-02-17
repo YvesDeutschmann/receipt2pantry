@@ -267,14 +267,28 @@ def store_fetched_receipts(
                 parsed_data["total_amount"] = parsed_data["total"]
             elif "total_amount" not in parsed_data:
                 parsed_data["total_amount"] = 0.0
+            
+            # Try to store new receipt
             receipt_id = store_parsed_receipt(
                 user_id, provider_name, parsed_data, supabase_service
             )
             result["receipt_ids"].append(receipt_id)
             result["receipts_stored"] += 1
-            logger.info(f"Stored fetched receipt {receipt_id} (order_id={parsed_data.get('order_id')})")
+            logger.info(f"Stored new receipt {receipt_id} (order_id={parsed_data.get('order_id')})")
+                
         except Exception as e:
-            logger.warning(f"Failed to store receipt {raw_receipt.get('order_id', '?')}: {e}")
-            result["errors"].append(f"Store error: {str(e)}")
+            # Check if this is a duplicate key error
+            error_str = str(e).lower()
+            if 'duplicate key' in error_str and 'order_id' in error_str:
+                # Handle duplicate gracefully - the receipt already exists in the database
+                # This can happen if the receipt was previously imported (possibly by another user due to RLS)
+                # We'll add a user-friendly message but not treat it as a processing failure
+                order_id = raw_receipt.get('order_id', '?')
+                logger.info(f"Receipt {order_id} already exists in database - skipping duplicate")
+                # Add informational message (not an error) so user knows what happened
+                result["errors"].append(f"Receipt {order_id} was already imported previously")
+            else:
+                logger.warning(f"Failed to store receipt {raw_receipt.get('order_id', '?')}: {e}")
+                result["errors"].append(f"Store error: {str(e)}")
     return result
 
