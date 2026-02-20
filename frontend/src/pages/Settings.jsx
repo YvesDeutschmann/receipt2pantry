@@ -1,6 +1,9 @@
 import { useState, useEffect } from 'react'
+import { Link } from 'react-router-dom'
+import { Store, Users } from 'lucide-react'
 import { api } from '../services/apiClient'
 import HouseholdModal from '../components/HouseholdModal'
+import PageHeader from '../components/PageHeader'
 
 function Settings() {
   const [household, setHousehold] = useState(null)
@@ -32,12 +35,10 @@ function Settings() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Settings</h1>
-        <p className="text-gray-600 mt-2">
-          Manage your account preferences and application settings.
-        </p>
-      </div>
+      <PageHeader
+        title="Settings"
+        subtitle="Manage your account preferences and application settings."
+      />
 
       <div className="space-y-6">
         {/* Household Settings */}
@@ -56,19 +57,7 @@ function Settings() {
               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                 <div className="flex items-center space-x-3">
                   <div className="p-2 bg-primary-100 rounded-lg">
-                    <svg 
-                      className="w-6 h-6 text-primary-600" 
-                      fill="none" 
-                      stroke="currentColor" 
-                      viewBox="0 0 24 24"
-                    >
-                      <path 
-                        strokeLinecap="round" 
-                        strokeLinejoin="round" 
-                        strokeWidth={2} 
-                        d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" 
-                      />
-                    </svg>
+                    <Users className="w-6 h-6 text-primary-600" />
                   </div>
                   <div>
                     <p className="font-medium text-gray-900">{household.name}</p>
@@ -99,19 +88,7 @@ function Settings() {
           ) : (
             <div className="text-center py-6">
               <div className="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-                <svg 
-                  className="w-6 h-6 text-gray-400" 
-                  fill="none" 
-                  stroke="currentColor" 
-                  viewBox="0 0 24 24"
-                >
-                  <path 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    strokeWidth={2} 
-                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" 
-                  />
-                </svg>
+                <Users className="w-6 h-6 text-gray-400" />
               </div>
               <p className="text-gray-600 mb-4">
                 No household yet. Create or join one to share with family.
@@ -125,6 +102,26 @@ function Settings() {
             </div>
           )}
         </div>
+
+        {/* Connected Stores - links to Providers */}
+        <Link to="/providers" className="block">
+          <div className="card hover:shadow-lg transition-shadow cursor-pointer">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <div className="p-2 bg-primary-100 rounded-lg">
+                  <Store className="w-6 h-6 text-primary-600" />
+                </div>
+                <div>
+                  <h2 className="text-xl font-semibold">Connected Stores</h2>
+                  <p className="text-sm text-gray-600">
+                    Connect Safeway, Costco, and other grocery accounts to sync receipts
+                  </p>
+                </div>
+              </div>
+              <span className="text-primary-600 font-medium">Manage →</span>
+            </div>
+          </div>
+        </Link>
 
         <div className="card">
           <h2 className="text-xl font-semibold mb-4">Account Settings</h2>

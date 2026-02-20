@@ -1,5 +1,5 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom'
-import Header from './components/Header'
+import AppShell from './components/AppShell'
 import Dashboard from './pages/Dashboard'
 import Pantry from './pages/Pantry'
 import Providers from './pages/Providers'
@@ -10,27 +10,18 @@ import MealPlan from './pages/MealPlan'
 function App() {
   return (
     <Router>
-      <div className="min-h-screen flex flex-col">
-        <Header />
-        <main className="flex-1 container mx-auto px-4 py-8">
-          <Routes>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/pantry" element={<Pantry />} />
-            <Route path="/recipes" element={<Recipes />} />
-            <Route path="/meal-plan" element={<MealPlan />} />
-            <Route path="/providers" element={<Providers />} />
-            <Route path="/settings" element={<Settings />} />
-          </Routes>
-        </main>
-        <footer className="bg-white border-t py-6 mt-auto">
-          <div className="container mx-auto px-4 text-center text-gray-600 text-sm">
-            © 2025 GrocerySync. All rights reserved.
-          </div>
-        </footer>
-      </div>
+      <Routes>
+        <Route element={<AppShell />}>
+          <Route index element={<Dashboard />} />
+          <Route path="pantry" element={<Pantry />} />
+          <Route path="recipes" element={<Recipes />} />
+          <Route path="meal-plan" element={<MealPlan />} />
+          <Route path="settings" element={<Settings />} />
+          <Route path="providers" element={<Providers />} />
+        </Route>
+      </Routes>
     </Router>
   )
 }
 
 export default App
-

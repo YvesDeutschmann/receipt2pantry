@@ -1,7 +1,10 @@
 import { useState, useEffect } from 'react'
+import { Plus, Search, X, Package } from 'lucide-react'
 import { api } from '../services/apiClient'
 import PantryList from '../components/PantryList'
 import AddPantryItemModal from '../components/AddPantryItemModal'
+import PageHeader from '../components/PageHeader'
+import PullToRefresh from '../components/PullToRefresh'
 
 function Pantry() {
   const [pantryData, setPantryData] = useState(null)
@@ -93,26 +96,21 @@ function Pantry() {
   const filteredData = getFilteredData()
 
   return (
+    <PullToRefresh onRefresh={fetchPantry}>
     <div>
-      <div className="mb-8">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold text-gray-900">Pantry</h1>
-            <p className="text-gray-600 mt-2">
-              Track your ingredients and see what you have on hand.
-            </p>
-          </div>
+      <PageHeader
+        title="Pantry"
+        subtitle="Track your ingredients and see what you have on hand."
+        actions={
           <button
             onClick={() => setAddModalOpen(true)}
             className="btn btn-primary flex items-center gap-2"
           >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
+            <Plus className="w-5 h-5" />
             Add Item
           </button>
-        </div>
-      </div>
+        }
+      />
 
       {/* Stats Cards */}
       {pantryData && (
@@ -144,14 +142,7 @@ function Pantry() {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
           />
-          <svg 
-            className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" 
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
+          <Search className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
           {searchTerm && (
             <button
               onClick={() => setSearchTerm('')}
@@ -187,9 +178,7 @@ function Pantry() {
         ) : !pantryData || pantryData.total_items === 0 ? (
           <div className="text-center py-12">
             <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" />
-              </svg>
+              <Package className="w-8 h-8 text-gray-400" />
             </div>
             <h3 className="text-lg font-medium text-gray-900 mb-2">Your pantry is empty</h3>
             <p className="text-gray-600 mb-4">
@@ -215,13 +204,13 @@ function Pantry() {
         )}
       </div>
 
-      {/* Add Item Modal */}
       <AddPantryItemModal
         isOpen={addModalOpen}
         onClose={() => setAddModalOpen(false)}
         onAdd={handleAddItem}
       />
     </div>
+    </PullToRefresh>
   )
 }
 

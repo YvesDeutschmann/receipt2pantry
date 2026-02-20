@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react'
 import { api } from '../services/apiClient'
+import PageHeader from '../components/PageHeader'
+import PullToRefresh from '../components/PullToRefresh'
 
 function Dashboard() {
   const [receipts, setReceipts] = useState([])
@@ -12,14 +14,23 @@ function Dashboard() {
     setLoading(false)
   }, [])
 
+  const handleRefresh = async () => {
+    setLoading(true)
+    try {
+      // In production: await api.getReceipts(userId)
+      await new Promise((r) => setTimeout(r, 500))
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
+    <PullToRefresh onRefresh={handleRefresh}>
     <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Dashboard</h1>
-        <p className="text-gray-600 mt-2">
-          Welcome to GrocerySync! View your recent receipts and shopping statistics.
-        </p>
-      </div>
+      <PageHeader
+        title="Dashboard"
+        subtitle="Welcome to GrocerySync! View your recent receipts and shopping statistics."
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="card">
@@ -68,7 +79,7 @@ function Dashboard() {
           </div>
         )}
       </div>
-    </div>
+    </div></PullToRefresh>
   )
 }
 

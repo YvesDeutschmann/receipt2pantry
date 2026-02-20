@@ -1,59 +1,28 @@
 import { useEffect } from 'react'
+import AdaptiveModal from './AdaptiveModal'
 
 function RecipeDetailModal({ isOpen, onClose, recipe, loading }) {
-  // Close modal on Escape key
   useEffect(() => {
     const handleEscape = (e) => {
-      if (e.key === 'Escape') {
-        onClose()
-      }
+      if (e.key === 'Escape') onClose()
     }
-    
     if (isOpen) {
       document.addEventListener('keydown', handleEscape)
-      // Prevent body scroll when modal is open
       document.body.style.overflow = 'hidden'
     }
-    
     return () => {
       document.removeEventListener('keydown', handleEscape)
       document.body.style.overflow = 'unset'
     }
   }, [isOpen, onClose])
 
-  if (!isOpen) return null
-
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto">
-      <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
-        {/* Backdrop */}
-        <div 
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
-          onClick={onClose}
-        />
-
-        {/* Modal */}
-        <div className="relative bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-3xl sm:w-full max-h-[90vh] flex flex-col">
-          {/* Header */}
-          <div className="bg-white px-4 pt-5 pb-4 sm:p-6 border-b border-gray-200">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-gray-900">
-                {recipe?.title || 'Recipe Details'}
-              </h3>
-              <button
-                type="button"
-                onClick={onClose}
-                className="text-gray-400 hover:text-gray-500"
-              >
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          {/* Content */}
-          <div className="overflow-y-auto flex-1 px-4 pt-4 pb-4 sm:p-6">
+    <AdaptiveModal
+      isOpen={isOpen}
+      onClose={onClose}
+      title={recipe?.title || 'Recipe Details'}
+    >
+      <div className="px-4 pt-2 pb-4 sm:px-6">
             {loading ? (
               <div className="flex justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
@@ -197,21 +166,17 @@ function RecipeDetailModal({ isOpen, onClose, recipe, loading }) {
                 )}
               </div>
             )}
-          </div>
-
-          {/* Footer */}
-          <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse border-t border-gray-200">
-            <button
-              type="button"
-              onClick={onClose}
-              className="w-full sm:w-auto btn btn-primary"
-            >
-              Close
-            </button>
-          </div>
-        </div>
       </div>
-    </div>
+      <div className="bg-gray-50 px-4 py-3 sm:px-6 border-t border-gray-200">
+        <button
+          type="button"
+          onClick={onClose}
+          className="w-full sm:w-auto btn btn-primary"
+        >
+          Close
+        </button>
+      </div>
+    </AdaptiveModal>
   )
 }
 
