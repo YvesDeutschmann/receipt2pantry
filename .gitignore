@@ -63,6 +63,12 @@ pnpm-debug.log*
 frontend/dist/
 frontend/build/
 
+# Capacitor native build artifacts
+frontend/android/app/build/
+frontend/android/.gradle/
+frontend/android/local.properties
+frontend/ios/App/Pods/
+
 # OS
 .DS_Store
 Thumbs.db
