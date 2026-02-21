@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { Plus, Search, X, Package } from 'lucide-react'
 import { api } from '../services/apiClient'
+import { useAuth } from '../contexts/AuthContext'
 import PantryList from '../components/PantryList'
 import AddPantryItemModal from '../components/AddPantryItemModal'
 import PageHeader from '../components/PageHeader'
@@ -13,9 +14,8 @@ function Pantry() {
   const [searchTerm, setSearchTerm] = useState('')
   const [addModalOpen, setAddModalOpen] = useState(false)
   
-  // For demo purposes - in production this would come from auth
-  // Use a valid UUID for demo purposes (no real auth yet)
-  const userId = localStorage.getItem('user_id') || '00000000-0000-0000-0000-000000000001'
+  const { user } = useAuth()
+  const userId = user?.id
 
   useEffect(() => {
     fetchPantry()

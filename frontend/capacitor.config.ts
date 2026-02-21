@@ -19,8 +19,8 @@ const config: CapacitorConfig = {
   server: {
     // For local dev, point to the Vite dev server so live-reload works.
     // Uncomment and set your machine's IP (see MOBILE_SETUP.md):
-    // url: 'http://YOUR_IP:5173',
-    // cleartext: true,
+    url: 'http://192.168.50.30:5173/',
+    cleartext: true,
     androidScheme: 'https',
   },
   plugins: {

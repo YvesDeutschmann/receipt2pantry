@@ -1,21 +1,34 @@
 import axios from 'axios'
+import { supabase } from './supabaseClient'
+
+function getApiBaseUrl() {
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return import.meta.env.VITE_API_BASE_URL
+  }
+  // Derive from current hostname so mobile devices (Capacitor) reach the
+  // dev machine instead of trying localhost on the phone itself.
+  const hostname = window.location.hostname || 'localhost'
+  return `http://${hostname}:5000/api`
+}
 
 // Create axios instance with default config
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000/api',
+  baseURL: getApiBaseUrl(),
   timeout: 120000, // 2 minutes timeout for device verification
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
-// Request interceptor for adding auth tokens
+// Request interceptor: add Supabase JWT and X-User-Id from session
 apiClient.interceptors.request.use(
-  (config) => {
-    // Add auth token if available
-    const token = localStorage.getItem('auth_token')
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`
+  async (config) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    if (session?.access_token) {
+      config.headers.Authorization = `Bearer ${session.access_token}`
+    }
+    if (session?.user?.id) {
+      config.headers['X-User-Id'] = session.user.id
     }
     return config
   },

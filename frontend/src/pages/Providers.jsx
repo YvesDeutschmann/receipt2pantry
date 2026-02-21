@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../services/apiClient'
+import { useAuth } from '../contexts/AuthContext'
 import ProviderCard from '../components/ProviderCard'
 import PageHeader from '../components/PageHeader'
 import CredentialsModal from '../components/CredentialsModal'
@@ -7,7 +8,8 @@ import MfaDialog from '../components/MfaDialog'
 import CostcoConnectPage from '../components/CostcoConnectPage'
 
 function Providers() {
-  const userId = localStorage.getItem('user_id') || '00000000-0000-0000-0000-000000000001'
+  const { user } = useAuth()
+  const userId = user?.id
   const [providers, setProviders] = useState([])
   const [providerStatuses, setProviderStatuses] = useState({}) // { providerName: { configured, active } }
   const [loading, setLoading] = useState(true)

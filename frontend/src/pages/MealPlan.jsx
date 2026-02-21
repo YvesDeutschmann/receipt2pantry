@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react'
 import { format, startOfWeek, addDays, eachDayOfInterval } from 'date-fns'
 import { api } from '../services/apiClient'
+import { useAuth } from '../contexts/AuthContext'
 import MealPlanWizard from '../components/MealPlanWizard'
 import RecipeDetailModal from '../components/RecipeDetailModal'
 import PageHeader from '../components/PageHeader'
@@ -14,7 +15,8 @@ const MealPlan = () => {
   const [recipeDetailOpen, setRecipeDetailOpen] = useState(false)
   const [recipeDetailLoading, setRecipeDetailLoading] = useState(false)
   
-  const userId = localStorage.getItem('user_id') || '00000000-0000-0000-0000-000000000001'
+  const { user } = useAuth()
+  const userId = user?.id
   const [householdId, setHouseholdId] = useState(null)
 
   // Get current week
