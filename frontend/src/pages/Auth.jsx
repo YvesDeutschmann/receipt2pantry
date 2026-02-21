@@ -2,9 +2,6 @@ import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 
-const TEST_USER_EMAIL = 'test@example.com'
-const TEST_USER_PASSWORD = 'test123'
-
 function Auth() {
   const { user, signIn, signUp } = useAuth()
 
@@ -34,10 +31,16 @@ function Auth() {
     }
   }
 
+  const testUserEmail = import.meta.env.VITE_TEST_USER_EMAIL
+  const testUserPassword = import.meta.env.VITE_TEST_USER_PASSWORD
+  const canUseTestUser = testUserEmail && testUserPassword
+
   const fillTestUser = () => {
-    setEmail(TEST_USER_EMAIL)
-    setPassword(TEST_USER_PASSWORD)
-    setError('')
+    if (canUseTestUser) {
+      setEmail(testUserEmail)
+      setPassword(testUserPassword)
+      setError('')
+    }
   }
 
   return (
@@ -138,15 +141,17 @@ function Auth() {
           </button>
         </form>
 
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <button
-            type="button"
-            onClick={fillTestUser}
-            className="w-full text-sm text-gray-500 hover:text-primary-600 transition-colors"
-          >
-            Dev: Sign in as Test User
-          </button>
-        </div>
+        {canUseTestUser && (
+          <div className="mt-6 pt-6 border-t border-gray-200">
+            <button
+              type="button"
+              onClick={fillTestUser}
+              className="w-full text-sm text-gray-500 hover:text-primary-600 transition-colors"
+            >
+              Dev: Sign in as Test User
+            </button>
+          </div>
+        )}
       </div>
     </div>
   )
