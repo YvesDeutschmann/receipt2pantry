@@ -1,17 +1,17 @@
 import { useState, useEffect } from 'react'
 import { Link, useLocation, NavLink } from 'react-router-dom'
-import { Home, Users } from 'lucide-react'
+import { Home, Users, LogOut } from 'lucide-react'
 import { api } from '../services/apiClient'
+import { useAuth } from '../contexts/AuthContext'
 import HouseholdModal from './HouseholdModal'
 
 function TopNavBar() {
   const location = useLocation()
+  const { user, signOut } = useAuth()
   const [householdModalOpen, setHouseholdModalOpen] = useState(false)
   const [household, setHousehold] = useState(null)
   const [loading, setLoading] = useState(true)
-
-  const userId =
-    localStorage.getItem('user_id') || '00000000-0000-0000-0000-000000000001'
+  const userId = user?.id
 
   useEffect(() => {
     fetchHousehold()
@@ -89,7 +89,19 @@ function TopNavBar() {
                   </span>
                 )}
               </button>
-              <button className="btn btn-primary">Sign In</button>
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-gray-600 max-w-[140px] truncate" title={user?.email}>
+                  {user?.email}
+                </span>
+                <button
+                  onClick={() => signOut()}
+                  className="btn btn-secondary flex items-center gap-1"
+                  title="Sign Out"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sign Out
+                </button>
+              </div>
             </div>
           </div>
         </div>

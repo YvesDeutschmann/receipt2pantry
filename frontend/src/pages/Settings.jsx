@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Store, Users } from 'lucide-react'
 import { api } from '../services/apiClient'
+import { useAuth } from '../contexts/AuthContext'
 import HouseholdModal from '../components/HouseholdModal'
 import PageHeader from '../components/PageHeader'
 
@@ -10,9 +11,8 @@ function Settings() {
   const [loading, setLoading] = useState(true)
   const [householdModalOpen, setHouseholdModalOpen] = useState(false)
   
-  // For demo purposes - in production this would come from auth
-  // Use a valid UUID for demo purposes (no real auth yet)
-  const userId = localStorage.getItem('user_id') || '00000000-0000-0000-0000-000000000001'
+  const { user } = useAuth()
+  const userId = user?.id
 
   useEffect(() => {
     fetchHousehold()

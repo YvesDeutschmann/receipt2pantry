@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { api } from '../services/apiClient'
+import { useAuth } from '../contexts/AuthContext'
 import RecipeDetailModal from '../components/RecipeDetailModal'
 import PageHeader from '../components/PageHeader'
 import PullToRefresh from '../components/PullToRefresh'
@@ -12,8 +13,8 @@ function Recipes() {
   const [detailModalOpen, setDetailModalOpen] = useState(false)
   const [loadingDetails, setLoadingDetails] = useState(false)
   
-  // For demo purposes - in production this would come from auth
-  const userId = localStorage.getItem('user_id') || '00000000-0000-0000-0000-000000000001'
+  const { user } = useAuth()
+  const userId = user?.id
   
   // Get household ID from localStorage or API
   const [householdId, setHouseholdId] = useState(null)

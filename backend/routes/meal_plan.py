@@ -4,6 +4,7 @@ import asyncio
 from datetime import date
 from flask import Blueprint, request, current_app, jsonify
 from backend.utils.logger import get_logger
+from backend.utils.auth import get_user_id_from_request
 from backend.utils.exceptions import (
     ValidationException,
     DatabaseException,
@@ -22,25 +23,6 @@ def get_meal_plan_service():
 def get_shopping_list_service():
     """Get shopping list service from app config"""
     return current_app.config.get("SHOPPING_LIST_SERVICE")
-
-
-def get_user_id_from_request():
-    """
-    Extract user ID from request.
-    In production, this would come from JWT token validation.
-    For now, we'll accept it from headers or query params.
-    """
-    # Try header first (standard auth flow)
-    user_id = request.headers.get("X-User-Id")
-    if not user_id:
-        # Try query param (for testing)
-        user_id = request.args.get("user_id")
-    if not user_id:
-        # Try request body
-        data = request.get_json(silent=True) or {}
-        user_id = data.get("user_id")
-    
-    return user_id
 
 
 def run_async(coro):

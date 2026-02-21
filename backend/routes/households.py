@@ -2,6 +2,7 @@
 
 from flask import Blueprint, request, current_app, jsonify
 from backend.utils.logger import get_logger
+from backend.utils.auth import get_user_id_from_request
 from backend.utils.exceptions import (
     ValidationException,
     AuthorizationException,
@@ -16,25 +17,6 @@ households_bp = Blueprint("households", __name__)
 def get_household_service():
     """Get household service from app config"""
     return current_app.config.get("HOUSEHOLD_SERVICE")
-
-
-def get_user_id_from_request():
-    """
-    Extract user ID from request.
-    In production, this would come from JWT token validation.
-    For now, we'll accept it from headers or query params.
-    """
-    # Try header first (standard auth flow)
-    user_id = request.headers.get("X-User-Id")
-    if not user_id:
-        # Try query param (for testing)
-        user_id = request.args.get("user_id")
-    if not user_id:
-        # Try request body
-        data = request.get_json(silent=True) or {}
-        user_id = data.get("user_id")
-    
-    return user_id
 
 
 @households_bp.route("/households", methods=["GET"])
