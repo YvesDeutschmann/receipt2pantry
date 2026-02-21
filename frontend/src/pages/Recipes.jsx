@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react'
 import { api } from '../services/apiClient'
 import RecipeDetailModal from '../components/RecipeDetailModal'
+import PageHeader from '../components/PageHeader'
+import PullToRefresh from '../components/PullToRefresh'
 
 function Recipes() {
   const [recipes, setRecipes] = useState([])
@@ -68,13 +70,12 @@ function Recipes() {
   }
 
   return (
+    <PullToRefresh onRefresh={fetchRecipes}>
     <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Recipe Ideas</h1>
-        <p className="text-gray-600 mt-2">
-          Discover recipes based on ingredients in your pantry.
-        </p>
-      </div>
+      <PageHeader
+        title="Recipe Ideas"
+        subtitle="Discover recipes based on ingredients in your pantry."
+      />
 
       {/* Error Message */}
       {error && (
@@ -185,7 +186,7 @@ function Recipes() {
         recipe={selectedRecipe}
         loading={loadingDetails}
       />
-    </div>
+    </div></PullToRefresh>
   )
 }
 

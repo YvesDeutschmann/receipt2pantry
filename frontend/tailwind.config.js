@@ -6,6 +6,21 @@ export default {
   ],
   theme: {
     extend: {
+      spacing: {
+        'safe-top': 'env(safe-area-inset-top)',
+        'safe-bottom': 'env(safe-area-inset-bottom)',
+      },
+      padding: {
+        'safe-top': 'env(safe-area-inset-top)',
+        'safe-bottom': 'env(safe-area-inset-bottom)',
+        'tab-bar': 'calc(56px + env(safe-area-inset-bottom, 0px))',
+      },
+      minHeight: {
+        touch: '44px',
+      },
+      minWidth: {
+        touch: '44px',
+      },
       colors: {
         primary: {
           50: '#f0f9ff',

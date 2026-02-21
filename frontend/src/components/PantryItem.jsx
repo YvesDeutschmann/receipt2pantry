@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Trash2, Check, X, Minus, Plus } from 'lucide-react'
 
 function PantryItem({ item, onUpdateQuantity, onDeleteItem }) {
   const [isEditing, setIsEditing] = useState(false)
@@ -49,7 +50,7 @@ function PantryItem({ item, onUpdateQuantity, onDeleteItem }) {
   }
 
   return (
-    <div className="flex items-center justify-between p-3 hover:bg-gray-50 transition-colors">
+    <div className="flex items-center justify-between p-3 min-h-touch hover:bg-gray-50 transition-colors">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-gray-900 truncate">
@@ -97,9 +98,7 @@ function PantryItem({ item, onUpdateQuantity, onDeleteItem }) {
               className="p-1 text-gray-400 hover:bg-gray-100 rounded"
               title="Cancel"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-              </svg>
+              <X className="w-5 h-5" />
             </button>
           </div>
         ) : (
@@ -142,9 +141,7 @@ function PantryItem({ item, onUpdateQuantity, onDeleteItem }) {
               className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
               title="Remove item"
             >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-              </svg>
+              <Trash2 className="w-5 h-5" />
             </button>
           </>
         )}

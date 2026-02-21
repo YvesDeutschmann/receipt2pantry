@@ -2,15 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Safe area insets for iOS notch and home indicator */
+:root {
+  --safe-area-inset-top: env(safe-area-inset-top, 0px);
+  --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+}
+
 @layer base {
+  html {
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    overscroll-behavior-y: contain;
+  }
+
   body {
     @apply bg-gray-50 text-gray-900;
+  }
+
+  /* Native scroll feel on mobile - hide scrollbar */
+  @media (max-width: 1023px) {
+    .overflow-y-auto::-webkit-scrollbar {
+      display: none;
+    }
+    .overflow-y-auto {
+      -ms-overflow-style: none;
+      scrollbar-width: none;
+    }
   }
 }
 
 @layer components {
   .btn {
-    @apply px-4 py-2 rounded-lg font-medium transition-colors duration-200;
+    @apply px-4 py-2 min-h-touch min-w-touch rounded-lg font-medium transition-colors duration-200 active:scale-[0.98] flex items-center justify-center;
   }
   
   .btn-primary {
@@ -22,7 +45,7 @@
   }
   
   .card {
-    @apply bg-white rounded-lg shadow-md p-6;
+    @apply bg-white rounded-none md:rounded-lg shadow-md p-6 transition-transform active:scale-[0.98];
   }
 }
 

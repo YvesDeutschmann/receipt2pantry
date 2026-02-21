@@ -3,6 +3,7 @@ import { format, startOfWeek, addDays, eachDayOfInterval } from 'date-fns'
 import { api } from '../services/apiClient'
 import MealPlanWizard from '../components/MealPlanWizard'
 import RecipeDetailModal from '../components/RecipeDetailModal'
+import PageHeader from '../components/PageHeader'
 
 const MealPlan = () => {
   const [meals, setMeals] = useState([])

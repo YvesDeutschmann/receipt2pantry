@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { api } from '../services/apiClient'
 import ProviderCard from '../components/ProviderCard'
+import PageHeader from '../components/PageHeader'
 import CredentialsModal from '../components/CredentialsModal'
 import MfaDialog from '../components/MfaDialog'
 import CostcoConnectPage from '../components/CostcoConnectPage'
@@ -375,12 +376,10 @@ function Providers() {
 
   return (
     <div>
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-gray-900">Providers</h1>
-        <p className="text-gray-600 mt-2">
-          Connect your grocery store accounts to automatically sync receipts.
-        </p>
-      </div>
+      <PageHeader
+        title="Providers"
+        subtitle="Connect your grocery store accounts to automatically sync receipts."
+      />
 
       {loading ? (
         <div className="text-center py-8 text-gray-600">Loading providers...</div>
