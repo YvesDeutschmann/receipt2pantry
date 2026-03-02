@@ -158,6 +158,7 @@ See `.env.example` for all available configuration options.
 
 **Key settings:**
 - `SUPABASE_URL` and `SUPABASE_KEY`: Database connection
+- `CONTENTSTACK_ACCESS_TOKEN`: Costco Contentstack CMS read-only token (for client-identifier verification)
 - `AWS_*`: Secrets Manager for credential storage (use mock in development)
 - `PLAYWRIGHT_HEADLESS`: Run browser automation headless or visible
 - `LOG_LEVEL`: Logging verbosity

@@ -14,6 +14,7 @@ const nodeModules = path.join(__dirname, '..', 'node_modules')
 const PLUGINS = [
   '@capacitor/haptics',
   '@capacitor/keyboard',
+  'capacitor-secure-storage-plugin',
 ]
 
 const OLD = "getDefaultProguardFile('proguard-android.txt')"

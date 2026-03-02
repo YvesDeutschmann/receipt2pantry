@@ -6,7 +6,6 @@ import json
 import random
 import re
 import time
-import uuid
 import requests
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
@@ -20,12 +19,59 @@ from backend.utils.costco_receipt_extraction import (
 )
 from backend.utils.exceptions import AuthenticationException, ProviderException, MFARequiredException
 from backend.utils.logger import get_logger
+from backend.config import Config
 
 logger = get_logger(__name__)
 
 # Costco API Configuration
 COSTCO_GRAPHQL_ENDPOINT = "https://ecom-api.costco.com/ebusiness/order/v1/orders/graphql"
 COSTCO_WCS_CLIENT_ID = "4900eb1f-0c10-4bd9-99c3-c59e6c1ecebf"
+# Static client-identifier from Costco's Contentstack CMS (site_context.usbc.clientIdentifier).
+# Verify via: POST https://azure-na-graphql.contentstack.com/stacks/bltc822c5b479075ef1?environment=production
+#   Headers: access_token: <CONTENTSTACK_ACCESS_TOKEN from env>
+#   Body: {"query":"query($l:String!){all_Configuration_Setting(locale:$l where:{enabled_applications:{applications:\"my.costco.web\"}}){items{configkey custom}}}","variables":{"locale":"prod"}}
+COSTCO_CLIENT_IDENTIFIER = "481b1aec-aa3b-454b-b81b-48187e28f205"
+CONTENTSTACK_URL = "https://azure-na-graphql.contentstack.com/stacks/bltc822c5b479075ef1"
+
+
+def verify_costco_client_identifier() -> dict:
+    """Verify COSTCO_CLIENT_IDENTIFIER against Costco's Contentstack CMS.
+    Returns {"valid": bool, "current": str|None, "expected": str, "error": str|None}
+    """
+    token = Config.CONTENTSTACK_ACCESS_TOKEN
+    if not token:
+        return {"valid": False, "current": None, "expected": COSTCO_CLIENT_IDENTIFIER, "error": "CONTENTSTACK_ACCESS_TOKEN not configured"}
+    query = {
+        "query": 'query($l:String!){all_Configuration_Setting(locale:$l where:{enabled_applications:{applications:"my.costco.web"}}){items{configkey custom}}}',
+        "variables": {"locale": "prod"},
+    }
+    try:
+        resp = requests.post(
+            f"{CONTENTSTACK_URL}?environment=production",
+            json=query,
+            headers={
+                "access_token": token,
+                "content-type": "application/json",
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        items = resp.json().get("data", {}).get("all_Configuration_Setting", {}).get("items", [])
+        for item in items:
+            if item.get("configkey") == "site_context":
+                custom = item.get("custom", {})
+                cid = custom.get("usbc", {}).get("clientIdentifier")
+                if cid:
+                    return {
+                        "valid": cid == COSTCO_CLIENT_IDENTIFIER,
+                        "current": cid,
+                        "expected": COSTCO_CLIENT_IDENTIFIER,
+                        "error": None,
+                    }
+        return {"valid": False, "current": None, "expected": COSTCO_CLIENT_IDENTIFIER, "error": "site_context config not found"}
+    except Exception as e:
+        return {"valid": False, "current": None, "expected": COSTCO_CLIENT_IDENTIFIER, "error": str(e)}
+
 
 # Azure AD B2C Configuration for Costco
 COSTCO_B2C_TENANT = "bfc5f2e2-aea6-44ef-abc2-f0c95c397145"
@@ -119,26 +165,27 @@ class CostcoProvider(PlaywrightProvider):
         return datetime.now() >= (expiry_time - timedelta(seconds=buffer_seconds))
     
     def _get_api_headers(self, id_token: str, client_identifier: Optional[str] = None) -> Dict[str, str]:
-        """Get headers for Costco API requests"""
+        """Get headers for Costco API requests. Matches browser DevTools cURL - no X-Requested-With (triggers Akamai 403)."""
+        cid = client_identifier or COSTCO_CLIENT_IDENTIFIER
         return {
             "Accept": "*/*",
-            "Accept-Language": "en-US,en;q=0.9",
+            "Accept-Language": "en-US,en;q=0.9,de-DE;q=0.8,de;q=0.7",
             "Connection": "keep-alive",
             "Content-Type": "application/json-patch+json",
             "Origin": "https://www.costco.com",
             "Referer": "https://www.costco.com/",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36",
-            "client-identifier": client_identifier or str(uuid.uuid4()),
+            "Sec-Fetch-Dest": "empty",
+            "Sec-Fetch-Mode": "cors",
+            "Sec-Fetch-Site": "same-site",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
+            "client-identifier": cid,
             "costco-x-authorization": f"Bearer {id_token}",
             "costco-x-wcs-clientId": COSTCO_WCS_CLIENT_ID,
             "costco.env": "ecom",
             "costco.service": "restOrders",
-            "sec-ch-ua": '"Not(A:Brand";v="8", "Chromium";v="144", "Google Chrome";v="144"',
+            "sec-ch-ua": '"Not:A-Brand";v="99", "Google Chrome";v="145", "Chromium";v="145"',
             "sec-ch-ua-mobile": "?0",
             "sec-ch-ua-platform": '"Windows"',
-            "Sec-Fetch-Dest": "empty",
-            "Sec-Fetch-Mode": "cors",
-            "Sec-Fetch-Site": "same-site",
         }
     
     def _get_b2c_token_endpoint(self, id_token: str) -> str:
@@ -156,51 +203,29 @@ class CostcoProvider(PlaywrightProvider):
         
         logger.debug(f"Extracting token endpoint from issuer: {issuer}")
         
-        # Issuer format examples:
-        # https://signin.costco.com/{tenant}/v2.0/
-        # https://{tenant}.b2clogin.com/{tenant}/v2.0/
         if 'signin.costco.com' in issuer:
-            # Custom domain format
             parts = issuer.rstrip('/').split('/')
-            # Extract tenant - it's typically the part before /v2.0
             tenant = parts[-2] if len(parts) > 1 and parts[-1] == 'v2.0' else parts[-1]
             endpoint = f"https://signin.costco.com/{tenant}/{COSTCO_B2C_POLICY}/oauth2/v2.0/token"
             logger.debug(f"Built custom domain endpoint: {endpoint}")
             return endpoint
         elif 'b2clogin.com' in issuer:
-            # Standard B2C format
             parts = issuer.rstrip('/').split('/')
             tenant = parts[-2] if len(parts) > 1 and parts[-1] == 'v2.0' else parts[-1]
             endpoint = f"https://{tenant}.b2clogin.com/{tenant}/{COSTCO_B2C_POLICY}/oauth2/v2.0/token"
             logger.debug(f"Built standard B2C endpoint: {endpoint}")
             return endpoint
         
-        # Fallback to configured endpoint with policy
         endpoint = f"https://signin.costco.com/{COSTCO_B2C_TENANT}/{COSTCO_B2C_POLICY}/oauth2/v2.0/token"
         logger.warning(f"Could not parse issuer {issuer}, using fallback endpoint: {endpoint}")
         return endpoint
     
     def _refresh_id_token(self, refresh_token: str, id_token: Optional[str] = None, client_id: Optional[str] = None) -> Dict[str, str]:
-        """
-        Refresh the idToken using the stored refresh token.
-        
-        Args:
-            refresh_token: The refresh token from MSAL storage
-            id_token: Optional idToken to extract endpoint info from (required for correct endpoint)
-            client_id: Optional client ID (defaults to Costco's B2C client ID)
-        
-        Returns:
-            Dictionary with new 'idToken' and 'refreshToken'
-        
-        Raises:
-            AuthenticationException: If refresh fails
-        """
+        """Refresh the idToken using the stored refresh token."""
         if not id_token:
             raise AuthenticationException("idToken is required to determine the correct token endpoint")
         
         client_id = client_id or COSTCO_B2C_CLIENT_ID
-        
-        # Get the correct token endpoint from the idToken's issuer claim
         token_endpoint = self._get_b2c_token_endpoint(id_token)
         logger.info(f"Using token refresh endpoint: {token_endpoint}")
         
@@ -210,7 +235,6 @@ class CostcoProvider(PlaywrightProvider):
             "refresh_token": refresh_token,
             "scope": f"openid offline_access {client_id}"
         }
-        
         headers = {
             "Content-Type": "application/x-www-form-urlencoded",
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/144.0.0.0 Safari/537.36"
@@ -218,29 +242,23 @@ class CostcoProvider(PlaywrightProvider):
         
         try:
             response = requests.post(token_endpoint, data=data, headers=headers, timeout=30)
-            
             if response.status_code != 200:
                 error_text = response.text[:500] if response.text else "No error details"
                 logger.error(f"Token refresh failed with status {response.status_code}: {error_text}")
                 raise AuthenticationException(f"Token refresh failed: {response.status_code} - {error_text}")
             
             tokens = response.json()
-            
             if not tokens.get("id_token"):
                 raise AuthenticationException("Token refresh response missing id_token")
             
             result = {
                 "idToken": tokens.get("id_token"),
-                "refreshToken": tokens.get("refresh_token") or refresh_token,  # Use new refresh token if provided, otherwise keep old one
+                "refreshToken": tokens.get("refresh_token") or refresh_token,
             }
-            
-            # Include access token if present
             if tokens.get("access_token"):
                 result["accessToken"] = tokens.get("access_token")
-            
             logger.info("Successfully refreshed Costco idToken")
             return result
-            
         except AuthenticationException:
             raise
         except Exception as e:
@@ -248,44 +266,17 @@ class CostcoProvider(PlaywrightProvider):
             raise AuthenticationException(f"Token refresh failed: {str(e)}")
     
     def fetch_receipts_via_api(self, id_token: str, days: int = 90, client_identifier: Optional[str] = None) -> List[Dict]:
-        """
-        Fetch receipts directly via Costco's GraphQL API
-        
-        Args:
-            id_token: Valid Costco idToken (JWT)
-            days: Number of days of history to fetch
-            client_identifier: Optional client identifier UUID (from browser)
-            
-        Returns:
-            List of receipt dictionaries
-        """
+        """Fetch receipts directly via Costco's GraphQL API"""
         logger.info(f"Fetching Costco receipts via API for last {days} days")
-        
-        # Check if token is expired and log details
-        payload = self._decode_jwt_payload(id_token)
-        exp = payload.get('exp')
-        if exp:
-            expiry_time = datetime.fromtimestamp(exp)
-            time_until_expiry = expiry_time - datetime.now()
-            is_expired = self._is_token_expired(id_token)
-            logger.debug(f"Token expiry check - Expires at: {expiry_time}, Time until expiry: {time_until_expiry}, Is expired: {is_expired}")
-        else:
-            logger.warning("Token has no expiry claim (exp), treating as expired")
         
         if self._is_token_expired(id_token):
             raise AuthenticationException("The provided idToken has expired. Please provide a fresh token.")
         
-        # Calculate date range
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
-        
-        # Format dates as MM/DD/YYYY (Costco's expected format)
         start_str = start_date.strftime("%m/%d/%Y")
         end_str = end_date.strftime("%m/%d/%Y")
         
-        logger.info(f"Fetching receipts from {start_str} to {end_str}")
-        
-        # Build GraphQL request
         payload = {
             "query": RECEIPTS_QUERY,
             "variables": {
@@ -295,7 +286,6 @@ class CostcoProvider(PlaywrightProvider):
                 "documentSubType": "all"
             }
         }
-        
         headers = self._get_api_headers(id_token, client_identifier)
         
         try:
@@ -305,41 +295,30 @@ class CostcoProvider(PlaywrightProvider):
                 headers=headers,
                 timeout=30
             )
-            
             if response.status_code == 401:
                 error_text = response.text[:500] if response.text else "No error details"
                 logger.error(f"Costco API returned 401 Unauthorized. Response: {error_text}")
                 raise AuthenticationException("Token is invalid or expired")
-            
             if response.status_code != 200:
                 error_text = response.text[:500] if response.text else "No error details"
                 logger.error(f"Costco API returned status {response.status_code}. Response: {error_text}")
-                logger.debug(f"Full response headers: {dict(response.headers)}")
                 raise ProviderException(f"Costco API returned status {response.status_code}: {error_text[:200]}")
             
             data = response.json()
-            
             if 'errors' in data:
                 logger.error(f"GraphQL errors: {data['errors']}")
                 raise ProviderException(f"GraphQL error: {data['errors']}")
             
             receipts_data = data.get('data', {}).get('receiptsWithCounts', {})
             raw_receipts = receipts_data.get('receipts', [])
-            
             logger.info(f"Found {len(raw_receipts)} receipts via API")
-            logger.info(f"Receipt counts - In-warehouse: {receipts_data.get('inWarehouse', 0)}, "
-                       f"Gas: {receipts_data.get('gasStation', 0)}, "
-                       f"Car wash: {receipts_data.get('carWash', 0)}")
             
-            # Convert to standard receipt format
             receipts = []
             for raw in raw_receipts:
                 receipt = self._parse_api_receipt(raw)
                 if receipt:
                     receipts.append(receipt)
-            
             return receipts
-            
         except requests.RequestException as e:
             logger.error(f"API request failed: {e}")
             raise ProviderException(f"Failed to fetch receipts from Costco API: {e}")
@@ -945,11 +924,8 @@ class CostcoProvider(PlaywrightProvider):
                 try:
                     logger.info("Attempting to fetch receipts via direct API...")
                     tokens = self.extract_tokens_from_browser()
-                    
                     if tokens.get('idToken'):
                         id_token = tokens['idToken']
-                        
-                        # Check if token is still valid
                         if not self._is_token_expired(id_token):
                             logger.info("Valid token found, using API approach")
                             receipts = self.fetch_receipts_via_api(id_token, days=days)
@@ -962,7 +938,6 @@ class CostcoProvider(PlaywrightProvider):
                             logger.info("Token is expired, falling back to browser scraping")
                     else:
                         logger.info("No idToken found in browser, falling back to browser scraping")
-                        
                 except Exception as api_error:
                     logger.warning(f"API approach failed: {api_error}, falling back to browser scraping")
             

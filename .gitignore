@@ -82,3 +82,6 @@ htmlcov/
 # Temporary files
 *.tmp
 *.temp
+
+# android studio logs
+*.logcat

@@ -57,6 +57,9 @@ class Config:
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
     COSTCO_AI_MODEL: str = os.getenv("COSTCO_AI_MODEL", "auto")  # openai, gemini, or auto
     
+    # Costco Contentstack (read-only CMS verification)
+    CONTENTSTACK_ACCESS_TOKEN: Optional[str] = os.getenv("CONTENTSTACK_ACCESS_TOKEN")
+
     # Spoonacular
     SPOONACULAR_API_KEY: Optional[str] = os.getenv("SPOONACULAR_API_KEY")
     SPOONACULAR_BASE_URL: str = os.getenv("SPOONACULAR_BASE_URL", "https://api.spoonacular.com")

@@ -24,6 +24,7 @@ const config: CapacitorConfig = {
     androidScheme: 'https',
   },
   plugins: {
+    CapacitorHttp: { enabled: true },
     SplashScreen: {
       launchAutoHide: true,
       launchShowDuration: 2000,

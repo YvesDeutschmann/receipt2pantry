@@ -174,6 +174,29 @@ export const api = {
     return response.data
   },
 
+  connectCostcoFromApp: async (userId, tokens) => {
+    const response = await apiClient.post('/providers/costco/connect-from-app', {
+      user_id: userId,
+      idToken: tokens.idToken || tokens.accessToken,
+      clientId: tokens.clientID,
+      wcsClientId: tokens.wcsClientId,
+      refreshToken: tokens.refreshToken || null,
+      refreshTokenClientId: tokens.refreshTokenClientId || null,
+    })
+    return response.data
+  },
+
+  /** Fetch Costco receipts using token directly (no stored credentials needed). Used by One-Tap Sync fallback. */
+  fetchCostcoReceiptsWithToken: async (tokens, userId, days = 90) => {
+    const response = await apiClient.post('/providers/costco/fetch-receipts-with-token', {
+      idToken: tokens.idToken || tokens.accessToken,
+      clientIdentifier: tokens.clientID,
+      userId: userId || undefined,
+      days,
+    })
+    return response.data
+  },
+
   getConnectionStatus: async (provider, connectionCode) => {
     const response = await apiClient.get(`/providers/${provider}/connection/${connectionCode}/status`)
     return response.data
