@@ -66,6 +66,37 @@ def get_pantry():
         return jsonify({"error": str(e)}), 500
 
 
+@pantry_bp.route("/pantry/reset", methods=["DELETE"])
+def reset_pantry():
+    """
+    Delete all pantry items for the current user.
+    Optionally scoped to a household via query param.
+    Used for testing re-import workflows.
+    
+    Query params:
+        - household_id: Optional household ID to scope deletion
+    """
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+    
+    supabase = get_supabase_service()
+    if not supabase:
+        return jsonify({"error": "Database service not available"}), 503
+    
+    household_id = request.args.get("household_id")
+    
+    try:
+        supabase.reset_pantry(user_id, household_id)
+        return jsonify({"message": "Pantry reset"}), 200
+    except DatabaseException as e:
+        logger.error(f"Database error resetting pantry: {e}")
+        return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        logger.error(f"Error resetting pantry: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @pantry_bp.route("/pantry/items", methods=["POST"])
 def add_pantry_item():
     """
