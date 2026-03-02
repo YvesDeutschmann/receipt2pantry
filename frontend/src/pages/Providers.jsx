@@ -6,6 +6,7 @@ import PageHeader from '../components/PageHeader'
 import CredentialsModal from '../components/CredentialsModal'
 import MfaDialog from '../components/MfaDialog'
 import CostcoConnectPage from '../components/CostcoConnectPage'
+import CostcoOneTapSync from '../../spike/CostcoOneTapSync'
 
 function Providers() {
   const { user } = useAuth()
@@ -422,32 +423,42 @@ function Providers() {
                   </p>
                   <div className="flex gap-2">
                     {provider === 'costco' ? (
-                      <>
-                        {isConnected ? (
-                          <>
-                            <button
-                              onClick={() => handleFetchWithStoredCredentials(provider)}
-                              className="btn btn-primary flex-1"
-                              disabled={fetchingReceipts}
-                            >
-                              {fetchingReceipts ? 'Fetching...' : 'Fetch Receipts'}
-                            </button>
+                      <div className="w-full space-y-3">
+                        <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
+                          <p className="text-xs font-medium text-slate-600 mb-2">One-Tap Sync (spike)</p>
+                          <CostcoOneTapSync
+                            userId={userId}
+                            days={90}
+                            apiBaseUrl={import.meta.env.VITE_API_BASE_URL}
+                          />
+                        </div>
+                        <div className="flex gap-2">
+                          {isConnected ? (
+                            <>
+                              <button
+                                onClick={() => handleFetchWithStoredCredentials(provider)}
+                                className="btn btn-primary flex-1"
+                                disabled={fetchingReceipts}
+                              >
+                                {fetchingReceipts ? 'Fetching...' : 'Fetch Receipts'}
+                              </button>
+                              <button
+                                onClick={handleConnectCostco}
+                                className="btn btn-secondary"
+                              >
+                                Reconnect
+                              </button>
+                            </>
+                          ) : (
                             <button
                               onClick={handleConnectCostco}
-                              className="btn btn-secondary"
+                              className="btn btn-primary flex-1"
                             >
-                              Reconnect
+                              Connect Costco Account
                             </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={handleConnectCostco}
-                            className="btn btn-primary flex-1"
-                          >
-                            Connect Costco Account
-                          </button>
-                        )}
-                      </>
+                          )}
+                        </div>
+                      </div>
                     ) : (
                       <>
                         <button

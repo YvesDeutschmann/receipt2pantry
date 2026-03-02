@@ -1,6 +1,7 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
 import { useMediaQuery } from '../hooks/useMediaQuery'
+import { useCostcoAutoSync } from '../hooks/useCostcoAutoSync'
 import BottomTabBar from './BottomTabBar'
 import TopNavBar from './TopNavBar'
 import PageTransition from './PageTransition'
@@ -10,6 +11,7 @@ const DESKTOP_BREAKPOINT = '(min-width: 1024px)'
 function AppShell() {
   const isDesktop = useMediaQuery(DESKTOP_BREAKPOINT)
   const location = useLocation()
+  useCostcoAutoSync()
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">

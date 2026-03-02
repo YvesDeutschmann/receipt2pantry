@@ -8,6 +8,7 @@ from backend.utils.exceptions import GrocerySyncException
 
     # Import routes
 from backend.routes.health import health_bp
+from backend.routes.debug_ingest import debug_ingest_bp
 from backend.routes.receipts import receipts_bp
 from backend.routes.providers import providers_bp
 from backend.routes.parsers import parsers_bp
@@ -209,6 +210,7 @@ def create_app(config=None):
     
     # Register blueprints
     app.register_blueprint(health_bp, url_prefix="/api")
+    app.register_blueprint(debug_ingest_bp, url_prefix="/api")
     app.register_blueprint(receipts_bp, url_prefix="/api")
     app.register_blueprint(providers_bp, url_prefix="/api")
     app.register_blueprint(parsers_bp, url_prefix="/api")
