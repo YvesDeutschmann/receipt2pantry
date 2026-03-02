@@ -76,6 +76,34 @@ class SupabaseService:
             logger.error(f"Failed to get receipt by order_id {order_id}: {e}")
             raise DatabaseException(f"Failed to get receipt by order_id: {e}")
     
+    def delete_receipt(self, receipt_id: str, user_id: str) -> None:
+        """
+        Delete a receipt and its items (receipt_items cascade automatically).
+        
+        Args:
+            receipt_id: Receipt ID
+            user_id: User ID (required for authorization — only deletes if receipt belongs to user)
+        """
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            response = (
+                client.table("receipts")
+                .delete()
+                .eq("id", receipt_id)
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if response.data and len(response.data) > 0:
+                logger.info(f"Deleted receipt {receipt_id}")
+            else:
+                # No rows deleted — receipt not found or not owned by user
+                raise DatabaseException(f"Receipt {receipt_id} not found or not owned by user")
+        except DatabaseException:
+            raise
+        except Exception as e:
+            logger.error(f"Failed to delete receipt {receipt_id}: {e}")
+            raise DatabaseException(f"Failed to delete receipt: {e}")
+    
     def store_receipt(self, receipt_data: Dict) -> str:
         """
         Store a receipt in the database
@@ -632,6 +660,26 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Failed to delete pantry item: {e}")
             raise DatabaseException(f"Failed to delete pantry item: {e}")
+    
+    def reset_pantry(self, user_id: str, household_id: Optional[str] = None) -> None:
+        """
+        Delete all pantry items for a user, optionally scoped to a household.
+        Used for testing re-import workflows.
+        
+        Args:
+            user_id: User ID
+            household_id: Optional household ID to scope deletion
+        """
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            query = client.table("pantry_items").delete().eq("user_id", user_id)
+            if household_id is not None:
+                query = query.eq("household_id", household_id)
+            query.execute()
+            logger.info(f"Reset pantry for user {user_id}" + (f" (household {household_id})" if household_id else ""))
+        except Exception as e:
+            logger.error(f"Failed to reset pantry: {e}")
+            raise DatabaseException(f"Failed to reset pantry: {e}")
     
     # Cooking Log Methods
     
