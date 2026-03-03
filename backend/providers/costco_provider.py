@@ -311,7 +311,9 @@ class CostcoProvider(PlaywrightProvider):
             
             receipts_data = data.get('data', {}).get('receiptsWithCounts', {})
             raw_receipts = receipts_data.get('receipts', [])
-            logger.info(f"Found {len(raw_receipts)} receipts via API")
+            all_count = len(raw_receipts)
+            raw_receipts = [r for r in raw_receipts if r.get('receiptType', '').lower() == 'warehouse']
+            logger.info(f"Found {all_count} total receipts via API, {len(raw_receipts)} grocery (warehouse) after filtering out gas/carwash")
             
             receipts = []
             for raw in raw_receipts:

@@ -1044,6 +1044,15 @@ def store_costco_receipts():
         if not isinstance(receipts, list):
             return jsonify({"error": "receipts must be an array"}), 400
 
+        # Filter to grocery/warehouse receipts only - exclude gas, car wash
+        all_count = len(receipts)
+        receipts = [
+            r for r in receipts
+            if (r.get("receipt_type") or r.get("receiptType") or "").lower() == "warehouse"
+        ]
+        if all_count > len(receipts):
+            logger.info(f"Filtered {all_count - len(receipts)} non-grocery receipts (gas/carwash) from store-receipts")
+
         store_result = _store_and_process_fetched_receipts(user_id, "costco", receipts)
         return jsonify({
             "status": "success",
