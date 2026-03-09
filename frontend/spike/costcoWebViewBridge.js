@@ -269,7 +269,10 @@ export async function startLogin() {
         if (tokensReceived) return;
         tokensReceived = true;
         const rawReceipts = d.receipts || [];
-        const receipts = rawReceipts.map((r) => parseApiReceipt(r)).filter(Boolean);
+        const groceryRaw = rawReceipts.filter(
+          (r) => (r.receiptType || 'warehouse').toLowerCase() === 'warehouse'
+        );
+        const receipts = groceryRaw.map((r) => parseApiReceipt(r)).filter(Boolean);
         debugLog('costcoWebViewBridge.js:receiptsFromWebView', 'Receipts from in-WebView fetch', {
           rawCount: rawReceipts.length,
           parsedCount: receipts.length,
@@ -513,7 +516,10 @@ export async function startSilentSync() {
       if (d?.type === 'costco-receipts' && Array.isArray(d?.receipts)) {
         if (received) return;
         const rawReceipts = d.receipts || [];
-        const receipts = rawReceipts.map((r) => parseApiReceipt(r)).filter(Boolean);
+        const groceryRaw = rawReceipts.filter(
+          (r) => (r.receiptType || 'warehouse').toLowerCase() === 'warehouse'
+        );
+        const receipts = groceryRaw.map((r) => parseApiReceipt(r)).filter(Boolean);
         console.log(`${LOG_PREFIX} startSilentSync: receipts fetched from hidden WebView (${receipts.length})`);
         closeWebViewAfterFetch().then(() =>
           storeTokens({
