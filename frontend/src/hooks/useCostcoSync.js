@@ -5,8 +5,8 @@
 
 import { useState, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { getStoredTokens, hasStoredTokens, startLogin, startSilentSync, clearStoredTokens } from '../services/costcoWebViewBridge';
-import { isTokenExpired, submitToBackend } from '../services/costcoNativeSync';
+import { hasStoredTokens, startLogin, startSilentSync, clearStoredTokens } from '../services/costcoWebViewBridge';
+import { submitToBackend } from '../services/costcoNativeSync';
 import { api } from '../services/apiClient';
 
 const LOG_PREFIX = '[CostcoSync]';
@@ -19,8 +19,7 @@ const STATUS = {
   ERROR: 'error',
 };
 
-export function useCostcoSync(userId, options = {}) {
-  const { days = 90 } = options;
+export function useCostcoSync(userId) {
   const [status, setStatus] = useState(STATUS.IDLE);
   const [error, setError] = useState(null);
   const [result, setResult] = useState(null);
@@ -30,25 +29,6 @@ export function useCostcoSync(userId, options = {}) {
     const has = await hasStoredTokens();
     setHasStoredTokensState(has);
     return has;
-  }, []);
-
-  const getValidTokens = useCallback(async () => {
-    const stored = await getStoredTokens();
-    const tokenForExpiry = stored?.idToken || stored?.accessToken;
-    const expired = tokenForExpiry ? isTokenExpired(tokenForExpiry) : 'n/a';
-    console.log(`${LOG_PREFIX} getValidTokens: hasStored=${Boolean(tokenForExpiry)}, expired=${expired}`);
-    if (!stored?.idToken && !stored?.accessToken) return null;
-    if (tokenForExpiry && !isTokenExpired(tokenForExpiry)) {
-      return {
-        idToken: stored.idToken,
-        accessToken: stored.accessToken,
-        clientID: stored.clientID,
-        refreshToken: stored.refreshToken,
-        refreshTokenClientId: stored.refreshTokenClientId,
-        userAgent: stored.userAgent,
-      };
-    }
-    return null;
   }, []);
 
   const startSync = useCallback(async () => {
@@ -114,7 +94,7 @@ export function useCostcoSync(userId, options = {}) {
       setError(msg);
       setStatus(STATUS.ERROR);
     }
-  }, [userId, days]);
+  }, [userId]);
 
   const startSilent = useCallback(async () => {
     if (!Capacitor.isNativePlatform()) {

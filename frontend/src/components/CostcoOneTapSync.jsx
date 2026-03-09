@@ -6,7 +6,7 @@
 import { useEffect } from 'react';
 import { useCostcoSync, STATUS } from '../hooks/useCostcoSync';
 
-export default function CostcoOneTapSync({ userId, days = 90, className = '' }) {
+export default function CostcoOneTapSync({ userId, className = '' }) {
   const {
     status,
     error,
@@ -16,7 +16,7 @@ export default function CostcoOneTapSync({ userId, days = 90, className = '' }) 
     hasStoredTokens,
     checkStoredTokens,
     isNative,
-  } = useCostcoSync(userId, { days });
+  } = useCostcoSync(userId);
 
   useEffect(() => {
     checkStoredTokens();

@@ -38,7 +38,7 @@ export function useCostcoAutoSync() {
         isSyncingRef.current = true;
         const result = await startSilentSync();
         if (result?.receipts?.length > 0) {
-          const finalBackend = await submitToBackend(result.receipts, userId);
+          await submitToBackend(result.receipts, userId);
           if (result.idToken || result.accessToken) {
             try {
               await api.connectCostcoFromApp(userId, result);
