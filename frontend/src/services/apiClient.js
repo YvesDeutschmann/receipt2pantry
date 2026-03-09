@@ -186,13 +186,11 @@ export const api = {
     return response.data
   },
 
-  /** Fetch Costco receipts using token directly (no stored credentials needed). Used by One-Tap Sync fallback. */
-  fetchCostcoReceiptsWithToken: async (tokens, userId, days = 90) => {
-    const response = await apiClient.post('/providers/costco/fetch-receipts-with-token', {
-      idToken: tokens.idToken || tokens.accessToken,
-      clientIdentifier: tokens.clientID,
-      userId: userId || undefined,
-      days,
+  /** Store pre-fetched Costco receipts from One-Tap Sync (in-WebView fetch). */
+  storeCostcoReceipts: async (receipts, userId) => {
+    const response = await apiClient.post('/providers/costco/store-receipts', {
+      receipts,
+      user_id: userId,
     })
     return response.data
   },

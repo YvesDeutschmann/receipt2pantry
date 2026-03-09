@@ -1,13 +1,16 @@
 /**
  * useCostcoAutoSync - App lifecycle hook for automatic Costco receipt sync.
  * Triggers fetch when app comes to foreground, throttled to once per 30 minutes.
- * Only runs on native platform when Costco is connected.
+ * Uses One-Tap Sync bridge (startSilentSync + submitToBackend) when local tokens exist.
+ * Only runs on native platform.
  */
 
 import { useEffect, useRef } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { App } from '@capacitor/app';
 import { Preferences } from '@capacitor/preferences';
+import { hasStoredTokens, startSilentSync, clearStoredTokens } from '../services/costcoWebViewBridge';
+import { submitToBackend } from '../services/costcoNativeSync';
 import { api } from '../services/apiClient';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -25,19 +28,34 @@ export function useCostcoAutoSync() {
     const runSyncIfAllowed = async () => {
       if (isSyncingRef.current) return;
       try {
+        const hasTokens = await hasStoredTokens();
+        if (!hasTokens) return;
+
         const { value: lastStr } = await Preferences.get({ key: PREF_KEY_LAST_SYNC });
         const lastSync = lastStr ? parseInt(lastStr, 10) : 0;
         if (Date.now() - lastSync < THROTTLE_MS) return;
 
-        const status = await api.getProviderStatus('costco', userId);
-        if (!status?.configured || !status?.active) return;
-
         isSyncingRef.current = true;
-        await api.fetchReceiptsWithStoredCredentials('costco', userId, 90);
-        await Preferences.set({ key: PREF_KEY_LAST_SYNC, value: String(Date.now()) });
+        const result = await startSilentSync();
+        if (result?.receipts?.length > 0) {
+          await submitToBackend(result.receipts, userId);
+          if (result.idToken || result.accessToken) {
+            try {
+              await api.connectCostcoFromApp(userId, result);
+            } catch (connectErr) {
+              console.warn('[CostcoAutoSync] connect-from-app failed:', connectErr?.message || connectErr);
+            }
+          }
+          await Preferences.set({ key: PREF_KEY_LAST_SYNC, value: String(Date.now()) });
+        } else if (!result) {
+          await clearStoredTokens();
+          console.warn('[CostcoAutoSync] Session expired, tokens cleared');
+        }
       } catch (err) {
         if (err?.response?.data?.expired_credentials) {
           console.warn('[CostcoAutoSync] Credentials expired, skipping');
+        } else {
+          console.warn('[CostcoAutoSync] Sync failed:', err?.message || err);
         }
       } finally {
         isSyncingRef.current = false;

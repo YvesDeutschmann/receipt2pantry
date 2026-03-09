@@ -6,7 +6,7 @@ import PageHeader from '../components/PageHeader'
 import CredentialsModal from '../components/CredentialsModal'
 import MfaDialog from '../components/MfaDialog'
 import CostcoConnectPage from '../components/CostcoConnectPage'
-import CostcoOneTapSync from '../../spike/CostcoOneTapSync'
+import CostcoOneTapSync from '../components/CostcoOneTapSync'
 
 function Providers() {
   const { user } = useAuth()
@@ -425,11 +425,10 @@ function Providers() {
                     {provider === 'costco' ? (
                       <div className="w-full space-y-3">
                         <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                          <p className="text-xs font-medium text-slate-600 mb-2">One-Tap Sync (spike)</p>
+                          <p className="text-xs font-medium text-slate-600 mb-2">One-Tap Sync</p>
                           <CostcoOneTapSync
                             userId={userId}
                             days={90}
-                            apiBaseUrl={import.meta.env.VITE_API_BASE_URL}
                           />
                         </div>
                         <div className="flex gap-2">
