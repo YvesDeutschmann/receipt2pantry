@@ -100,7 +100,7 @@ function AddPantryItemModal({ isOpen, onClose, onAdd }) {
       <form onSubmit={handleSubmit}>
         <div className="px-4 pt-2 pb-4 sm:px-6 sm:pb-4">
           {error && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700 text-sm">
+                <div className="mb-4 p-3 border border-[var(--color-error)] rounded-mise-md text-[var(--color-error)] bg-[var(--color-error)]/10 text-sm">
                   {error}
                 </div>
               )}
@@ -118,14 +118,14 @@ function AddPantryItemModal({ isOpen, onClose, onAdd }) {
                     value={formData.base_ingredient}
                     onChange={handleChange}
                     placeholder="e.g., butter, milk, eggs"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className="input"
                     required
                   />
                 </div>
 
                 {/* Variant */}
                 <div>
-                  <label htmlFor="variant" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="variant" className="block text-sm font-medium text-sage-light mb-1">
                     Variant (optional)
                   </label>
                   <input
@@ -135,9 +135,9 @@ function AddPantryItemModal({ isOpen, onClose, onAdd }) {
                     value={formData.variant}
                     onChange={handleChange}
                     placeholder="e.g., unsalted, whole, organic"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                    className="input"
                   />
-                  <p className="mt-1 text-xs text-gray-500">
+                  <p className="mt-1 text-xs text-sage-light">
                     Different variants are tracked separately (e.g., salted vs unsalted butter)
                   </p>
                 </div>
@@ -145,7 +145,7 @@ function AddPantryItemModal({ isOpen, onClose, onAdd }) {
                 {/* Quantity and Unit */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label htmlFor="quantity" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="quantity" className="block text-sm font-medium text-sage-light mb-1">
                       Quantity *
                     </label>
                     <input
@@ -157,12 +157,12 @@ function AddPantryItemModal({ isOpen, onClose, onAdd }) {
                       placeholder="0"
                       step="0.1"
                       min="0"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="input"
                       required
                     />
                   </div>
                   <div>
-                    <label htmlFor="unit" className="block text-sm font-medium text-gray-700 mb-1">
+                    <label htmlFor="unit" className="block text-sm font-medium text-sage-light mb-1">
                       Unit *
                     </label>
                     <select
@@ -183,7 +183,7 @@ function AddPantryItemModal({ isOpen, onClose, onAdd }) {
 
                 {/* Category */}
                 <div>
-                  <label htmlFor="category" className="block text-sm font-medium text-gray-700 mb-1">
+                  <label htmlFor="category" className="block text-sm font-medium text-sage-light mb-1">
                     Category (optional)
                   </label>
                   <select
@@ -202,7 +202,7 @@ function AddPantryItemModal({ isOpen, onClose, onAdd }) {
               </div>
         </div>
 
-        <div className="bg-gray-50 px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-3">
+        <div className="bg-forest px-4 py-3 sm:px-6 sm:flex sm:flex-row-reverse gap-3">
           <button
             type="submit"
             disabled={isSubmitting}
@@ -210,7 +210,7 @@ function AddPantryItemModal({ isOpen, onClose, onAdd }) {
           >
             {isSubmitting ? (
               <span className="flex items-center justify-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-cream"></div>
                 Adding...
               </span>
             ) : (
@@ -221,7 +221,7 @@ function AddPantryItemModal({ isOpen, onClose, onAdd }) {
             type="button"
             onClick={onClose}
             disabled={isSubmitting}
-            className="w-full sm:w-auto btn btn-secondary mt-3 sm:mt-0"
+            className="w-full sm:w-auto btn btn-ghost mt-3 sm:mt-0"
           >
             Cancel
           </button>

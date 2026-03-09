@@ -4,9 +4,9 @@ function ProviderCard({ provider, status, onTest, onConfigure }) {
   const [isExpanded, setIsExpanded] = useState(false)
 
   const statusColors = {
-    active: 'bg-green-100 text-green-800',
-    inactive: 'bg-gray-100 text-gray-800',
-    error: 'bg-red-100 text-red-800',
+    active: 'bg-forest-light text-sage',
+    inactive: 'bg-forest-light text-sage-light',
+    error: 'bg-[var(--color-error)]/10 text-[var(--color-error)]',
   }
 
   const statusText = {
@@ -25,7 +25,7 @@ function ProviderCard({ provider, status, onTest, onConfigure }) {
             </span>
           </div>
           <div>
-            <h3 className="text-lg font-semibold capitalize">{provider}</h3>
+            <h3 className="text-lg font-display font-semibold text-cream capitalize">{provider}</h3>
             <span className={`inline-block px-2 py-1 text-xs font-medium rounded ${statusColors[status] || statusColors.inactive}`}>
               {statusText[status] || statusText.inactive}
             </span>
@@ -34,7 +34,7 @@ function ProviderCard({ provider, status, onTest, onConfigure }) {
         <div className="flex space-x-2">
           <button
             onClick={() => setIsExpanded(!isExpanded)}
-            className="btn btn-secondary"
+            className="btn btn-ghost"
           >
             {isExpanded ? 'Hide' : 'Details'}
           </button>
@@ -51,7 +51,7 @@ function ProviderCard({ provider, status, onTest, onConfigure }) {
         <div className="mt-4 pt-4 border-t">
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
-              <span className="text-gray-600">Provider:</span>
+              <span className="text-sage-light">Provider:</span>
               <span className="font-medium capitalize">{provider}</span>
             </div>
             <div className="flex justify-between">
@@ -60,7 +60,7 @@ function ProviderCard({ provider, status, onTest, onConfigure }) {
             </div>
             {status === 'active' && (
               <div className="flex justify-between">
-                <span className="text-gray-600">Last Login:</span>
+                <span className="text-sage-light">Last Login:</span>
                 <span className="font-medium">Recently</span>
               </div>
             )}

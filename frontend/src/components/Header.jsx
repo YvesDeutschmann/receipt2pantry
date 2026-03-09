@@ -34,18 +34,18 @@ function Header() {
   
   const isActive = (path) => {
     return location.pathname === path
-      ? 'text-primary-600 border-b-2 border-primary-600'
-      : 'text-gray-600 hover:text-gray-900'
+      ? 'text-cream border-b-2 border-terra'
+      : 'text-sage-light hover:text-cream'
   }
 
   return (
     <>
-      <header className="bg-white shadow-sm">
+      <header className="bg-forest-mid shadow-mise-sm">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-8">
-              <Link to="/" className="text-2xl font-bold text-primary-600">
-                GrocerySync
+              <Link to="/" className="text-2xl font-display font-bold text-cream">
+                Mise
               </Link>
               <nav className="flex space-x-6">
                 <Link
@@ -90,11 +90,11 @@ function Header() {
               {/* Household Button */}
               <button
                 onClick={() => setHouseholdModalOpen(true)}
-                className="flex items-center space-x-2 px-3 py-2 rounded-lg hover:bg-gray-100 transition-colors"
+                className="flex items-center space-x-2 px-3 py-2 rounded-mise-md hover:bg-forest-light transition-colors"
                 title="Manage Household"
               >
                 <svg 
-                  className="w-5 h-5 text-gray-600" 
+                  className="w-5 h-5 text-sage-light" 
                   fill="none" 
                   stroke="currentColor" 
                   viewBox="0 0 24 24"
@@ -107,24 +107,24 @@ function Header() {
                   />
                 </svg>
                 {!loading && (
-                  <span className="text-sm text-gray-700">
+                  <span className="text-sm text-cream">
                     {household ? household.name : 'No Household'}
                   </span>
                 )}
                 {household && (
-                  <span className="px-1.5 py-0.5 bg-green-100 text-green-700 text-xs rounded-full">
+                  <span className="px-1.5 py-0.5 bg-forest-light text-sage text-xs rounded-full">
                     {household.role === 'owner' ? 'Owner' : 'Member'}
                   </span>
                 )}
               </button>
               
               <div className="flex items-center gap-2">
-                <span className="text-sm text-gray-600 max-w-[140px] truncate" title={user?.email}>
+                <span className="text-sm text-sage-light max-w-[140px] truncate" title={user?.email}>
                   {user?.email}
                 </span>
                 <button
                   onClick={() => signOut()}
-                  className="btn btn-secondary flex items-center gap-1"
+                  className="btn btn-ghost flex items-center gap-1"
                   title="Sign Out"
                 >
                   <LogOut className="w-4 h-4" />

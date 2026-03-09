@@ -45,14 +45,14 @@ function PantryList({ groupedItems, onUpdateQuantity, onDeleteItem }) {
       <div className="flex justify-end gap-2 mb-4">
         <button
           onClick={expandAll}
-          className="text-sm text-primary-600 hover:text-primary-700"
+          className="text-sm text-terra hover:text-terra-light"
         >
           Expand All
         </button>
-        <span className="text-gray-300">|</span>
+        <span className="text-forest-light">|</span>
         <button
           onClick={collapseAll}
-          className="text-sm text-primary-600 hover:text-primary-700"
+          className="text-sm text-terra hover:text-terra-light"
         >
           Collapse All
         </button>
@@ -77,12 +77,12 @@ function PantryList({ groupedItems, onUpdateQuantity, onDeleteItem }) {
               {groupedByCategory[category].map(group => (
                 <div 
                   key={group.base_ingredient}
-                  className="border border-gray-200 rounded-lg overflow-hidden"
+                  className="border border-forest-light rounded-mise-md overflow-hidden"
                 >
                   {/* Group Header */}
                   <button
                     onClick={() => toggleGroup(group.base_ingredient)}
-                    className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 transition-colors"
+                    className="w-full flex items-center justify-between p-3 bg-forest hover:bg-forest-light transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       <svg 
@@ -95,18 +95,18 @@ function PantryList({ groupedItems, onUpdateQuantity, onDeleteItem }) {
                       >
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                       </svg>
-                      <span className="font-medium text-gray-900 capitalize">
+                      <span className="font-medium text-cream capitalize">
                         {group.base_ingredient}
                       </span>
                     </div>
-                    <span className="text-sm text-gray-500">
+                    <span className="text-sm text-sage-light">
                       {group.variants.length} variant{group.variants.length !== 1 ? 's' : ''}
                     </span>
                   </button>
 
                   {/* Variants */}
                   {expandedGroups.has(group.base_ingredient) && (
-                    <div className="divide-y divide-gray-100">
+                    <div className="divide-y divide-forest-light">
                       {group.variants.map(item => (
                         <PantryItem
                           key={item.id}

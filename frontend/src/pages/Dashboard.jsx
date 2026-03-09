@@ -29,32 +29,32 @@ function Dashboard() {
     <div>
       <PageHeader
         title="Dashboard"
-        subtitle="Welcome to GrocerySync! View your recent receipts and shopping statistics."
+        subtitle="Welcome to Mise! View your recent receipts and shopping statistics."
       />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="card">
-          <h3 className="text-sm font-medium text-gray-600 mb-2">Total Receipts</h3>
-          <p className="text-3xl font-bold text-gray-900">0</p>
+          <h3 className="text-sm font-medium text-sage-light mb-2">Total Receipts</h3>
+          <p className="text-3xl font-display font-bold text-cream">0</p>
         </div>
         <div className="card">
-          <h3 className="text-sm font-medium text-gray-600 mb-2">This Month</h3>
-          <p className="text-3xl font-bold text-gray-900">$0.00</p>
+          <h3 className="text-sm font-medium text-sage-light mb-2">This Month</h3>
+          <p className="text-3xl font-display font-bold text-cream">$0.00</p>
         </div>
         <div className="card">
-          <h3 className="text-sm font-medium text-gray-600 mb-2">Total Items</h3>
-          <p className="text-3xl font-bold text-gray-900">0</p>
+          <h3 className="text-sm font-medium text-sage-light mb-2">Total Items</h3>
+          <p className="text-3xl font-display font-bold text-cream">0</p>
         </div>
       </div>
 
       <div className="card">
-        <h2 className="text-xl font-semibold mb-4">Recent Receipts</h2>
+        <h2 className="text-xl font-display font-semibold text-cream mb-4">Recent Receipts</h2>
         {loading ? (
-          <div className="text-center py-8 text-gray-600">Loading...</div>
+          <div className="text-center py-8 text-sage-light">Loading...</div>
         ) : error ? (
-          <div className="text-center py-8 text-red-600">{error}</div>
+          <div className="text-center py-8 text-[var(--color-error)]">{error}</div>
         ) : receipts.length === 0 ? (
-          <div className="text-center py-8 text-gray-600">
+          <div className="text-center py-8 text-sage-light">
             <p className="mb-4">No receipts yet!</p>
             <p className="text-sm">
               Configure a provider to start syncing your grocery receipts.
@@ -63,15 +63,15 @@ function Dashboard() {
         ) : (
           <div className="space-y-4">
             {receipts.map((receipt) => (
-              <div key={receipt.id} className="border rounded-lg p-4">
+              <div key={receipt.id} className="border border-forest-light rounded-mise-md p-4">
                 <div className="flex justify-between items-start">
                   <div>
-                    <h3 className="font-semibold">{receipt.provider}</h3>
-                    <p className="text-sm text-gray-600">{receipt.order_date}</p>
+                    <h3 className="font-semibold text-cream">{receipt.provider}</h3>
+                    <p className="text-sm text-sage-light">{receipt.order_date}</p>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold">${receipt.total_amount}</p>
-                    <p className="text-sm text-gray-600">{receipt.num_items} items</p>
+                    <p className="font-semibold text-cream">${receipt.total_amount}</p>
+                    <p className="text-sm text-sage-light">{receipt.num_items} items</p>
                   </div>
                 </div>
               </div>

@@ -27,8 +27,8 @@ function TabLink({ to, icon: Icon, label }) {
       to={to}
       onClick={handleClick}
       className={({ isActive }) =>
-        `flex flex-col items-center justify-center flex-1 min-h-[56px] pt-2 pb-2 pb-safe-bottom transition-colors ${
-          isActive ? 'text-primary-600' : 'text-gray-400'
+        `flex flex-col items-center justify-center flex-1 min-h-[56px] pt-2 pb-2 pb-safe-bottom transition-colors border-t-2 border-transparent ${
+          isActive ? 'text-cream border-t-terra' : 'text-sage-light'
         }`
       }
     >
@@ -48,7 +48,7 @@ function TabLink({ to, icon: Icon, label }) {
 function BottomTabBar() {
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 min-h-[56px] pt-2 pb-safe-bottom bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-t border-gray-200/80 z-50"
+      className="fixed bottom-0 left-0 right-0 min-h-[56px] pt-2 pb-safe-bottom bg-forest-mid backdrop-blur-lg border-t border-forest-light z-50"
       role="navigation"
       aria-label="Main navigation"
     >

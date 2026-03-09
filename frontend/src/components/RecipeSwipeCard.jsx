@@ -37,7 +37,7 @@ const RecipeSwipeCard = ({
 
   return (
     <motion.div
-      className="relative bg-white rounded-lg shadow-lg overflow-hidden cursor-grab active:cursor-grabbing"
+      className="relative bg-forest-mid rounded-mise-lg shadow-mise-lg overflow-hidden cursor-grab active:cursor-grabbing"
       style={{ zIndex, x, y }}
       drag
       dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
@@ -73,7 +73,7 @@ const RecipeSwipeCard = ({
 
       {/* Recipe Content */}
       <div className="p-6">
-        <h3 className="text-2xl font-bold mb-2">{recipe.title}</h3>
+        <h3 className="text-2xl font-display font-bold text-cream mb-2">{recipe.title}</h3>
         
         {/* Match Percentage Badge */}
         <div className="mb-4">
@@ -83,9 +83,9 @@ const RecipeSwipeCard = ({
         </div>
 
         {/* Ingredients Info */}
-        <div className="mb-4 text-sm text-gray-600">
+        <div className="mb-4 text-sm text-sage-light">
           <p>
-            <span className="font-semibold text-green-600">
+            <span className="font-semibold text-sage">
               {recipe.usedIngredientCount || 0} ingredients available
             </span>
             {recipe.missedIngredientCount > 0 && (
@@ -102,7 +102,7 @@ const RecipeSwipeCard = ({
         {/* Staple Meal Indicator */}
         {recipe.is_staple && (
           <div className="mb-4">
-            <span className="inline-block px-2 py-1 bg-blue-100 text-blue-800 rounded text-xs">
+            <span className="inline-block px-2 py-1 bg-forest-light text-terra rounded text-xs">
               Staple Meal
             </span>
           </div>
@@ -128,7 +128,7 @@ const RecipeSwipeCard = ({
               Not Tonight
             </button>
             <button
-              className="btn px-4 py-2.5 text-sm bg-orange-100 hover:bg-orange-200 text-orange-800 border-orange-300"
+              className="btn px-4 py-2.5 text-sm bg-terra/20 hover:bg-terra/30 text-terra-light border-forest-light"
               onClick={onBan}
             >
               Absolutely Not
@@ -150,7 +150,7 @@ const RecipeSwipeCard = ({
 
         {/* Hint Text for First Card */}
         {isFirstCard && (
-          <p className="text-xs text-gray-400 text-center mt-4">
+          <p className="text-xs text-sage-light text-center mt-4">
             Swipe gestures: right to accept • left for "not tonight" • up to ban
           </p>
         )}
@@ -163,7 +163,7 @@ const RecipeSwipeCard = ({
           opacity: x.get() > 50 ? Math.min(x.get() / 200, 0.8) : 0
         }}
       >
-        <span className="text-white text-2xl font-bold">✓ Accept</span>
+        <span className="text-cream text-2xl font-bold">✓ Accept</span>
       </motion.div>
 
       <motion.div
@@ -182,7 +182,7 @@ const RecipeSwipeCard = ({
             opacity: y.get() < -50 ? Math.min(Math.abs(y.get()) / 200, 0.8) : 0
           }}
         >
-          <span className="text-white text-2xl font-bold">🚫 Absolutely Not</span>
+          <span className="text-cream text-2xl font-bold">🚫 Absolutely Not</span>
         </motion.div>
       )}
     </motion.div>

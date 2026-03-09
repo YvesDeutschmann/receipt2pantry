@@ -391,22 +391,22 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
       <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-20 text-center sm:p-0">
         {/* Backdrop */}
         <div
-          className="fixed inset-0 bg-gray-500 bg-opacity-75 transition-opacity"
+          className="fixed inset-0 bg-forest bg-opacity-75 transition-opacity"
           onClick={onClose}
         />
 
         {/* Modal */}
         <div className="relative bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-2xl sm:w-full max-h-[90vh] flex flex-col">
           {/* Header */}
-          <div className="bg-white px-4 pt-5 pb-4 sm:p-6 border-b border-gray-200">
+          <div className="bg-forest-mid px-4 pt-5 pb-4 sm:p-6 border-b border-forest-light">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-semibold text-gray-900">
+              <h3 className="text-xl font-display font-semibold text-cream">
                 Meal Planning Wizard
               </h3>
               <button
                 type="button"
                 onClick={onClose}
-                className="text-gray-400 hover:text-gray-500"
+                className="text-sage-light hover:text-cream"
               >
                 <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -426,19 +426,19 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
             {step === 'setup' && (
               <div className="space-y-6">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-sage-light mb-2">
                     Start Date
                   </label>
                   <input
                     type="date"
                     value={startDate}
                     onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                    className="input"
                   />
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <label className="block text-sm font-medium text-sage-light mb-3">
                     Plan These Meals
                   </label>
                   <div className="space-y-2">
@@ -480,7 +480,7 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
 
                 <div className="flex justify-end gap-3">
                   <button
-                    className="btn btn-secondary"
+                    className="btn btn-ghost"
                     onClick={onClose}
                   >
                     Cancel
@@ -508,9 +508,9 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
                       {format(currentMealSlot?.dateObj, 'EEEE, MMM d')} - {currentMealSlot?.mealType}
                     </span>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
+                  <div className="w-full bg-forest-light rounded-full h-2">
                     <div
-                      className="bg-primary-600 h-2 rounded-full transition-all"
+                      className="bg-terra h-2 rounded-full transition-all"
                       style={{ width: `${((currentSlot + 1) / mealSlotsList.length) * 100}%` }}
                     />
                   </div>
@@ -519,13 +519,13 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
                 {/* Recipe Cards */}
                 {loading && recipes.length === 0 ? (
                   <div className="flex justify-center py-12">
-                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terra"></div>
                   </div>
                 ) : recipes.length === 0 ? (
                   <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 mb-6">
                     <div className="text-center mb-6">
                       <div className="mb-4">
-                        <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="mx-auto h-12 w-12 text-sage-light" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                       </div>
@@ -539,12 +539,12 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
 
                     <div className="space-y-4">
                       {/* Threshold Slider */}
-                      <div className="border-t border-gray-200 pt-4">
-                        <label className="block text-sm font-medium text-gray-700 mb-3">
+                      <div className="border-t border-forest-light pt-4">
+                        <label className="block text-sm font-medium text-sage-light mb-3">
                           Adjust Match Threshold: {Math.round(threshold * 100)}%
                         </label>
                         <div className="flex items-center gap-4">
-                          <span className="text-xs text-gray-500">50%</span>
+                          <span className="text-xs text-sage-light">50%</span>
                           <input
                             type="range"
                             min="0.5"
@@ -560,14 +560,14 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
                             disabled={isAdjustingThreshold}
                             className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
                           />
-                          <span className="text-xs text-gray-500">90%</span>
+                          <span className="text-xs text-sage-light">90%</span>
                         </div>
-                        <p className="text-xs text-gray-500 mt-2">
+                        <p className="text-xs text-sage-light mt-2">
                           Lower values will show more recipes, but they may require more ingredients you don't have.
                         </p>
                         {isAdjustingThreshold && (
-                          <div className="mt-2 flex items-center gap-2 text-sm text-primary-600">
-                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>
+                          <div className="mt-2 flex items-center gap-2 text-sm text-terra">
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-terra"></div>
                             <span>Loading suggestions...</span>
                           </div>
                         )}
@@ -584,7 +584,7 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
                         <button
                           onClick={handleCompletePartial}
                           disabled={loading}
-                          className="flex-1 px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 transition-colors font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex-1 btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                         >
                           {loading ? 'Completing...' : 'Complete with current selections'}
                         </button>
@@ -622,13 +622,13 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
 
             {step === 'review' && (
               <div className="space-y-6">
-                <h4 className="text-lg font-semibold">Meal Plan Summary</h4>
+                <h4 className="text-lg font-display font-semibold text-cream">Meal Plan Summary</h4>
                 <div className="space-y-2">
                   {plannedMeals.map((meal, index) => (
                     <div key={index} className="p-3 bg-gray-50 rounded-lg">
                       <div className="flex justify-between">
-                        <span className="font-medium">{meal.recipe_name}</span>
-                        <span className="text-sm text-gray-600">
+                        <span className="font-medium text-cream">{meal.recipe_name}</span>
+                        <span className="text-sm text-sage-light">
                           {format(new Date(meal.meal_date), 'MMM d')} - {meal.meal_type}
                         </span>
                       </div>
@@ -638,7 +638,7 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
 
                 <div className="flex justify-end gap-3">
                   <button
-                    className="btn btn-secondary"
+                    className="btn btn-ghost"
                     onClick={() => setStep('selection')}
                   >
                     Back
@@ -664,14 +664,14 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 20 }}
           className="fixed bottom-4 left-1/2 transform -translate-x-1/2 
-                      bg-gray-800 text-white px-4 py-3 rounded-lg shadow-lg 
-                      flex items-center gap-3 z-[60]"
+                      bg-forest-mid text-cream px-4 py-3 rounded-mise-md shadow-mise-lg 
+                      flex items-center gap-3 z-[60] border border-forest-light"
         >
           <span>{toastMessage}</span>
           {lastBannedRecipe && (
             <button
               onClick={handleUnban}
-              className="underline font-semibold hover:text-gray-300"
+              className="underline font-semibold hover:text-terra-light"
             >
               Undo
             </button>

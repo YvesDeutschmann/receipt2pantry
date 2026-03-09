@@ -14,7 +14,7 @@ function AppShell() {
   useCostcoAutoSync()
 
   return (
-    <div className="flex flex-col h-screen overflow-hidden">
+    <div className="flex flex-col h-screen overflow-hidden bg-forest text-cream">
       {isDesktop && <TopNavBar />}
 
       <main className="flex-1 overflow-y-auto pt-safe-top pb-tab-bar lg:pb-safe-bottom">

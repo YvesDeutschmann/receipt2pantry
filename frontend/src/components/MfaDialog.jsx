@@ -100,15 +100,15 @@ const MfaDialog = ({
       aria-labelledby="mfa-dialog-title"
     >
       <div
-        className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4"
+        className="bg-forest-mid rounded-mise-lg shadow-mise-lg p-6 max-w-md w-full mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="mb-6">
-          <h2 id="mfa-dialog-title" className="text-2xl font-bold text-gray-900 mb-2">
+          <h2 id="mfa-dialog-title" className="text-2xl font-display font-bold text-cream mb-2">
             Verification Required
           </h2>
-          <p className="text-gray-600">
+          <p className="text-sage-light">
             Enter the 6-digit verification code sent to your {provider} account
           </p>
         </div>
@@ -125,7 +125,7 @@ const MfaDialog = ({
         <form onSubmit={handleSubmit}>
           {/* Code Input */}
           <div className="mb-6">
-            <label htmlFor="mfa-code" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="mfa-code" className="block text-sm font-medium text-sage-light mb-2">
               Verification Code
             </label>
             <input
@@ -138,11 +138,11 @@ const MfaDialog = ({
               value={code}
               onChange={handleCodeChange}
               disabled={loading}
-              className={`w-full px-4 py-3 text-center text-2xl font-mono tracking-widest border rounded-lg focus:outline-none focus:ring-2 ${
+              className={`input text-center text-2xl font-mono tracking-widest ${
                 error
-                  ? 'border-red-300 focus:ring-red-500'
-                  : 'border-gray-300 focus:ring-blue-500'
-              } ${loading ? 'bg-gray-100 cursor-not-allowed' : 'bg-white'}`}
+                  ? 'border-[var(--color-error)] focus:border-[var(--color-error)]'
+                  : ''
+              } ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
               placeholder="000000"
               aria-invalid={error ? 'true' : 'false'}
               aria-describedby={error ? 'mfa-error' : undefined}
@@ -156,7 +156,7 @@ const MfaDialog = ({
           {error && (
             <div
               id="mfa-error"
-              className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg"
+              className="mb-4 p-3 bg-[var(--color-error)]/10 border border-[var(--color-error)] rounded-mise-md"
               role="alert"
             >
               <p className="text-sm text-red-800">{error}</p>
@@ -169,14 +169,14 @@ const MfaDialog = ({
               type="button"
               onClick={onCancel}
               disabled={loading}
-              className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 btn btn-ghost disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={code.length !== 6 || loading}
-              className="flex-1 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <span className="flex items-center justify-center">
@@ -195,7 +195,7 @@ const MfaDialog = ({
 
         {/* Help Text */}
         <div className="mt-4 text-center">
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-sage-light">
             Didn't receive a code? Check your email or phone for the verification code.
           </p>
         </div>

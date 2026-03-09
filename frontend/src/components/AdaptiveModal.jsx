@@ -23,7 +23,7 @@ function AdaptiveModal({ isOpen, onClose, title, children, hideHeader }) {
         >
           {/* Backdrop */}
           <motion.div
-            className="absolute inset-0 bg-gray-500/75"
+            className="absolute inset-0 bg-forest/75"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -33,7 +33,7 @@ function AdaptiveModal({ isOpen, onClose, title, children, hideHeader }) {
 
           {/* Bottom Sheet */}
           <motion.div
-            className="relative bg-white rounded-t-2xl shadow-xl overflow-hidden flex flex-col max-h-[85vh] pb-safe"
+            className="relative bg-forest-mid rounded-t-2xl shadow-mise-lg overflow-hidden flex flex-col max-h-[85vh] pb-safe"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
@@ -41,14 +41,14 @@ function AdaptiveModal({ isOpen, onClose, title, children, hideHeader }) {
           >
             {/* Drag handle */}
             <div className="flex justify-center pt-3 pb-2">
-              <div className="w-12 h-1 bg-gray-300 rounded-full" />
+              <div className="w-12 h-1 bg-forest-light rounded-full" />
             </div>
 
             {/* Header */}
             {(title || onClose) && (
-              <div className="flex items-center justify-between px-4 pb-3 border-b border-gray-200">
+              <div className="flex items-center justify-between px-4 pb-3 border-b border-forest-light">
                 {title && (
-                  <h3 id="modal-title" className="text-lg font-semibold text-gray-900">
+                  <h3 id="modal-title" className="text-lg font-display font-semibold text-cream">
                     {title}
                   </h3>
                 )}
@@ -56,7 +56,7 @@ function AdaptiveModal({ isOpen, onClose, title, children, hideHeader }) {
                   <button
                     type="button"
                     onClick={onClose}
-                    className="p-2 -m-2 text-gray-400 hover:text-gray-600 min-w-touch min-h-touch flex items-center justify-center"
+                    className="p-2 -m-2 text-sage-light hover:text-cream min-w-touch min-h-touch flex items-center justify-center"
                     aria-label="Close"
                   >
                     <X className="w-6 h-6" />
@@ -92,16 +92,16 @@ function AdaptiveModal({ isOpen, onClose, title, children, hideHeader }) {
             onClick={handleBackdropClick}
           />
           <motion.div
-            className="relative bg-white rounded-lg shadow-xl max-w-lg w-full mx-auto"
+            className="relative bg-forest-mid rounded-mise-lg shadow-mise-lg max-w-lg w-full mx-auto"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
             transition={{ duration: 0.2 }}
           >
             {!hideHeader && (title || onClose) && (
-              <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-200">
+              <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-forest-light">
                 {title && (
-                  <h3 id="modal-title" className="text-lg font-semibold text-gray-900">
+                  <h3 id="modal-title" className="text-lg font-display font-semibold text-cream">
                     {title}
                   </h3>
                 )}
@@ -109,7 +109,7 @@ function AdaptiveModal({ isOpen, onClose, title, children, hideHeader }) {
                   <button
                     type="button"
                     onClick={onClose}
-                    className="p-2 -m-2 text-gray-400 hover:text-gray-600"
+                    className="p-2 -m-2 text-sage-light hover:text-cream"
                     aria-label="Close"
                   >
                     <X className="w-6 h-6" />

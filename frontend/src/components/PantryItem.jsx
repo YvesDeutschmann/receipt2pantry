@@ -50,14 +50,14 @@ function PantryItem({ item, onUpdateQuantity, onDeleteItem }) {
   }
 
   return (
-    <div className="flex items-center justify-between p-3 min-h-touch hover:bg-gray-50 transition-colors">
+    <div className="flex items-center justify-between p-3 min-h-touch hover:bg-forest-light transition-colors">
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2">
-          <span className="text-gray-900 truncate">
+          <span className="text-cream truncate">
             {item.normalized_name || `${item.base_ingredient}${item.variant ? ` (${item.variant})` : ''}`}
           </span>
           {isLowStock && (
-            <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-medium rounded">
+            <span className="px-2 py-0.5 bg-terra/20 text-terra-light text-xs font-medium rounded">
               Low Stock
             </span>
           )}
@@ -76,7 +76,7 @@ function PantryItem({ item, onUpdateQuantity, onDeleteItem }) {
               value={editQuantity}
               onChange={(e) => setEditQuantity(e.target.value)}
               onKeyDown={handleKeyDown}
-              className="w-20 px-2 py-1 border border-gray-300 rounded text-right focus:ring-2 focus:ring-primary-500"
+              className="input w-20 px-2 py-1 text-right"
               step={item.unit === 'count' ? '1' : '0.1'}
               min="0"
               autoFocus
@@ -95,7 +95,7 @@ function PantryItem({ item, onUpdateQuantity, onDeleteItem }) {
             <button
               onClick={handleCancel}
               disabled={isUpdating}
-              className="p-1 text-gray-400 hover:bg-gray-100 rounded"
+              className="p-1 text-sage-light hover:bg-forest-light rounded"
               title="Cancel"
             >
               <X className="w-5 h-5" />
@@ -105,7 +105,7 @@ function PantryItem({ item, onUpdateQuantity, onDeleteItem }) {
           <>
             <button
               onClick={() => setIsEditing(true)}
-              className="flex items-center gap-1 px-3 py-1 bg-gray-100 hover:bg-gray-200 rounded-full transition-colors"
+              className="flex items-center gap-1 px-3 py-1 bg-forest-light hover:bg-forest-light/80 rounded-full transition-colors"
               title="Click to edit quantity"
             >
               <span className={`font-medium ${isLowStock ? 'text-amber-600' : 'text-gray-900'}`}>
@@ -117,7 +117,7 @@ function PantryItem({ item, onUpdateQuantity, onDeleteItem }) {
             <div className="flex items-center">
               <button
                 onClick={() => onUpdateQuantity(item.id, Math.max(0, item.quantity - 1))}
-                className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
+                className="p-1 text-sage-light hover:text-cream hover:bg-forest-light rounded"
                 title="Decrease"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -138,7 +138,7 @@ function PantryItem({ item, onUpdateQuantity, onDeleteItem }) {
             {/* Delete button */}
             <button
               onClick={() => onDeleteItem(item.id)}
-              className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded"
+              className="p-1 text-sage-light hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/10 rounded"
               title="Remove item"
             >
               <Trash2 className="w-5 h-5" />

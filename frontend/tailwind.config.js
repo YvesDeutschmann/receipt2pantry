@@ -22,21 +22,51 @@ export default {
         touch: '44px',
       },
       colors: {
-        primary: {
-          50: '#f0f9ff',
-          100: '#e0f2fe',
-          200: '#bae6fd',
-          300: '#7dd3fc',
-          400: '#38bdf8',
-          500: '#0ea5e9',
-          600: '#0284c7',
-          700: '#0369a1',
-          800: '#075985',
-          900: '#0c4a6e',
+        forest: {
+          DEFAULT: 'var(--color-forest)',
+          mid: 'var(--color-forest-mid)',
+          light: 'var(--color-forest-light)',
         },
+        sage: {
+          DEFAULT: 'var(--color-sage)',
+          light: 'var(--color-sage-light)',
+        },
+        terra: {
+          DEFAULT: 'var(--color-terra)',
+          light: 'var(--color-terra-light)',
+        },
+        cream: {
+          DEFAULT: 'var(--color-cream)',
+          dark: 'var(--color-cream-dark)',
+        },
+        'text-mid': 'var(--color-text-mid)',
+        'text-muted': 'var(--color-text-muted)',
+      },
+      fontFamily: {
+        display: ['var(--font-display)'],
+        body: ['var(--font-body)'],
+      },
+      fontSize: {
+        'display': ['var(--text-display)', { lineHeight: 'var(--leading-tight)' }],
+        'hero': ['var(--text-4xl)', { lineHeight: 'var(--leading-tight)' }],
+        'heading': ['var(--text-3xl)', { lineHeight: 'var(--leading-tight)' }],
+      },
+      borderRadius: {
+        'mise-sm': 'var(--radius-sm)',
+        'mise-md': 'var(--radius-md)',
+        'mise-lg': 'var(--radius-lg)',
+        'mise-xl': 'var(--radius-xl)',
+      },
+      boxShadow: {
+        'card': 'var(--shadow-card)',
+        'mise-sm': 'var(--shadow-sm)',
+        'mise-md': 'var(--shadow-md)',
+        'mise-lg': 'var(--shadow-lg)',
+      },
+      letterSpacing: {
+        'widest-mise': 'var(--tracking-widest)',
       },
     },
   },
   plugins: [],
 }
-

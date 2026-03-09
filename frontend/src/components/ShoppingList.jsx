@@ -45,7 +45,7 @@ const ShoppingList = ({ userId, householdId }) => {
   if (!householdId) {
     return (
       <div className="card p-6">
-        <p className="text-gray-600">Join a household to see your shopping list.</p>
+        <p className="text-sage-light">Join a household to see your shopping list.</p>
       </div>
     )
   }
@@ -54,7 +54,7 @@ const ShoppingList = ({ userId, householdId }) => {
     return (
       <div className="card p-6">
         <div className="flex justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terra"></div>
         </div>
       </div>
     )
@@ -66,7 +66,7 @@ const ShoppingList = ({ userId, householdId }) => {
   return (
     <div className="card p-6">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-bold">Shopping List</h2>
+        <h2 className="text-2xl font-display font-bold text-cream">Shopping List</h2>
         <div className="flex gap-2">
           <label className="flex items-center text-sm">
             <input
@@ -89,8 +89,8 @@ const ShoppingList = ({ userId, householdId }) => {
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-800">{error}</p>
+        <div className="mb-4 p-4 bg-[var(--color-error)]/10 border border-[var(--color-error)] rounded-mise-md">
+          <p className="text-[var(--color-error)]">{error}</p>
         </div>
       )}
 
@@ -106,7 +106,7 @@ const ShoppingList = ({ userId, householdId }) => {
           {/* Unpurchased Items */}
           {unpurchasedItems.length > 0 && (
             <div>
-              <h3 className="text-lg font-semibold mb-2">To Buy</h3>
+              <h3 className="text-lg font-display font-semibold text-cream mb-2">To Buy</h3>
               <ul className="space-y-2">
                 {unpurchasedItems.map((item) => (
                   <li
@@ -121,15 +121,15 @@ const ShoppingList = ({ userId, householdId }) => {
                           onChange={() => handleMarkPurchased(item.id)}
                           className="w-5 h-5"
                         />
-                        <span className="font-medium">{item.ingredient_name}</span>
+                        <span className="font-medium text-cream">{item.ingredient_name}</span>
                         {item.quantity && (
-                          <span className="text-gray-600">
+                          <span className="text-sage-light">
                             {item.quantity} {item.unit || ''}
                           </span>
                         )}
                       </div>
                       {item.needed_for_recipe && (
-                        <p className="text-sm text-gray-500 mt-1 ml-7">
+                        <p className="text-sm text-sage-light mt-1 ml-7">
                           For: {item.needed_for_recipe}
                         </p>
                       )}
@@ -148,7 +148,7 @@ const ShoppingList = ({ userId, householdId }) => {
                 {purchasedItems.map((item) => (
                   <li
                     key={item.id}
-                    className="flex items-center justify-between p-3 bg-green-50 rounded-lg"
+                    className="flex items-center justify-between p-3 bg-forest-light rounded-mise-md"
                   >
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
@@ -162,7 +162,7 @@ const ShoppingList = ({ userId, householdId }) => {
                           {item.ingredient_name}
                         </span>
                         {item.quantity && (
-                          <span className="text-gray-500 line-through">
+                          <span className="text-sage-light line-through">
                             {item.quantity} {item.unit || ''}
                           </span>
                         )}

@@ -1,3 +1,5 @@
+@import './mise-tokens.css';
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -15,10 +17,6 @@
     overscroll-behavior-y: contain;
   }
 
-  body {
-    @apply bg-gray-50 text-gray-900;
-  }
-
   /* Native scroll feel on mobile - hide scrollbar */
   @media (max-width: 1023px) {
     .overflow-y-auto::-webkit-scrollbar {
@@ -33,19 +31,14 @@
 
 @layer components {
   .btn {
-    @apply px-4 py-2 min-h-touch min-w-touch rounded-lg font-medium transition-colors duration-200 active:scale-[0.98] flex items-center justify-center;
+    @apply min-h-touch min-w-touch rounded-mise-md font-medium transition-all duration-200 active:scale-[0.98] flex items-center justify-center;
   }
-  
-  .btn-primary {
-    @apply bg-primary-600 text-white hover:bg-primary-700;
-  }
-  
+
   .btn-secondary {
-    @apply bg-gray-200 text-gray-800 hover:bg-gray-300;
+    @apply bg-forest-light text-cream hover:opacity-90;
   }
-  
+
   .card {
-    @apply bg-white rounded-none md:rounded-lg shadow-md p-6 transition-transform active:scale-[0.98];
+    @apply transition-transform active:scale-[0.98];
   }
 }
-
