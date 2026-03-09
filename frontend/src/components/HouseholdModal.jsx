@@ -136,25 +136,25 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
       <div className="p-4 sm:p-6">
       {loading ? (
             <div className="flex justify-center py-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terra"></div>
             </div>
           ) : (
             <>
               {error && (
-                <div className="mb-4 p-3 bg-red-50 border border-red-200 text-red-700 rounded-lg text-sm">
+                <div className="mb-4 p-3 bg-[var(--color-error)]/10 border border-[var(--color-error)] text-[var(--color-error)] rounded-mise-md text-sm">
                   {error}
                 </div>
               )}
 
               {/* Tabs when no household */}
               {!household && (
-                <div className="flex border-b border-gray-200 mb-4">
+                <div className="flex border-b border-forest-light mb-4">
                   <button
                     onClick={() => setActiveTab('create')}
                     className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${
                       activeTab === 'create'
-                        ? 'border-primary-600 text-primary-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                        ? 'border-terra text-terra'
+                        : 'border-transparent text-sage-light hover:text-cream'
                     }`}
                   >
                     Create New
@@ -163,8 +163,8 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
                     onClick={() => setActiveTab('join')}
                     className={`flex-1 py-2 text-sm font-medium border-b-2 transition-colors ${
                       activeTab === 'join'
-                        ? 'border-primary-600 text-primary-600'
-                        : 'border-transparent text-gray-500 hover:text-gray-700'
+                        ? 'border-terra text-terra'
+                        : 'border-transparent text-sage-light hover:text-cream'
                     }`}
                   >
                     Join Existing
@@ -185,7 +185,7 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
                         </p>
                       </div>
                       {household.role === 'owner' && (
-                        <span className="px-2 py-1 bg-primary-100 text-primary-700 text-xs rounded-full">
+                        <span className="px-2 py-1 bg-forest-light text-terra text-xs rounded-full">
                           Owner
                         </span>
                       )}
@@ -194,15 +194,15 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
 
                   {/* Join Code (owner only) */}
                   {household.role === 'owner' && (
-                    <div className="bg-blue-50 rounded-lg p-4">
-                      <p className="text-sm text-blue-700 mb-2">Share this code to invite members:</p>
+                    <div className="bg-forest-light rounded-mise-md p-4">
+                      <p className="text-sm text-sage-light mb-2">Share this code to invite members:</p>
                       <div className="flex items-center space-x-2">
-                        <code className="flex-1 bg-white px-3 py-2 rounded border border-blue-200 font-mono text-lg text-center tracking-widest">
+                        <code className="flex-1 bg-forest-mid px-3 py-2 rounded-mise-sm border border-forest-light font-mono text-lg text-center tracking-widest text-cream">
                           {household.join_code}
                         </code>
                         <button
                           onClick={handleCopyCode}
-                          className="px-3 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                          className="px-3 py-2 btn btn-primary"
                         >
                           {copied ? 'Copied!' : 'Copy'}
                         </button>
@@ -219,14 +219,14 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
 
                   {/* Members List */}
                   <div>
-                    <h4 className="font-medium text-gray-900 mb-2">
+                    <h4 className="font-medium text-cream mb-2">
                       Members ({members.length})
                     </h4>
                     <div className="space-y-2">
                       {members.map((member) => (
                         <div
                           key={member.user_id}
-                          className="flex items-center justify-between p-3 bg-gray-50 rounded-lg"
+                          className="flex items-center justify-between p-3 bg-forest-light rounded-mise-md"
                         >
                           <div className="flex items-center space-x-3">
                             <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
@@ -235,10 +235,10 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
                               </svg>
                             </div>
                             <div>
-                              <p className="text-sm font-medium text-gray-900">
+                              <p className="text-sm font-medium text-cream">
                                 {member.user_id === userId ? 'You' : `Member`}
                               </p>
-                              <p className="text-xs text-gray-500">{member.role}</p>
+                              <p className="text-xs text-sage-light">{member.role}</p>
                             </div>
                           </div>
                           {household.role === 'owner' && member.user_id !== userId && (
@@ -258,7 +258,7 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
                   <button
                     onClick={handleLeaveHousehold}
                     disabled={submitting}
-                    className="w-full mt-4 px-4 py-2 border border-red-300 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
+                    className="w-full mt-4 px-4 py-2 border border-[var(--color-error)] text-[var(--color-error)] rounded-mise-md hover:bg-[var(--color-error)]/10 transition-colors"
                   >
                     {household.role === 'owner' && members.length === 1 
                       ? 'Delete Household' 
@@ -274,7 +274,7 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
                     Create a household to share your pantry and receipts with family members.
                   </p>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-sage-light mb-1">
                       Household Name
                     </label>
                     <input
@@ -282,7 +282,7 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
                       value={householdName}
                       onChange={(e) => setHouseholdName(e.target.value)}
                       placeholder="e.g., Smith Family"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+                      className="input"
                       maxLength={100}
                     />
                   </div>
@@ -303,7 +303,7 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
                     Enter the 6-character code shared by the household owner.
                   </p>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                    <label className="block text-sm font-medium text-sage-light mb-1">
                       Join Code
                     </label>
                     <input
@@ -311,7 +311,7 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
                       value={joinCode}
                       onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
                       placeholder="ABC123"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500 font-mono text-center text-lg tracking-widest uppercase"
+                      className="input font-mono text-center text-lg tracking-widest uppercase"
                       maxLength={6}
                     />
                   </div>

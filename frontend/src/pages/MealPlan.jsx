@@ -116,7 +116,7 @@ const MealPlan = () => {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="flex justify-center py-12">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terra"></div>
         </div>
       </div>
     )
@@ -125,7 +125,7 @@ const MealPlan = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold">Meal Plan</h1>
+        <h1 className="text-3xl font-display font-bold text-cream">Meal Plan</h1>
         <button
           className="btn btn-primary"
           onClick={() => setWizardOpen(true)}
@@ -135,35 +135,35 @@ const MealPlan = () => {
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-          <p className="text-red-800">{error}</p>
+        <div className="mb-4 p-4 border border-[var(--color-error)] rounded-mise-md bg-[var(--color-error)]/10">
+          <p className="text-[var(--color-error)]">{error}</p>
         </div>
       )}
 
       {/* Calendar Grid */}
-      <div className="bg-white rounded-lg shadow overflow-hidden">
+      <div className="bg-forest-mid rounded-mise-lg shadow-card overflow-hidden border border-forest-light">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
               <tr>
-                <th className="px-4 py-3 bg-gray-50 text-left text-sm font-semibold text-gray-700">
+                <th className="px-4 py-3 bg-forest text-left text-sm font-semibold text-sage-light">
                   Meal
                 </th>
                 {weekDays.map((day) => (
                   <th
                     key={day.toISOString()}
-                    className="px-4 py-3 bg-gray-50 text-center text-sm font-semibold text-gray-700 min-w-[120px]"
+                    className="px-4 py-3 bg-forest text-center text-sm font-semibold text-sage-light min-w-[120px]"
                   >
                     <div>{format(day, 'EEE')}</div>
-                    <div className="text-xs text-gray-500">{format(day, 'MMM d')}</div>
+                    <div className="text-xs text-text-muted">{format(day, 'MMM d')}</div>
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {mealTypes.map((mealType) => (
-                <tr key={mealType} className="border-t border-gray-200">
-                  <td className="px-4 py-3 bg-gray-50 text-sm font-medium text-gray-700 capitalize">
+                <tr key={mealType} className="border-t border-forest-light">
+                  <td className="px-4 py-3 bg-forest text-sm font-medium text-sage-light capitalize">
                     {mealType}
                   </td>
                   {weekDays.map((day) => {
@@ -171,25 +171,25 @@ const MealPlan = () => {
                     return (
                       <td
                         key={`${day.toISOString()}-${mealType}`}
-                        className="px-2 py-3 border-l border-gray-200"
+                        className="px-2 py-3 border-l border-forest-light"
                       >
                         {meal ? (
                           <div
-                            className="group relative p-2 bg-blue-50 rounded-lg cursor-pointer hover:bg-blue-100 transition-colors"
+                            className="group relative p-2 bg-forest-light rounded-mise-md cursor-pointer hover:bg-forest-light/80 transition-colors"
                             onClick={() => handleMealClick(meal)}
                           >
                             <div className="flex items-start justify-between">
                               <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-gray-900 truncate">
+                                <p className="text-sm font-medium text-cream truncate">
                                   {meal.recipe_name}
                                 </p>
                                 {meal.is_leftover && (
-                                  <span className="inline-block mt-1 px-2 py-0.5 text-xs bg-orange-100 text-orange-800 rounded">
+                                  <span className="inline-block mt-1 px-2 py-0.5 text-xs bg-terra/20 text-terra-light rounded">
                                     Leftover
                                   </span>
                                 )}
                                 {meal.servings && (
-                                  <p className="text-xs text-gray-500 mt-1">
+                                  <p className="text-xs text-sage-light mt-1">
                                     {meal.servings} servings
                                   </p>
                                 )}
@@ -207,10 +207,10 @@ const MealPlan = () => {
                             </div>
                             
                             {/* Hover Actions */}
-                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 rounded-lg flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 rounded-mise-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                               <div className="flex gap-2">
                                 <button
-                                  className="px-3 py-1 bg-white text-sm rounded hover:bg-gray-100"
+                                  className="px-3 py-1 bg-forest-mid text-cream text-sm rounded-mise-sm hover:bg-forest-light"
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleDeleteMeal(meal.id)
@@ -222,7 +222,7 @@ const MealPlan = () => {
                             </div>
                           </div>
                         ) : (
-                          <div className="p-2 text-center text-gray-400 text-sm">
+                          <div className="p-2 text-center text-sage-light text-sm">
                             —
                           </div>
                         )}

@@ -25,11 +25,11 @@ function RecipeDetailModal({ isOpen, onClose, recipe, loading }) {
       <div className="px-4 pt-2 pb-4 sm:px-6">
             {loading ? (
               <div className="flex justify-center py-12">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terra"></div>
               </div>
             ) : !recipe ? (
               <div className="text-center py-12">
-                <p className="text-gray-600">No recipe details available.</p>
+                <p className="text-sage-light">No recipe details available.</p>
               </div>
             ) : (
               <div className="space-y-6">
@@ -50,17 +50,17 @@ function RecipeDetailModal({ isOpen, onClose, recipe, loading }) {
                 {/* Recipe Info */}
                 <div className="grid grid-cols-2 gap-4">
                   {recipe.readyInMinutes && (
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <div className="text-sm text-gray-600">Ready In</div>
-                      <div className="text-lg font-semibold text-gray-900">
+                    <div className="bg-forest-light p-3 rounded-mise-md">
+                      <div className="text-sm text-sage-light">Ready In</div>
+                      <div className="text-lg font-display font-semibold text-cream">
                         {recipe.readyInMinutes} minutes
                       </div>
                     </div>
                   )}
                   {recipe.servings && (
-                    <div className="bg-gray-50 p-3 rounded-lg">
-                      <div className="text-sm text-gray-600">Servings</div>
-                      <div className="text-lg font-semibold text-gray-900">
+                    <div className="bg-forest-light p-3 rounded-mise-md">
+                      <div className="text-sm text-sage-light">Servings</div>
+                      <div className="text-lg font-display font-semibold text-cream">
                         {recipe.servings}
                       </div>
                     </div>
@@ -81,12 +81,12 @@ function RecipeDetailModal({ isOpen, onClose, recipe, loading }) {
                 {/* Ingredients */}
                 {recipe.extendedIngredients && recipe.extendedIngredients.length > 0 && (
                   <div>
-                    <h4 className="text-lg font-semibold text-gray-900 mb-3">Ingredients</h4>
+                    <h4 className="text-lg font-display font-semibold text-cream mb-3">Ingredients</h4>
                     <ul className="space-y-2">
                       {recipe.extendedIngredients.map((ingredient, index) => (
                         <li key={index} className="flex items-start gap-2">
-                          <span className="text-primary-600 mt-1">•</span>
-                          <span className="text-gray-700">
+                          <span className="text-terra mt-1">•</span>
+                          <span className="text-sage-light">
                             {ingredient.original || ingredient.name}
                           </span>
                         </li>
@@ -98,7 +98,7 @@ function RecipeDetailModal({ isOpen, onClose, recipe, loading }) {
                 {/* Instructions */}
                 {recipe.instructions && (
                   <div>
-                    <h4 className="text-lg font-semibold text-gray-900 mb-3">Instructions</h4>
+                    <h4 className="text-lg font-display font-semibold text-cream mb-3">Instructions</h4>
                     {recipe.analyzedInstructions && recipe.analyzedInstructions.length > 0 ? (
                       // Use structured instructions if available
                       <div className="space-y-4">
@@ -106,7 +106,7 @@ function RecipeDetailModal({ isOpen, onClose, recipe, loading }) {
                           <div key={groupIndex}>
                             {instructionGroup.steps && instructionGroup.steps.map((step, stepIndex) => (
                               <div key={stepIndex} className="mb-4 flex gap-3">
-                                <div className="flex-shrink-0 w-8 h-8 bg-primary-600 text-white rounded-full flex items-center justify-center font-semibold text-sm">
+                                <div className="flex-shrink-0 w-8 h-8 bg-terra text-cream rounded-full flex items-center justify-center font-semibold text-sm">
                                   {step.number}
                                 </div>
                                 <div className="flex-1">
@@ -114,7 +114,7 @@ function RecipeDetailModal({ isOpen, onClose, recipe, loading }) {
                                   {step.equipment && step.equipment.length > 0 && (
                                     <div className="mt-2 flex flex-wrap gap-2">
                                       {step.equipment.map((eq, eqIndex) => (
-                                        <span key={eqIndex} className="px-2 py-1 bg-gray-100 text-gray-600 text-xs rounded">
+                                        <span key={eqIndex} className="px-2 py-1 bg-forest-light text-sage-light text-xs rounded">
                                           {eq.name}
                                         </span>
                                       ))}
@@ -129,7 +129,7 @@ function RecipeDetailModal({ isOpen, onClose, recipe, loading }) {
                     ) : (
                       // Fallback to plain text instructions
                       <div 
-                        className="text-gray-700 prose prose-sm max-w-none whitespace-pre-line"
+                        className="text-sage-light prose prose-sm max-w-none prose-invert whitespace-pre-line"
                         dangerouslySetInnerHTML={{ __html: recipe.instructions }}
                       />
                     )}
@@ -138,8 +138,8 @@ function RecipeDetailModal({ isOpen, onClose, recipe, loading }) {
 
                 {/* Source Links */}
                 {(recipe.sourceUrl || recipe.spoonacularSourceUrl) && (
-                  <div className="pt-4 border-t border-gray-200">
-                    <h4 className="text-sm font-semibold text-gray-900 mb-2">Source</h4>
+                  <div className="pt-4 border-t border-forest-light">
+                    <h4 className="text-sm font-semibold text-cream mb-2">Source</h4>
                     <div className="flex flex-wrap gap-2">
                       {recipe.sourceUrl && (
                         <a
@@ -167,7 +167,7 @@ function RecipeDetailModal({ isOpen, onClose, recipe, loading }) {
               </div>
             )}
       </div>
-      <div className="bg-gray-50 px-4 py-3 sm:px-6 border-t border-gray-200">
+      <div className="bg-forest px-4 py-3 sm:px-6 border-t border-forest-light">
         <button
           type="button"
           onClick={onClose}

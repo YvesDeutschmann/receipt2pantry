@@ -44,26 +44,26 @@ function Auth() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center px-4 py-8">
+    <div className="min-h-screen bg-forest flex flex-col items-center justify-center px-4 py-8">
       <div className="w-full max-w-sm card">
         <div className="text-center mb-8">
-          <h1 className="text-2xl font-bold text-primary-600">GrocerySync</h1>
-          <p className="text-gray-600 mt-1">
+          <h1 className="text-hero font-display font-bold text-cream">Mise</h1>
+          <p className="text-subhead mt-2">
             {mode === 'signIn' ? 'Sign in to your account' : 'Create an account'}
           </p>
         </div>
 
-        <div className="flex rounded-lg bg-gray-100 p-1 mb-6">
+        <div className="flex rounded-mise-md bg-forest-light p-1 mb-6">
           <button
             type="button"
             onClick={() => {
               setMode('signIn')
               setError('')
             }}
-            className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`flex-1 py-2 rounded-mise-sm text-sm font-medium transition-colors ${
               mode === 'signIn'
-                ? 'bg-white text-primary-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-forest-mid text-cream shadow-mise-sm'
+                : 'text-sage-light hover:text-cream'
             }`}
           >
             Sign In
@@ -74,10 +74,10 @@ function Auth() {
               setMode('signUp')
               setError('')
             }}
-            className={`flex-1 py-2 rounded-md text-sm font-medium transition-colors ${
+            className={`flex-1 py-2 rounded-mise-sm text-sm font-medium transition-colors ${
               mode === 'signUp'
-                ? 'bg-white text-primary-600 shadow-sm'
-                : 'text-gray-600 hover:text-gray-900'
+                ? 'bg-forest-mid text-cream shadow-mise-sm'
+                : 'text-sage-light hover:text-cream'
             }`}
           >
             Sign Up
@@ -86,7 +86,7 @@ function Auth() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="email" className="block text-sm font-medium text-sage-light mb-1">
               Email
             </label>
             <input
@@ -96,12 +96,12 @@ function Auth() {
               onChange={(e) => setEmail(e.target.value)}
               required
               autoComplete="email"
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="input"
               placeholder="you@example.com"
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
+            <label htmlFor="password" className="block text-sm font-medium text-sage-light mb-1">
               Password
             </label>
             <input
@@ -112,13 +112,13 @@ function Auth() {
               required
               autoComplete={mode === 'signIn' ? 'current-password' : 'new-password'}
               minLength={6}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+              className="input"
               placeholder="••••••••"
             />
           </div>
 
           {error && (
-            <div className="rounded-lg bg-red-50 border border-red-200 px-3 py-2 text-sm text-red-700">
+            <div className="rounded-mise-md border border-[var(--color-error)] px-3 py-2 text-sm text-[var(--color-error)] bg-[var(--color-error)]/10">
               {error}
             </div>
           )}
@@ -130,7 +130,7 @@ function Auth() {
           >
             {loading ? (
               <span className="flex items-center justify-center gap-2">
-                <span className="animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent" />
+                <span className="animate-spin rounded-full h-4 w-4 border-2 border-cream border-t-transparent" />
                 {mode === 'signIn' ? 'Signing in...' : 'Creating account...'}
               </span>
             ) : mode === 'signIn' ? (
@@ -142,11 +142,11 @@ function Auth() {
         </form>
 
         {canUseTestUser && (
-          <div className="mt-6 pt-6 border-t border-gray-200">
+          <div className="mt-6 pt-6 border-t border-forest-light">
             <button
               type="button"
               onClick={fillTestUser}
-              className="w-full text-sm text-gray-500 hover:text-primary-600 transition-colors"
+              className="w-full text-sm text-sage-light hover:text-terra-light transition-colors"
             >
               Dev: Sign in as Test User
             </button>

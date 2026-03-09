@@ -61,15 +61,15 @@ const CredentialsModal = ({
       aria-labelledby="credentials-dialog-title"
     >
       <div
-        className="bg-white rounded-lg shadow-xl p-6 max-w-md w-full mx-4"
+        className="bg-forest-mid rounded-mise-lg shadow-mise-lg p-6 max-w-md w-full mx-4"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
         <div className="mb-6">
-          <h2 id="credentials-dialog-title" className="text-2xl font-bold text-gray-900 mb-2">
+          <h2 id="credentials-dialog-title" className="text-2xl font-display font-bold text-cream mb-2">
             {title || `Connect to ${providerName}`}
           </h2>
-          <p className="text-gray-600">
+          <p className="text-sage-light">
             Enter your {providerName} account credentials
           </p>
         </div>
@@ -78,7 +78,7 @@ const CredentialsModal = ({
         <form onSubmit={handleSubmit}>
           {/* Username Input */}
           <div className="mb-4">
-            <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="username" className="block text-sm font-medium text-sage-light mb-2">
               Username or Email
             </label>
             <input
@@ -88,7 +88,7 @@ const CredentialsModal = ({
               value={username}
               onChange={(e) => setUsername(e.target.value)}
               disabled={loading}
-              className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+              className="input disabled:opacity-50 disabled:cursor-not-allowed"
               placeholder="Enter your username"
               required
             />
@@ -96,7 +96,7 @@ const CredentialsModal = ({
 
           {/* Password Input */}
           <div className="mb-6">
-            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="password" className="block text-sm font-medium text-sage-light mb-2">
               Password
             </label>
             <div className="relative">
@@ -106,7 +106,7 @@ const CredentialsModal = ({
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 disabled={loading}
-                className="w-full px-4 py-2 pr-10 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                className="input pr-10 disabled:opacity-50 disabled:cursor-not-allowed"
                 placeholder="Enter your password"
                 required
               />
@@ -114,7 +114,7 @@ const CredentialsModal = ({
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 disabled={loading}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-500 hover:text-gray-700 focus:outline-none"
+                className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-sage-light hover:text-cream focus:outline-none"
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? (
@@ -132,12 +132,12 @@ const CredentialsModal = ({
           </div>
 
           {/* Security Notice */}
-          <div className="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <div className="mb-6 p-3 bg-forest-light border border-forest-light rounded-mise-md">
             <div className="flex items-start">
-              <svg className="w-5 h-5 text-blue-600 mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
+              <svg className="w-5 h-5 text-sage mt-0.5 mr-2 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20">
                 <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
               </svg>
-              <p className="text-xs text-blue-800">
+              <p className="text-xs text-sage-light">
                 Your credentials are used only to test the connection and are not stored on our servers.
               </p>
             </div>
@@ -149,18 +149,18 @@ const CredentialsModal = ({
               type="button"
               onClick={onCancel}
               disabled={loading}
-              className="flex-1 px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 btn btn-ghost disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={!username || !password || loading}
-              className="flex-1 px-4 py-2 text-white bg-blue-600 hover:bg-blue-700 rounded-lg font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex-1 btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? (
                 <span className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-cream" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>

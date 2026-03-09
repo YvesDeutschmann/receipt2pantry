@@ -385,10 +385,10 @@ function Providers() {
       />
 
       {loading ? (
-        <div className="text-center py-8 text-gray-600">Loading providers...</div>
+        <div className="text-center py-8 text-sage-light">Loading providers...</div>
       ) : error ? (
-        <div className="card bg-red-50 border border-red-200">
-          <p className="text-red-600">{error}</p>
+        <div className="card border border-[var(--color-error)] bg-[var(--color-error)]/10">
+          <p className="text-[var(--color-error)]">{error}</p>
           <button
             onClick={fetchProviders}
             className="btn btn-primary mt-4"
@@ -406,16 +406,16 @@ function Providers() {
               return (
                 <div key={provider} className="card">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold capitalize">{provider}</h3>
+                    <h3 className="text-lg font-display font-semibold text-cream capitalize">{provider}</h3>
                     <span className={`px-2 py-1 text-xs rounded-full ${
                       isConnected 
-                        ? 'bg-green-100 text-green-800' 
-                        : 'bg-gray-100 text-gray-600'
+                        ? 'bg-forest-light text-sage' 
+                        : 'bg-forest-light text-sage-light'
                     }`}>
                       {isConnected ? '✓ Connected' : 'Not Connected'}
                     </span>
                   </div>
-                  <p className="text-gray-600 text-sm mb-4">
+                  <p className="text-sage-light text-sm mb-4">
                     {isConnected 
                       ? `Your ${provider} account is connected and ready to fetch receipts.`
                       : `Connect your ${provider} account to automatically fetch receipts.`
@@ -424,8 +424,8 @@ function Providers() {
                   <div className="flex gap-2">
                     {provider === 'costco' ? (
                       <div className="w-full space-y-3">
-                        <div className="p-3 bg-slate-50 rounded-lg border border-slate-200">
-                          <p className="text-xs font-medium text-slate-600 mb-2">One-Tap Sync</p>
+                        <div className="p-3 bg-forest-light rounded-mise-md border border-forest-light">
+                          <p className="text-xs font-medium text-sage-light mb-2">One-Tap Sync</p>
                           <CostcoOneTapSync
                             userId={userId}
                             days={90}
@@ -443,7 +443,7 @@ function Providers() {
                               </button>
                               <button
                                 onClick={handleConnectCostco}
-                                className="btn btn-secondary"
+                                className="btn btn-ghost"
                               >
                                 Reconnect
                               </button>
@@ -480,7 +480,7 @@ function Providers() {
             })}
             {providers.length === 0 && (
               <div className="card col-span-2">
-                <p className="text-center text-gray-600">
+                <p className="text-center text-sage-light">
                   No providers available yet.
                 </p>
               </div>
@@ -496,13 +496,13 @@ function Providers() {
                   <div key={idx} className="card">
                     <div className="flex justify-between items-start">
                       <div>
-                        <p className="font-semibold">{receipt.order_id || `Order ${idx + 1}`}</p>
-                        <p className="text-sm text-gray-600">{receipt.order_date}</p>
+                        <p className="font-semibold text-cream">{receipt.order_id || `Order ${idx + 1}`}</p>
+                        <p className="text-sm text-sage-light">{receipt.order_date}</p>
                       </div>
-                      <p className="font-bold text-green-600">${receipt.total_amount != null ? Number(receipt.total_amount).toFixed(2) : 'N/A'}</p>
+                      <p className="font-bold text-sage">${receipt.total_amount != null ? Number(receipt.total_amount).toFixed(2) : 'N/A'}</p>
                     </div>
                     {receipt.items && (
-                      <div className="mt-2 text-sm text-gray-500">
+                      <div className="mt-2 text-sm text-sage-light">
                         {receipt.items.length} items
                       </div>
                     )}

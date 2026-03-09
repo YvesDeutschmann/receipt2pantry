@@ -80,7 +80,7 @@ function Recipes() {
 
       {/* Error Message */}
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <div className="mb-6 p-4 border border-[var(--color-error)] rounded-mise-md text-[var(--color-error)] bg-[var(--color-error)]/10">
           {error}
           <button 
             onClick={() => setError(null)} 
@@ -95,17 +95,17 @@ function Recipes() {
       <div className="card">
         {loading ? (
           <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terra"></div>
           </div>
         ) : recipes.length === 0 ? (
           <div className="text-center py-12">
-            <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <svg className="w-8 h-8 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="mx-auto w-16 h-16 bg-forest-light rounded-full flex items-center justify-center mb-4">
+              <svg className="w-8 h-8 text-sage-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
               </svg>
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">No recipes found</h3>
-            <p className="text-gray-600 mb-4">
+            <h3 className="text-lg font-display font-medium text-cream mb-2">No recipes found</h3>
+            <p className="text-sage-light mb-4">
               {error 
                 ? 'Unable to fetch recipes. Please check your pantry items and try again.'
                 : 'Add some ingredients to your pantry to get recipe suggestions.'}
@@ -117,10 +117,10 @@ function Recipes() {
               <div
                 key={recipe.id}
                 onClick={() => handleRecipeClick(recipe)}
-                className="bg-white rounded-lg shadow-md overflow-hidden cursor-pointer hover:shadow-lg transition-shadow border border-gray-200"
+                className="bg-forest-mid rounded-mise-lg shadow-card overflow-hidden cursor-pointer hover:shadow-mise-lg transition-shadow border border-forest-light"
               >
                 {/* Recipe Image */}
-                <div className="relative h-48 bg-gray-200">
+                <div className="relative h-48 bg-forest-light">
                   {recipe.image ? (
                     <img
                       src={recipe.image}
@@ -131,8 +131,8 @@ function Recipes() {
                       }}
                     />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gray-100">
-                      <svg className="w-16 h-16 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <div className="w-full h-full flex items-center justify-center bg-forest-mid">
+                      <svg className="w-16 h-16 text-sage-light" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
                       </svg>
                     </div>
@@ -155,12 +155,12 @@ function Recipes() {
                 
                 {/* Recipe Title */}
                 <div className="p-4">
-                  <h3 className="text-lg font-semibold text-gray-900 line-clamp-2 mb-2">
+                  <h3 className="text-lg font-display font-semibold text-cream line-clamp-2 mb-2">
                     {recipe.title}
                   </h3>
                   
                   {/* Recipe Stats */}
-                  <div className="flex items-center gap-4 text-sm text-gray-600">
+                  <div className="flex items-center gap-4 text-sm text-sage-light">
                     {recipe.likes > 0 && (
                       <div className="flex items-center gap-1">
                         <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">

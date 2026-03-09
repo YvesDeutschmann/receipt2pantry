@@ -43,32 +43,32 @@ function Settings() {
       <div className="space-y-6">
         {/* Household Settings */}
         <div className="card">
-          <h2 className="text-xl font-semibold mb-4">Household</h2>
-          <p className="text-sm text-gray-600 mb-4">
+          <h2 className="text-xl font-display font-semibold text-cream mb-4">Household</h2>
+          <p className="text-sm text-sage-light mb-4">
             Share your pantry, receipts, and cooking history with family members.
           </p>
           
           {loading ? (
             <div className="flex justify-center py-4">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary-600"></div>
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-terra"></div>
             </div>
           ) : household ? (
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+              <div className="flex items-center justify-between p-4 bg-forest-light rounded-mise-md">
                 <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-primary-100 rounded-lg">
-                    <Users className="w-6 h-6 text-primary-600" />
+                  <div className="p-2 bg-forest rounded-mise-md">
+                    <Users className="w-6 h-6 text-terra" />
                   </div>
                   <div>
-                    <p className="font-medium text-gray-900">{household.name}</p>
-                    <p className="text-sm text-gray-500">
+                    <p className="font-medium text-cream">{household.name}</p>
+                    <p className="text-sm text-sage-light">
                       You are {household.role === 'owner' ? 'the owner' : 'a member'}
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={() => setHouseholdModalOpen(true)}
-                  className="btn btn-secondary"
+                  className="btn btn-ghost"
                 >
                   Manage
                 </button>
@@ -87,10 +87,10 @@ function Settings() {
             </div>
           ) : (
             <div className="text-center py-6">
-              <div className="mx-auto w-12 h-12 bg-gray-100 rounded-full flex items-center justify-center mb-3">
-                <Users className="w-6 h-6 text-gray-400" />
+              <div className="mx-auto w-12 h-12 bg-forest-light rounded-full flex items-center justify-center mb-3">
+                <Users className="w-6 h-6 text-sage-light" />
               </div>
-              <p className="text-gray-600 mb-4">
+              <p className="text-sage-light mb-4">
                 No household yet. Create or join one to share with family.
               </p>
               <button
@@ -108,43 +108,43 @@ function Settings() {
           <div className="card hover:shadow-lg transition-shadow cursor-pointer">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <div className="p-2 bg-primary-100 rounded-lg">
-                  <Store className="w-6 h-6 text-primary-600" />
+                <div className="p-2 bg-forest rounded-mise-md">
+                  <Store className="w-6 h-6 text-terra" />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold">Connected Stores</h2>
-                  <p className="text-sm text-gray-600">
+                  <h2 className="text-xl font-display font-semibold text-cream">Connected Stores</h2>
+                  <p className="text-sm text-sage-light">
                     Connect Safeway, Costco, and other grocery accounts to sync receipts
                   </p>
                 </div>
               </div>
-              <span className="text-primary-600 font-medium">Manage →</span>
+              <span className="text-terra font-medium">Manage →</span>
             </div>
           </div>
         </Link>
 
         <div className="card">
-          <h2 className="text-xl font-semibold mb-4">Account Settings</h2>
+          <h2 className="text-xl font-display font-semibold text-cream mb-4">Account Settings</h2>
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-sage-light mb-2">
                 Email
               </label>
               <input
                 type="email"
                 placeholder="user@example.com"
-                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="input"
                 disabled
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
+              <label className="block text-sm font-medium text-sage-light mb-2">
                 Name
               </label>
               <input
                 type="text"
                 placeholder="Your Name"
-                className="w-full px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500"
+                className="input"
                 disabled
               />
             </div>
@@ -152,46 +152,46 @@ function Settings() {
         </div>
 
         <div className="card">
-          <h2 className="text-xl font-semibold mb-4">Preferences</h2>
+          <h2 className="text-xl font-display font-semibold text-cream mb-4">Preferences</h2>
           <div className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">Email Notifications</p>
-                <p className="text-sm text-gray-600">
+                <p className="font-medium text-cream">Email Notifications</p>
+                <p className="text-sm text-sage-light">
                   Receive notifications about new receipts
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" className="sr-only peer" />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                <div className="w-11 h-6 bg-forest-light peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-terra/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-cream after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-cream after:border-forest-light after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-terra"></div>
               </label>
             </div>
             <div className="flex items-center justify-between">
               <div>
-                <p className="font-medium">Auto-sync Receipts</p>
-                <p className="text-sm text-gray-600">
+                <p className="font-medium text-cream">Auto-sync Receipts</p>
+                <p className="text-sm text-sage-light">
                   Automatically fetch new receipts daily
                 </p>
               </div>
               <label className="relative inline-flex items-center cursor-pointer">
                 <input type="checkbox" className="sr-only peer" defaultChecked />
-                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-primary-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-primary-600"></div>
+                <div className="w-11 h-6 bg-forest-light peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-terra/30 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-cream after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-cream after:border-forest-light after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-terra"></div>
               </label>
             </div>
           </div>
         </div>
 
         <div className="card">
-          <h2 className="text-xl font-semibold mb-4 text-red-600">Danger Zone</h2>
+          <h2 className="text-xl font-display font-semibold mb-4 text-[var(--color-error)]">Danger Zone</h2>
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 border border-red-200 rounded-lg">
+            <div className="flex items-center justify-between p-4 border border-[var(--color-error)] rounded-mise-md">
               <div>
-                <p className="font-medium">Delete Account</p>
-                <p className="text-sm text-gray-600">
+                <p className="font-medium text-cream">Delete Account</p>
+                <p className="text-sm text-sage-light">
                   Permanently delete your account and all data
                 </p>
               </div>
-              <button className="btn bg-red-600 text-white hover:bg-red-700">
+              <button className="btn bg-[var(--color-error)] text-cream hover:opacity-90">
                 Delete
               </button>
             </div>

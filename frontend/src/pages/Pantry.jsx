@@ -116,16 +116,16 @@ function Pantry() {
       {pantryData && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
           <div className="card">
-            <h3 className="text-sm font-medium text-gray-600 mb-2">Total Items</h3>
-            <p className="text-3xl font-bold text-gray-900">{pantryData.total_items}</p>
+            <h3 className="text-sm font-medium text-sage-light mb-2">Total Items</h3>
+            <p className="text-3xl font-display font-bold text-cream">{pantryData.total_items}</p>
           </div>
           <div className="card">
-            <h3 className="text-sm font-medium text-gray-600 mb-2">Unique Ingredients</h3>
-            <p className="text-3xl font-bold text-gray-900">{pantryData.unique_ingredients}</p>
+            <h3 className="text-sm font-medium text-sage-light mb-2">Unique Ingredients</h3>
+            <p className="text-3xl font-display font-bold text-cream">{pantryData.unique_ingredients}</p>
           </div>
           <div className="card">
-            <h3 className="text-sm font-medium text-gray-600 mb-2">Categories</h3>
-            <p className="text-3xl font-bold text-gray-900">
+            <h3 className="text-sm font-medium text-sage-light mb-2">Categories</h3>
+            <p className="text-3xl font-display font-bold text-cream">
               {new Set(pantryData.items?.map(i => i.category).filter(Boolean)).size}
             </p>
           </div>
@@ -140,13 +140,13 @@ function Pantry() {
             placeholder="Search pantry..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full px-4 py-3 pl-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:border-primary-500"
+            className="input pl-10"
           />
-          <Search className="absolute left-3 top-3.5 w-5 h-5 text-gray-400" />
+          <Search className="absolute left-3 top-3.5 w-5 h-5 text-sage-light" />
           {searchTerm && (
             <button
               onClick={() => setSearchTerm('')}
-              className="absolute right-3 top-3.5 text-gray-400 hover:text-gray-600"
+              className="absolute right-3 top-3.5 text-sage-light hover:text-cream"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -158,7 +158,7 @@ function Pantry() {
 
       {/* Error Message */}
       {error && (
-        <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
+        <div className="mb-6 p-4 border border-[var(--color-error)] rounded-mise-md text-[var(--color-error)] bg-[var(--color-error)]/10">
           {error}
           <button 
             onClick={() => setError(null)} 
@@ -173,15 +173,15 @@ function Pantry() {
       <div className="card">
         {loading ? (
           <div className="flex justify-center py-12">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terra"></div>
           </div>
         ) : !pantryData || pantryData.total_items === 0 ? (
           <div className="text-center py-12">
-            <div className="mx-auto w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-              <Package className="w-8 h-8 text-gray-400" />
+            <div className="mx-auto w-16 h-16 bg-forest-light rounded-full flex items-center justify-center mb-4">
+              <Package className="w-8 h-8 text-sage-light" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">Your pantry is empty</h3>
-            <p className="text-gray-600 mb-4">
+            <h3 className="text-lg font-display font-medium text-cream mb-2">Your pantry is empty</h3>
+            <p className="text-sage-light mb-4">
               Add items manually or sync receipts from your grocery store.
             </p>
             <button
@@ -193,7 +193,7 @@ function Pantry() {
           </div>
         ) : filteredData.total_items === 0 ? (
           <div className="text-center py-12">
-            <p className="text-gray-600">No items match your search.</p>
+            <p className="text-sage-light">No items match your search.</p>
           </div>
         ) : (
           <PantryList
