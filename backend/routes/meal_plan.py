@@ -136,18 +136,8 @@ def accept_recipe(session_id):
     Returns:
         Meal plan entry and updated session pantry
     """
-    # #region agent log
-    import json
-    with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-        f.write(json.dumps({"location":"meal_plan.py:145","message":"Accept recipe route entry","data":{"session_id":session_id},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"B"}) + '\n')
-    # #endregion
-    
     service = get_meal_plan_service()
     if not service:
-        # #region agent log
-        with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"meal_plan.py:158","message":"Service not available","data":{},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"B"}) + '\n')
-        # #endregion
         return jsonify({"error": "Meal plan service not available"}), 503
     
     data = request.get_json() or {}
@@ -155,54 +145,21 @@ def accept_recipe(session_id):
     meal_date_str = data.get("meal_date")
     meal_type = data.get("meal_type", "dinner")
     
-    # #region agent log
-    with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-        f.write(json.dumps({"location":"meal_plan.py:167","message":"Request data parsed","data":{"recipe_id":recipe_id,"meal_date_str":meal_date_str,"meal_type":meal_type},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"D"}) + '\n')
-    # #endregion
-    
     if not recipe_id or not meal_date_str:
-        # #region agent log
-        with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"meal_plan.py:174","message":"Validation failed - missing required fields","data":{"recipe_id":recipe_id,"meal_date_str":meal_date_str},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"D"}) + '\n')
-        # #endregion
         return jsonify({"error": "recipe_id and meal_date are required"}), 400
     
     try:
         meal_date = date.fromisoformat(meal_date_str)
-        # #region agent log
-        with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"meal_plan.py:180","message":"Date parsed, calling service","data":{"meal_date":meal_date.isoformat()},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"B"}) + '\n')
-        # #endregion
         result = run_async(service.accept_recipe(session_id, recipe_id, meal_date, meal_type))
-        # #region agent log
-        with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"meal_plan.py:185","message":"Service call success","data":{"result_keys":list(result.keys()) if isinstance(result, dict) else str(type(result))},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"B"}) + '\n')
-        # #endregion
         return jsonify(result)
     except ValueError as e:
-        # #region agent log
-        with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"meal_plan.py:191","message":"Date format error","data":{"error":str(e)},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"D"}) + '\n')
-        # #endregion
         return jsonify({"error": f"Invalid date format: {e}"}), 400
     except ValidationException as e:
-        # #region agent log
-        with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"meal_plan.py:197","message":"Validation exception","data":{"error":str(e)},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"A"}) + '\n')
-        # #endregion
         return jsonify({"error": str(e)}), 400
     except DatabaseException as e:
-        # #region agent log
-        with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"meal_plan.py:203","message":"Database exception","data":{"error":str(e)},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"B"}) + '\n')
-        # #endregion
         logger.error(f"Database error accepting recipe: {e}")
         return jsonify({"error": str(e)}), 500
     except Exception as e:
-        # #region agent log
-        with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"meal_plan.py:210","message":"General exception","data":{"error":str(e),"error_type":str(type(e))},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"B"}) + '\n')
-        # #endregion
         logger.error(f"Error accepting recipe: {e}")
         return jsonify({"error": str(e)}), 500
 
@@ -253,18 +210,8 @@ def ban_recipe(session_id):
     Returns:
         Success message
     """
-    # #region agent log
-    import json
-    with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-        f.write(json.dumps({"location":"meal_plan.py:219","message":"Ban recipe route entry","data":{"session_id":session_id},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"F"}) + '\n')
-    # #endregion
-    
     user_id = get_user_id_from_request()
     if not user_id:
-        # #region agent log
-        with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"meal_plan.py:233","message":"No user ID for ban recipe","data":{},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"F"}) + '\n')
-        # #endregion
         return jsonify({"error": "User ID required"}), 401
     
     service = get_meal_plan_service()
@@ -275,43 +222,18 @@ def ban_recipe(session_id):
     recipe_id = data.get("recipe_id")
     recipe_name = data.get("recipe_name", "Recipe")
     
-    # #region agent log
-    with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-        f.write(json.dumps({"location":"meal_plan.py:247","message":"Ban recipe data parsed","data":{"recipe_id":recipe_id,"recipe_name":recipe_name,"user_id":user_id},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"F"}) + '\n')
-    # #endregion
-    
     if not recipe_id:
         return jsonify({"error": "recipe_id is required"}), 400
     
     try:
-        # #region agent log
-        with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"meal_plan.py:253","message":"Calling ban recipe service","data":{"recipe_id":recipe_id},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"F"}) + '\n')
-        # #endregion
         run_async(service.ban_recipe(session_id, recipe_id, recipe_name, user_id))
-        # #region agent log
-        with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"meal_plan.py:258","message":"Ban recipe service success","data":{"recipe_id":recipe_id},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"F"}) + '\n')
-        # #endregion
         return jsonify({"message": "Recipe banned for 6 months"})
     except ValidationException as e:
-        # #region agent log
-        with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"meal_plan.py:263","message":"Ban recipe validation error","data":{"error":str(e)},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"F"}) + '\n')
-        # #endregion
         return jsonify({"error": str(e)}), 400
     except DatabaseException as e:
-        # #region agent log
-        with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"meal_plan.py:269","message":"Ban recipe database error","data":{"error":str(e)},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"F"}) + '\n')
-        # #endregion
         logger.error(f"Database error banning recipe: {e}")
         return jsonify({"error": str(e)}), 500
     except Exception as e:
-        # #region agent log
-        with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-            f.write(json.dumps({"location":"meal_plan.py:276","message":"Ban recipe general error","data":{"error":str(e),"error_type":str(type(e))},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"F"}) + '\n')
-        # #endregion
         logger.error(f"Error banning recipe: {e}")
         return jsonify({"error": str(e)}), 500
 

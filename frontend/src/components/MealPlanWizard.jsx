@@ -90,27 +90,17 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
     
     const thresholdToUse = customThreshold !== null ? customThreshold : threshold
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MealPlanWizard.jsx:84',message:'Load suggestions started',data:{sessionId,mealType:currentMealSlot.mealType,threshold:thresholdToUse,showLoadingToast},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'G'})}).catch(()=>{});
-    // #endregion
-    
     if (showLoadingToast) {
       setToastMessage('Finding more recipe options...')
       setTimeout(() => setToastMessage(null), 2000)
     }
     
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MealPlanWizard.jsx:103',message:'Calling getSuggestions API',data:{sessionId,mealType:currentMealSlot.mealType,threshold:thresholdToUse},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'G'})}).catch(()=>{});
-      // #endregion
       const result = await api.mealPlan.getSuggestions(
         sessionId,
         currentMealSlot.mealType,
         thresholdToUse
       )
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MealPlanWizard.jsx:111',message:'getSuggestions API success',data:{recipeCount:result.recipes?.length || 0},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'G'})}).catch(()=>{});
-      // #endregion
       // Backend already filters rejected/accepted/banned recipes, but filter locally too for safety
       const loadedRecipes = result.recipes || []
       const filteredRecipes = loadedRecipes.filter(
@@ -130,9 +120,6 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
         setThreshold(customThreshold)
       }
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MealPlanWizard.jsx:127',message:'getSuggestions API error',data:{error:err.message,status:err.response?.status,responseData:err.response?.data},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'G'})}).catch(()=>{});
-      // #endregion
       setError(err.response?.data?.error || 'Failed to load suggestions')
     } finally {
       setLoading(false)
@@ -148,19 +135,11 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
     setError(null)
     
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MealPlanWizard.jsx:136',message:'Accept recipe started',data:{sessionId,recipeId:recipe.id,mealDate:currentMealSlot.date,mealType:currentMealSlot.mealType},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
-      
       const result = await api.mealPlan.acceptRecipe(sessionId, {
         recipe_id: recipe.id,
         meal_date: currentMealSlot.date,
         meal_type: currentMealSlot.mealType
       })
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MealPlanWizard.jsx:144',message:'Accept recipe API success',data:{result},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       
       // Add to planned meals
       setPlannedMeals([...plannedMeals, result.meal_plan_entry])
@@ -188,9 +167,6 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
         setStep('review')
       }
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MealPlanWizard.jsx:168',message:'Accept recipe error',data:{error:err.message,status:err.response?.status,responseData:err.response?.data,recipeId:recipe?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'post-fix',hypothesisId:'A'})}).catch(()=>{});
-      // #endregion
       setError(err.response?.data?.error || 'Failed to accept recipe')
     } finally {
       setLoading(false)
@@ -237,24 +213,13 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
     const recipeId = String(recipe.id)
     const recipeName = recipe.title || 'Recipe'
     
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MealPlanWizard.jsx:207',message:'Ban recipe started',data:{recipeId,recipeName,sessionId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'F'})}).catch(()=>{});
-    // #endregion
-    
     // Remove from local list immediately
     const filteredRecipes = recipes.filter(r => String(r.id) !== recipeId)
     setRecipes(filteredRecipes)
     
     // Call API to ban recipe
     try {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MealPlanWizard.jsx:218',message:'Calling ban recipe API',data:{recipeId,recipeName},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'F'})}).catch(()=>{});
-      // #endregion
       await api.mealPlan.banRecipe(sessionId, recipeId, recipeName, userId)
-      
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MealPlanWizard.jsx:223',message:'Ban recipe API success',data:{recipeId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'F'})}).catch(()=>{});
-      // #endregion
       
       // Show toast with undo button
       setLastBannedRecipe({ id: recipeId, name: recipeName })
@@ -266,18 +231,12 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
         setLastBannedRecipe(null)
       }, 5000)
     } catch (err) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MealPlanWizard.jsx:236',message:'Ban recipe API error',data:{error:err.message,status:err.response?.status,responseData:err.response?.data,recipeId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'F'})}).catch(()=>{});
-      // #endregion
       console.error('Failed to ban recipe:', err)
       setError(err.response?.data?.error || 'Failed to ban recipe')
     }
     
     // If no more recipes locally, reload suggestions
     if (filteredRecipes.length === 0) {
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/7d194db0-1957-4849-9c6e-e4502771bac7',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'MealPlanWizard.jsx:244',message:'Reloading suggestions after ban',data:{recipeId},timestamp:Date.now(),sessionId:'debug-session',hypothesisId:'G'})}).catch(()=>{});
-      // #endregion
       await loadSuggestions(true)
     }
   }
