@@ -425,21 +425,11 @@ class MealPlanService:
             user_id: User ID
         """
         try:
-            # #region agent log
-            import json
-            with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-                f.write(json.dumps({"location":"meal_plan_service.py:427","message":"Ban recipe service entry","data":{"session_id":session_id,"recipe_id":recipe_id,"recipe_name":recipe_name,"user_id":user_id},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"F"}) + '\n')
-            # #endregion
-            
             # Normalize recipe_id to string
             recipe_id = str(recipe_id)
             
             # Get session to verify it exists
             client = self.supabase.admin_client if self.supabase.admin_client else self.supabase.client
-            # #region agent log
-            with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-                f.write(json.dumps({"location":"meal_plan_service.py:438","message":"Checking session exists for ban","data":{"session_id":session_id},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"F"}) + '\n')
-            # #endregion
             session_response = (
                 client.table("meal_plan_wizard_session")
                 .select("*")
@@ -451,10 +441,6 @@ class MealPlanService:
                 raise ValidationException("Wizard session not found or expired")
             
             # Check if already banned
-            # #region agent log
-            with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-                f.write(json.dumps({"location":"meal_plan_service.py:450","message":"Checking if recipe already banned","data":{"recipe_id":recipe_id,"user_id":user_id},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"F"}) + '\n')
-            # #endregion
             ban_response = (
                 client.table("recipe_bans")
                 .select("*")
@@ -465,10 +451,6 @@ class MealPlanService:
             
             if ban_response.data:
                 # Already banned, update expires_at to extend ban
-                # #region agent log
-                with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-                    f.write(json.dumps({"location":"meal_plan_service.py:462","message":"Recipe already banned, extending ban","data":{"recipe_id":recipe_id},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"F"}) + '\n')
-                # #endregion
                 expires_at = datetime.utcnow() + timedelta(days=180)  # 6 months
                 client.table("recipe_bans").update({
                     "expires_at": expires_at.isoformat(),
@@ -476,10 +458,6 @@ class MealPlanService:
                 }).eq("user_id", user_id).eq("recipe_id", recipe_id).execute()
             else:
                 # Create new ban
-                # #region agent log
-                with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-                    f.write(json.dumps({"location":"meal_plan_service.py:472","message":"Creating new recipe ban","data":{"recipe_id":recipe_id,"recipe_name":recipe_name},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"F"}) + '\n')
-                # #endregion
                 expires_at = datetime.utcnow() + timedelta(days=180)  # 6 months
                 ban_data = {
                     "user_id": user_id,
@@ -555,21 +533,11 @@ class MealPlanService:
             Dictionary with meal_plan_entry and updated_session_pantry
         """
         try:
-            # #region agent log
-            import json
-            with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-                f.write(json.dumps({"location":"meal_plan_service.py:535","message":"Accept recipe service entry","data":{"session_id":session_id,"recipe_id":recipe_id,"meal_date":meal_date.isoformat(),"meal_type":meal_type},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"A"}) + '\n')
-            # #endregion
-            
             # Normalize recipe_id to string (handles both string and int from JSON)
             recipe_id = str(recipe_id)
             
             # Get session
             client = self.supabase.admin_client if self.supabase.admin_client else self.supabase.client
-            # #region agent log
-            with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-                f.write(json.dumps({"location":"meal_plan_service.py:546","message":"Fetching session from database","data":{"client_type":"admin" if self.supabase.admin_client else "regular"},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"A"}) + '\n')
-            # #endregion
             session_response = (
                 client.table("meal_plan_wizard_session")
                 .select("*")
@@ -578,10 +546,6 @@ class MealPlanService:
             )
             
             if not session_response.data:
-                # #region agent log
-                with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-                    f.write(json.dumps({"location":"meal_plan_service.py:558","message":"Session not found","data":{"session_id":session_id},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"A"}) + '\n')
-                # #endregion
                 raise ValidationException("Wizard session not found or expired")
             
             session = session_response.data[0]
@@ -589,11 +553,6 @@ class MealPlanService:
             user_id = session["user_id"]
             session_pantry = session.get("session_pantry", {})
             accepted_recipes = session.get("accepted_recipes", [])
-            
-            # #region agent log
-            with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-                f.write(json.dumps({"location":"meal_plan_service.py:570","message":"Session data loaded","data":{"household_id":household_id,"user_id":user_id,"pantry_items":len(session_pantry),"accepted_count":len(accepted_recipes)},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"A"}) + '\n')
-            # #endregion
             
             # Get household member count for scaling
             members = self.supabase.get_household_members(household_id)
@@ -621,15 +580,7 @@ class MealPlanService:
                 ingredients_reserved = []
             else:
                 # Get recipe from Spoonacular
-                # #region agent log
-                with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-                    f.write(json.dumps({"location":"meal_plan_service.py:590","message":"Fetching recipe details from Spoonacular","data":{"recipe_id":recipe_id},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"C"}) + '\n')
-                # #endregion
                 recipe_details = self.recipe_service.get_recipe_details(int(recipe_id))
-                # #region agent log
-                with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-                    f.write(json.dumps({"location":"meal_plan_service.py:596","message":"Recipe details fetched","data":{"title":recipe_details.get("title",""),"has_image":bool(recipe_details.get("image")),"servings":recipe_details.get("servings")},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"C"}) + '\n')
-                # #endregion
                 recipe_name = recipe_details.get("title", recipe_name)
                 recipe_image = recipe_details.get("image")
                 original_servings = recipe_details.get("servings", member_count)
@@ -688,10 +639,6 @@ class MealPlanService:
                 "ingredients_reserved": ingredients_reserved
             }
             
-            # #region agent log
-            with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-                f.write(json.dumps({"location":"meal_plan_service.py:650","message":"Creating meal plan entry","data":{"meal_plan_data_keys":list(meal_plan_data.keys())},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"B"}) + '\n')
-            # #endregion
             meal_plan_response = (
                 client.table("meal_plan")
                 .insert(meal_plan_data)
@@ -699,10 +646,6 @@ class MealPlanService:
             )
             
             if not meal_plan_response.data:
-                # #region agent log
-                with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-                    f.write(json.dumps({"location":"meal_plan_service.py:661","message":"Failed to create meal plan entry","data":{},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"B"}) + '\n')
-                # #endregion
                 raise DatabaseException("Failed to create meal plan entry")
             
             meal_plan_entry = meal_plan_response.data[0]
@@ -759,10 +702,6 @@ class MealPlanService:
         except ValidationException:
             raise
         except Exception as e:
-            # #region agent log
-            with open('c:\\Users\\yvesd\\source\\repos\\receipt2pantry\\.cursor\\debug.log', 'a') as f:
-                f.write(json.dumps({"location":"meal_plan_service.py:715","message":"Exception in accept_recipe","data":{"error":str(e),"error_type":str(type(e))},"timestamp":int(__import__('time').time()*1000),"sessionId":"debug-session","hypothesisId":"E"}) + '\n')
-            # #endregion
             logger.error(f"Failed to accept recipe: {e}")
             raise DatabaseException(f"Failed to accept recipe: {e}")
     
