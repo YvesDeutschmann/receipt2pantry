@@ -7,6 +7,7 @@ import CredentialsModal from '../components/CredentialsModal'
 import MfaDialog from '../components/MfaDialog'
 import CostcoConnectPage from '../components/CostcoConnectPage'
 import CostcoOneTapSync from '../components/CostcoOneTapSync'
+import SafewayConnectCard from '../components/SafewayConnectCard'
 
 function Providers() {
   const { user } = useAuth()
@@ -456,6 +457,13 @@ function Providers() {
                               Connect Costco Account
                             </button>
                           )}
+                        </div>
+                      </div>
+                    ) : provider === 'safeway' ? (
+                      <div className="w-full space-y-3">
+                        <div className="p-3 bg-forest-light rounded-mise-md border border-forest-light">
+                          <p className="text-xs font-medium text-sage-light mb-2">Connect Safeway</p>
+                          <SafewayConnectCard userId={userId} />
                         </div>
                       </div>
                     ) : (

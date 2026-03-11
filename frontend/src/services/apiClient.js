@@ -195,6 +195,16 @@ export const api = {
     return response.data
   },
 
+  /** Ingest receipts from native WebView bridge (Safeway, Costco, etc.). */
+  ingestReceipts: async (provider, receipts, userId) => {
+    const response = await apiClient.post('/receipts/ingest', {
+      provider,
+      receipts,
+      user_id: userId,
+    })
+    return response.data
+  },
+
   getConnectionStatus: async (provider, connectionCode) => {
     const response = await apiClient.get(`/providers/${provider}/connection/${connectionCode}/status`)
     return response.data

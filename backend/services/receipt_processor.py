@@ -109,12 +109,14 @@ class ReceiptProcessor:
             for item, normalized in zip(valid_items, normalized_results):
                 try:
                     raw_name = item.get('raw_name') or item.get('name')
-                    
+                    if normalized is None:
+                        logger.info(f"Skipping non-normalizable item '{raw_name}'")
+                        items_processed += 1
+                        continue
                     normalized_items.append({
                         'raw_name': raw_name,
                         'normalized': normalized
                     })
-                    
                     # Extract quantity info (prefer from item, fallback to normalized)
                     quantity_info = item.get('quantity_info') or normalized.get('quantity_info')
                     
@@ -147,14 +149,12 @@ class ReceiptProcessor:
                     errors.append(error_msg)
                     items_processed += 1
             
-            # 5. Update receipt status
+            # 5. Determine status (no DB update — status/processed_at columns don't exist)
             if errors:
                 status = 'processed_with_errors'
             else:
                 status = 'processed'
-            
-            self.supabase.update_receipt_status(receipt_id, status)
-            
+
             # Check if AI was actually used
             ai_used = any(
                 n.get('source') == 'openai'
@@ -184,13 +184,6 @@ class ReceiptProcessor:
             
         except Exception as e:
             logger.error(f"Failed to process receipt {receipt_id}: {e}")
-            
-            # Update receipt status to failed
-            try:
-                self.supabase.update_receipt_status(receipt_id, 'failed')
-            except Exception as update_error:
-                logger.error(f"Failed to update receipt status: {update_error}")
-            
             raise DatabaseException(f"Receipt processing failed: {e}")
     
     async def process_multiple_receipts(self, receipt_ids: List[str], user_id: str) -> Dict:

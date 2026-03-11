@@ -178,8 +178,8 @@ def create_app(config=None):
             app.config["SECRETS_SERVICE"] = secrets_service
             logger.info("Using mock Secrets Service (development mode)")
     
-    # Initialize Login Session Manager for MFA flows
-    from backend.services.login_session_manager import LoginSessionManager
+    # Initialize Login Session Manager for MFA flows (legacy Safeway; kept for session cleanup)
+    from backend.services._deprecated.login_session_manager import LoginSessionManager
     session_manager = LoginSessionManager(default_timeout=config.MFA_SESSION_TIMEOUT)
     app.config["LOGIN_SESSION_MANAGER"] = session_manager
     logger.info("Login session manager initialized")
@@ -202,7 +202,7 @@ def create_app(config=None):
     
     # Import providers and parsers to register them
     # This ensures @register_provider and @register_parser decorators are executed
-    from backend.providers import safeway_provider  # noqa: F401
+    # Safeway Playwright provider deprecated (M1) - use native WebView bridge instead
     from backend.providers import costco_provider  # noqa: F401
     from backend.parsers import safeway_parser  # noqa: F401
     from backend.parsers import costco_parser  # noqa: F401
