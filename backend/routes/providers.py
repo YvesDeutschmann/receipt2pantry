@@ -16,6 +16,20 @@ _playwright_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thre
 logger = get_logger(__name__)
 providers_bp = Blueprint("providers", __name__)
 
+# Safeway Playwright routes deprecated in favor of native WebView bridge (M1)
+# Excludes /status (used for native provider) and base /providers/safeway (list)
+_DEPRECATED_SAFEWAY_PATTERN = r"^/api/providers/safeway/(test|fetch-receipts|login/.*)$"
+
+
+@providers_bp.before_request
+def _deprecate_safeway_playwright_routes():
+    import re
+    if re.match(_DEPRECATED_SAFEWAY_PATTERN, request.path):
+        return jsonify({
+            "error": "Safeway Playwright automation is deprecated. Use the native app Connect Safeway flow instead.",
+            "deprecated": True,
+        }), 410
+
 
 def _is_valid_user_id(user_id: str) -> bool:
     """Return True if user_id is a non-empty, non-anonymous UUID."""
@@ -109,11 +123,18 @@ def _terminate_session_with_executor_cleanup(session_manager, session_id: str, s
     return session_manager.terminate_session(session_id, skip_browser_cleanup=True)
 
 
+# Native WebView bridge providers (no Playwright; not in ProviderRegistry)
+_NATIVE_PROVIDERS = ["safeway"]
+
+
 @providers_bp.route("/providers", methods=["GET"])
 def list_providers():
     """List all available providers"""
     try:
-        providers = ProviderRegistry.list_providers()
+        providers = list(ProviderRegistry.list_providers())
+        for p in _NATIVE_PROVIDERS:
+            if p not in providers:
+                providers.append(p)
         return jsonify({
             "providers": providers,
             "count": len(providers)
@@ -136,10 +157,18 @@ def get_provider_status(provider_name):
         if not user_id:
             return jsonify({"error": "user_id is required"}), 400
         
+        # Native providers (WebView bridge) - no backend-stored credentials
+        if provider_name in _NATIVE_PROVIDERS:
+            return jsonify({
+                "provider": provider_name,
+                "configured": False,
+                "active": False,
+            }), 200
+
         # Check if provider is registered
         if not ProviderRegistry.is_registered(provider_name):
             return jsonify({"error": f"Provider {provider_name} not found"}), 404
-        
+
         # Get grocery account from database
         supabase_service = current_app.config.get("SUPABASE_SERVICE")
         if not supabase_service:
@@ -1025,6 +1054,7 @@ def fetch_costco_receipts_with_token():
     except Exception as e:
         logger.error(f"Unexpected error: {e}", exc_info=True)
         return jsonify({"error": "Internal server error"}), 500
+
 
 
 @providers_bp.route("/providers/costco/store-receipts", methods=["POST"])

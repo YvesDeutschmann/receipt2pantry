@@ -1,7 +1,9 @@
 """Receipt management endpoints"""
 
+import uuid
 from flask import Blueprint, jsonify, request, current_app
 from backend.parsers.parser_registry import ParserRegistry, ParserNotFoundException
+from backend.services.receipt_service import store_fetched_receipts
 from backend.utils.logger import get_logger
 from backend.utils.auth import get_user_id_from_request
 from backend.utils.exceptions import ParserException, DatabaseException
@@ -95,6 +97,59 @@ def parse_receipt():
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
         return jsonify({"error": "Internal server error"}), 500
+
+
+@receipts_bp.route("/receipts/ingest", methods=["POST"])
+def ingest_receipts():
+    """
+    Ingest receipts from native client (WebView bridge). Used when receipts are
+    fetched on-device via WebView and submitted for storage and pantry processing.
+    Body: { "provider": "safeway"|"costco", "receipts": [...], "user_id": "uuid" }
+    """
+    try:
+        data = request.get_json() or {}
+        provider = data.get("provider")
+        receipts = data.get("receipts") or data.get("receipt_data") or []
+        user_id = data.get("user_id") or data.get("userId")
+
+        if not provider or provider not in ("safeway", "costco"):
+            return jsonify({"error": "provider is required and must be 'safeway' or 'costco'"}), 400
+        if not user_id or user_id.strip() in ("", "anonymous"):
+            return jsonify({"error": "user_id is required and must be a valid UUID"}), 400
+        try:
+            uuid.UUID(user_id)
+        except (ValueError, TypeError):
+            return jsonify({"error": "user_id is required and must be a valid UUID"}), 400
+        if not isinstance(receipts, list):
+            return jsonify({"error": "receipts must be an array"}), 400
+
+        supabase_service = current_app.config.get("SUPABASE_SERVICE")
+        receipt_processor = current_app.config.get("RECEIPT_PROCESSOR")
+        if not supabase_service:
+            return jsonify({"error": "Database service not available"}), 503
+
+        store_result = store_fetched_receipts(user_id, provider, receipts, supabase_service)
+        items_added = 0
+        if receipt_processor and store_result.get("receipt_ids"):
+            from backend.routes.pantry import run_async
+            for receipt_id in store_result["receipt_ids"]:
+                try:
+                    proc_result = run_async(receipt_processor.process_receipt(receipt_id, user_id))
+                    items_added += proc_result.get("items_added_to_pantry", 0)
+                except Exception as e:
+                    logger.warning(f"Failed to process receipt {receipt_id} into pantry: {e}")
+                    store_result.setdefault("errors", []).append(f"Process {receipt_id}: {str(e)}")
+
+        return jsonify({
+            "status": "success",
+            "receipts_stored": store_result["receipts_stored"],
+            "receipt_ids": store_result["receipt_ids"],
+            "items_added_to_pantry": items_added,
+            "errors": store_result.get("errors", []),
+        }), 200
+    except Exception as e:
+        logger.error(f"Error ingesting receipts: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
 
 
 @receipts_bp.route("/receipts/<receipt_id>", methods=["DELETE"])
