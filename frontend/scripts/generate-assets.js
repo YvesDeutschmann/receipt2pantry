@@ -12,7 +12,7 @@ const assetsDir = join(__dirname, '..', 'assets');
 
 await mkdir(assetsDir, { recursive: true });
 
-// 1024x1024 logo: green rounded square (GrocerySync placeholder)
+// 1024x1024 logo: green rounded square (Meald placeholder)
 const size = 1024;
 const innerSize = 624;
 const inner = await sharp({

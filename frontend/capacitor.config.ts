@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 /**
- * Capacitor configuration for GrocerySync native apps.
+ * Capacitor configuration for Meald native apps.
  *
  * Persistent Web Context: Capacitor's default WKWebView (iOS) and Android WebView
  * both persist localStorage, cookies, and DOM Storage across app kills. No extra
@@ -13,8 +13,8 @@ import type { CapacitorConfig } from '@capacitor/cli';
  * from external browsers.
  */
 const config: CapacitorConfig = {
-  appId: 'com.grocerysync.app',
-  appName: 'GrocerySync',
+  appId: 'com.meald.app',
+  appName: 'Meald',
   webDir: 'dist',
   server: {
     // For local dev, point to the Vite dev server so live-reload works.

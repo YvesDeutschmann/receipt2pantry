@@ -1,4 +1,4 @@
-package com.grocerysync.app;
+package com.meald.app;
 
 import android.os.Bundle;
 import android.webkit.WebView;
