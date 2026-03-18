@@ -1,7 +1,9 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">GrocerySync</string>
-    <string name="title_activity_main">GrocerySync</string>
-    <string name="package_name">com.grocerysync.app</string>
-    <string name="custom_url_scheme">com.grocerysync.app</string>
+    <string name="app_name">Meald</string>
+    <string name="title_activity_main">Meald</string>
+    <string name="package_name">com.meald.app</string>
+    <string name="custom_url_scheme">com.meald.app</string>
+    <!-- Google Sign-In: replace with your Web Client ID from Google Cloud Console -->
+    <string name="server_client_id">609962564119-m2vaucoakdhoqvodlrjp7173d5cjk689.apps.googleusercontent.com</string>
 </resources>
