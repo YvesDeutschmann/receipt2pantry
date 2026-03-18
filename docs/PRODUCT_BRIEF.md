@@ -1,7 +1,7 @@
-# GrocerySync — Project Context
+# Meald — Project Context
 
 ## Overview
-GrocerySync is a web application that automatically logs into grocery loyalty portals (Safeway, QFC/Kroger, Costco/Walmart), fetches digital receipts, parses them into structured data, and enriches them with recipe and meal-planning insights. It gives users a unified view of grocery spending, ingredients, and meal possibilities — turning receipts into actionable food data.
+Meald is a web application that automatically logs into grocery loyalty portals (Safeway, QFC/Kroger, Costco/Walmart), fetches digital receipts, parses them into structured data, and enriches them with recipe and meal-planning insights. It gives users a unified view of grocery spending, ingredients, and meal possibilities — turning receipts into actionable food data.
 
 ## Target Audience
 - Busy households and individuals who want to save time and simplify grocery tracking  
@@ -28,7 +28,7 @@ GrocerySync is a web application that automatically logs into grocery loyalty po
 Each loyalty program integration (Safeway, QFC, Costco/Walmart) is implemented as an independent module and task in early sprints. This structure allows adding new programs without affecting the existing system.
 
 ## Vision
-GrocerySync transforms routine grocery data into a meal intelligence system — combining automation, structured data, and personalized planning to make cooking and food management effortless.
+Meald transforms routine grocery data into a meal intelligence system — combining automation, structured data, and personalized planning to make cooking and food management effortless.
 
 ---
 

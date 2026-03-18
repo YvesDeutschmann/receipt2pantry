@@ -1,7 +1,8 @@
-import { Navigate } from 'react-router-dom'
+import { Navigate, Outlet } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { OnboardingProvider } from '../contexts/OnboardingContext'
 
-function ProtectedRoute({ children }) {
+function OnboardingRoute() {
   const { user, loading, onboardingComplete } = useAuth()
 
   if (loading) {
@@ -16,11 +17,15 @@ function ProtectedRoute({ children }) {
     return <Navigate to="/auth" replace />
   }
 
-  if (!onboardingComplete) {
-    return <Navigate to="/onboarding" replace />
+  if (onboardingComplete) {
+    return <Navigate to="/" replace />
   }
 
-  return children
+  return (
+    <OnboardingProvider>
+      <Outlet />
+    </OnboardingProvider>
+  )
 }
 
-export default ProtectedRoute
+export default OnboardingRoute

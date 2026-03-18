@@ -45,7 +45,7 @@ function Header() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-8">
               <Link to="/" className="text-2xl font-display font-bold text-cream">
-                Mise
+                Meald
               </Link>
               <nav className="flex space-x-6">
                 <Link

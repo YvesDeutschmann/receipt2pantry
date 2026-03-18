@@ -100,13 +100,13 @@ python -m backend.app
 
 **Expected Output:**
 ```
-INFO:grocerysync:Starting GrocerySync backend
+INFO:grocerysync:Starting Meald backend
 INFO:grocerysync:Supabase not configured (development mode)
 INFO:grocerysync:Using mock Secrets Service (development mode)
 INFO:grocerysync:LoginSessionManager initialized with 300s timeout
 INFO:grocerysync:Session cleanup worker started
 INFO:grocerysync:Routes registered
-INFO:grocerysync:GrocerySync backend initialized successfully
+INFO:grocerysync:Meald backend initialized successfully
 INFO:grocerysync:Starting Flask server on port 5000
  * Running on http://0.0.0.0:5000
 ```

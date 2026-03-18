@@ -1,4 +1,4 @@
--- GrocerySync Pantry Data Model Migration
+-- Meald Pantry Data Model Migration
 -- Creates tables for product normalization, pantry management, and cooking logs
 
 -- ============================================================================

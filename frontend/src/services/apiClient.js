@@ -231,11 +231,21 @@ export const api = {
     return response.data
   },
 
-  createHousehold: async (userId, name) => {
-    const response = await apiClient.post('/households', 
-      { name },
+  createHousehold: async (userId, name, size = 2, dietaryRestrictions = []) => {
+    const response = await apiClient.post('/households',
+      { name, size, dietary_restrictions: dietaryRestrictions },
       { headers: { 'X-User-Id': userId } }
     )
+    return response.data
+  },
+
+  updateHouseholdProfile: async (userId, { size, dietaryRestrictions }) => {
+    const body = {}
+    if (size !== undefined) body.size = size
+    if (dietaryRestrictions !== undefined) body.dietary_restrictions = dietaryRestrictions
+    const response = await apiClient.put('/households/profile', body, {
+      headers: { 'X-User-Id': userId }
+    })
     return response.data
   },
 

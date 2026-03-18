@@ -1,6 +1,6 @@
 # Mobile Setup (Capacitor)
 
-Guide for running GrocerySync on Android and iOS devices.
+Guide for running Meald on Android and iOS devices.
 
 ## Android: Fix "No valid Android SDK root found"
 

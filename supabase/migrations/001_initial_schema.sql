@@ -1,4 +1,4 @@
--- Initial database schema for GrocerySync
+-- Initial database schema for Meald
 -- This migration creates all core tables with proper relationships and indexes
 
 -- Enable UUID extension

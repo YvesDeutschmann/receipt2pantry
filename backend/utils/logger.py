@@ -1,4 +1,4 @@
-"""Centralized logging configuration for GrocerySync"""
+"""Centralized logging configuration for Meald"""
 
 import logging
 import json

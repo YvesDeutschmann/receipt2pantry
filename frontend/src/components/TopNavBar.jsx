@@ -48,7 +48,7 @@ function TopNavBar() {
                 className="flex items-center gap-2 text-2xl font-display font-bold text-cream"
               >
                 <Home className="w-7 h-7 text-terra" />
-                Mise
+                Meald
               </Link>
               <nav className="flex space-x-6">
                 <NavLink to="/" className={navLinkClass}>

@@ -9,6 +9,10 @@ import Recipes from './pages/Recipes'
 import MealPlan from './pages/MealPlan'
 import Auth from './pages/Auth'
 import ProtectedRoute from './components/ProtectedRoute'
+import OnboardingRoute from './components/OnboardingRoute'
+import HouseholdSize from './pages/onboarding/HouseholdSize'
+import DietaryRestrictions from './pages/onboarding/DietaryRestrictions'
+import BridgeScreen from './pages/onboarding/BridgeScreen'
 
 function App() {
   return (
@@ -16,6 +20,11 @@ function App() {
       <Router>
         <Routes>
           <Route path="/auth" element={<Auth />} />
+          <Route path="/onboarding" element={<OnboardingRoute />}>
+            <Route index element={<HouseholdSize />} />
+            <Route path="dietary" element={<DietaryRestrictions />} />
+            <Route path="bridge" element={<BridgeScreen />} />
+          </Route>
           <Route
             element={
               <ProtectedRoute>

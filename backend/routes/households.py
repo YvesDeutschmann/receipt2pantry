@@ -64,12 +64,18 @@ def create_household():
     
     data = request.get_json() or {}
     name = data.get("name", "").strip()
-    
+    size = data.get("size", 2)
+    dietary_restrictions = data.get("dietary_restrictions")
+
     if not name:
         return jsonify({"error": "Household name is required"}), 400
-    
+
     try:
-        household = service.create_household(user_id, name)
+        household = service.create_household(
+            user_id, name,
+            size=size if size is not None else 2,
+            dietary_restrictions=dietary_restrictions,
+        )
         return jsonify({"household": household}), 201
     except ValidationException as e:
         return jsonify({"error": str(e)}), 400
@@ -223,6 +229,44 @@ def regenerate_code():
         return jsonify({"error": str(e)}), 403
     except Exception as e:
         logger.error(f"Error regenerating code: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@households_bp.route("/households/profile", methods=["PUT"])
+def update_profile():
+    """
+    Update household size and/or dietary restrictions
+
+    Request body:
+        - size: integer 1-99 (optional)
+        - dietary_restrictions: string array (optional)
+
+    Returns:
+        Updated household details
+    """
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    service = get_household_service()
+    if not service:
+        return jsonify({"error": "Household service not available"}), 503
+
+    data = request.get_json() or {}
+    size = data.get("size")
+    dietary_restrictions = data.get("dietary_restrictions")
+
+    try:
+        household = service.update_household_profile(
+            user_id,
+            size=size,
+            dietary_restrictions=dietary_restrictions,
+        )
+        return jsonify({"household": household})
+    except ValidationException as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error updating household profile: {e}")
         return jsonify({"error": str(e)}), 500
 
 

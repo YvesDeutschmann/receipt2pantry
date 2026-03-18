@@ -1,4 +1,4 @@
-"""Pytest configuration and fixtures for GrocerySync tests"""
+"""Pytest configuration and fixtures for Meald tests"""
 
 import pytest
 from unittest.mock import Mock, MagicMock

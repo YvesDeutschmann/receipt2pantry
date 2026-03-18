@@ -1,10 +1,10 @@
-# GrocerySync
+# Meald
 
 Automated grocery receipt syncing and pantry management system.
 
 ## Overview
 
-GrocerySync automatically fetches grocery receipts from your favorite stores and organizes them into a searchable database. Currently supports Safeway, with more providers coming soon.
+Meald automatically fetches grocery receipts from your favorite stores and organizes them into a searchable database. Currently supports Safeway, with more providers coming soon.
 
 ## Features
 

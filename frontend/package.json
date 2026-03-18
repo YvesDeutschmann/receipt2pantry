@@ -28,6 +28,7 @@
     "@capacitor/keyboard": "^8.0.0",
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/status-bar": "^8.0.1",
+    "@capawesome/capacitor-google-sign-in": "^0.1.1",
     "@capgo/inappbrowser": "^8.1.23",
     "@supabase/supabase-js": "^2.97.0",
     "axios": "^1.7.0",

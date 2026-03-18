@@ -853,6 +853,8 @@ class SupabaseService:
                     "join_code": household.get("join_code"),
                     "created_by": household.get("created_by"),
                     "created_at": household.get("created_at"),
+                    "size": household.get("size", 2),
+                    "dietary_restrictions": household.get("dietary_restrictions") or [],
                     "role": membership.get("role"),
                     "joined_at": membership.get("joined_at")
                 }
@@ -913,18 +915,27 @@ class SupabaseService:
             logger.error(f"Failed to get household {household_id}: {e}")
             raise DatabaseException(f"Failed to get household: {e}")
     
-    def create_household(self, user_id: str, name: str, join_code: str) -> Dict:
+    def create_household(
+        self,
+        user_id: str,
+        name: str,
+        join_code: str,
+        size: int = 2,
+        dietary_restrictions: Optional[List[str]] = None,
+    ) -> Dict:
         """
         Create a new household
-        
+
         Creates household and adds creator as owner. If membership creation fails,
         the household is rolled back to prevent orphaned records.
-        
+
         Args:
             user_id: User ID of the creator
             name: Household name
             join_code: Generated join code
-        
+            size: Number of people in household (1-99), default 2
+            dietary_restrictions: List of restriction codes, default empty
+
         Returns:
             Created household dictionary
         """
@@ -932,14 +943,17 @@ class SupabaseService:
         # Use admin_client to bypass RLS for backend operations
         client = self.admin_client if self.admin_client else self.client
         try:
+            household_data = {
+                "name": name,
+                "join_code": join_code.upper(),
+                "created_by": user_id,
+                "size": max(1, min(99, size)),
+                "dietary_restrictions": dietary_restrictions if dietary_restrictions is not None else [],
+            }
             # Create the household
             household_response = (
                 client.table("households")
-                .insert({
-                    "name": name,
-                    "join_code": join_code.upper(),
-                    "created_by": user_id
-                })
+                .insert(household_data)
                 .execute()
             )
             
