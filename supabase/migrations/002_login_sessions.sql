@@ -1,6 +1,6 @@
 -- Migration: Login Sessions Table
 -- Description: Create table to track login sessions that require MFA
--- Author: GrocerySync
+-- Author: Meald
 -- Date: 2025-10-16
 
 -- Enable UUID extension if not already enabled

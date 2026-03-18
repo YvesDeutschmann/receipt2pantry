@@ -39,7 +39,7 @@ def create_app(config=None):
     # Setup logging
     log_level = config.LOG_LEVEL
     logger = setup_logger("grocerysync", log_level)
-    logger.info("Starting GrocerySync backend")
+    logger.info("Starting Meald backend")
     
     # Setup CORS
     cors_origins = config.get_cors_origins()
@@ -224,7 +224,7 @@ def create_app(config=None):
     # Register error handlers
     register_error_handlers(app)
     
-    logger.info("GrocerySync backend initialized successfully")
+    logger.info("Meald backend initialized successfully")
     return app
 
 
@@ -234,8 +234,8 @@ def register_error_handlers(app):
     
     @app.errorhandler(GrocerySyncException)
     def handle_grocerysync_exception(e):
-        """Handle custom GrocerySync exceptions"""
-        logger.error(f"GrocerySync exception: {e}")
+        """Handle custom Meald exceptions"""
+        logger.error(f"Meald exception: {e}")
         return {"error": str(e)}, 500
     
     @app.errorhandler(404)

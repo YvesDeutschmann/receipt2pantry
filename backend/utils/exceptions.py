@@ -1,8 +1,8 @@
-"""Custom exception classes for GrocerySync"""
+"""Custom exception classes for Meald"""
 
 
 class GrocerySyncException(Exception):
-    """Base exception for all GrocerySync errors"""
+    """Base exception for all Meald errors"""
     pass
 
 

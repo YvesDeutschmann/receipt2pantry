@@ -1,6 +1,6 @@
-# GrocerySync Setup Guide
+# Meald Setup Guide
 
-This guide will walk you through setting up GrocerySync from scratch.
+This guide will walk you through setting up Meald from scratch.
 
 ## Prerequisites
 

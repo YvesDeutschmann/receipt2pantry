@@ -1,1 +1,1 @@
-"""Tests package for GrocerySync backend"""
+"""Tests package for Meald backend"""

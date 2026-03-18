@@ -1,7 +1,7 @@
 #!/bin/bash
-# Quick start script for GrocerySync development
+# Quick start script for Meald development
 
-echo "🚀 GrocerySync Quick Start"
+echo "🚀 Meald Quick Start"
 echo "=========================="
 echo ""
 

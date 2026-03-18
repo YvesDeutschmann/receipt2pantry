@@ -29,7 +29,7 @@ function Dashboard() {
     <div>
       <PageHeader
         title="Dashboard"
-        subtitle="Welcome to Mise! View your recent receipts and shopping statistics."
+        subtitle="Welcome to Meald! View your recent receipts and shopping statistics."
       />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">

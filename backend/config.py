@@ -1,4 +1,4 @@
-"""Configuration management for GrocerySync backend"""
+"""Configuration management for Meald backend"""
 
 import os
 from typing import Optional

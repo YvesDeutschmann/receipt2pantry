@@ -47,17 +47,25 @@ class HouseholdService:
         # If we can't generate a unique code, raise an error
         raise DatabaseException("Failed to generate unique join code")
     
-    def create_household(self, user_id: str, name: str) -> Dict:
+    def create_household(
+        self,
+        user_id: str,
+        name: str,
+        size: int = 2,
+        dietary_restrictions: Optional[List[str]] = None,
+    ) -> Dict:
         """
         Create a new household with the user as owner
-        
+
         Args:
             user_id: User ID of the creator
             name: Name for the household
-        
+            size: Number of people in household (1-99), default 2
+            dietary_restrictions: List of restriction codes, default empty
+
         Returns:
             Created household dictionary
-        
+
         Raises:
             ValidationException: If user already in a household
         """
@@ -68,27 +76,37 @@ class HouseholdService:
                 "You are already a member of a household. "
                 "Please leave your current household first."
             )
-        
+
         # Validate name
         if not name or not name.strip():
             raise ValidationException("Household name is required")
-        
+
         name = name.strip()
         if len(name) > 100:
             raise ValidationException("Household name must be 100 characters or less")
-        
+
+        # Validate size
+        if size is not None and (size < 1 or size > 99):
+            raise ValidationException("Household size must be between 1 and 99")
+
         # Generate join code
         join_code = self._generate_join_code()
-        
+
         # Create household
-        household = self.supabase.create_household(user_id, name, join_code)
-        
+        household = self.supabase.create_household(
+            user_id, name, join_code,
+            size=size if size is not None else 2,
+            dietary_restrictions=dietary_restrictions or [],
+        )
+
         logger.info(f"User {user_id} created household '{name}' with code {join_code}")
-        
+
         return {
             "id": household["id"],
             "name": household["name"],
             "join_code": household["join_code"],
+            "size": household.get("size", 2),
+            "dietary_restrictions": household.get("dietary_restrictions") or [],
             "role": "owner",
             "created_at": household["created_at"]
         }
@@ -326,6 +344,61 @@ class HouseholdService:
             "id": household["id"],
             "name": new_name,
             "join_code": household["join_code"],
+            "role": household["role"]
+        }
+
+    def update_household_profile(
+        self,
+        user_id: str,
+        size: Optional[int] = None,
+        dietary_restrictions: Optional[List[str]] = None,
+    ) -> Dict:
+        """
+        Update household size and/or dietary restrictions (any member can update).
+
+        Args:
+            user_id: User ID (must be in a household)
+            size: New household size (1-99), optional
+            dietary_restrictions: New dietary restrictions list, optional
+
+        Returns:
+            Updated household dictionary
+
+        Raises:
+            ValidationException: If user not in household or validation fails
+        """
+        household = self.supabase.get_user_household(user_id)
+        if not household:
+            raise ValidationException("You are not a member of any household")
+
+        updates = {}
+        if size is not None:
+            if size < 1 or size > 99:
+                raise ValidationException("Household size must be between 1 and 99")
+            updates["size"] = size
+        if dietary_restrictions is not None:
+            updates["dietary_restrictions"] = dietary_restrictions
+
+        if not updates:
+            return {
+                "id": household["id"],
+                "name": household["name"],
+                "join_code": household["join_code"],
+                "size": household.get("size", 2),
+                "dietary_restrictions": household.get("dietary_restrictions") or [],
+                "role": household["role"]
+            }
+
+        self.supabase.update_household(household["id"], updates)
+
+        logger.info(f"User {user_id} updated household {household['id']} profile")
+
+        return {
+            "id": household["id"],
+            "name": household["name"],
+            "join_code": household["join_code"],
+            "size": updates.get("size", household.get("size", 2)),
+            "dietary_restrictions": updates.get("dietary_restrictions", household.get("dietary_restrictions") or []),
             "role": household["role"]
         }
 

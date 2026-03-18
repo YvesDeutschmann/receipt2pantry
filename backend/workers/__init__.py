@@ -1,2 +1,2 @@
-"""Background workers for GrocerySync"""
+"""Background workers for Meald"""
 

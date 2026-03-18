@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react'
+import { Capacitor } from '@capacitor/core'
 import { supabase } from '../services/supabaseClient'
 
 const AuthContext = createContext(null)
@@ -33,7 +34,39 @@ export function AuthProvider({ children }) {
   }
 
   const signUp = async (email, password) => {
-    const { data, error } = await supabase.auth.signUp({ email, password })
+    const { data, error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { signup_method: 'email' } }
+    })
+    if (error) throw error
+    return data
+  }
+
+  const signInWithApple = async () => {
+    const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'apple' })
+    if (error) throw error
+    return data
+  }
+
+  const signInWithGoogle = async () => {
+    if (Capacitor.isNativePlatform()) {
+      const { GoogleSignIn } = await import('@capawesome/capacitor-google-sign-in')
+      await GoogleSignIn.initialize({
+        clientId: import.meta.env.VITE_GOOGLE_WEB_CLIENT_ID,
+      })
+      const result = await GoogleSignIn.signIn()
+      const idToken = result?.idToken
+      if (!idToken) throw new Error('Google Sign-In did not return an ID token.')
+      const { data, error } = await supabase.auth.signInWithIdToken({
+        provider: 'google',
+        token: idToken,
+      })
+      if (error) throw error
+      return data
+    }
+    // Web fallback: browser redirect flow
+    const { data, error } = await supabase.auth.signInWithOAuth({ provider: 'google' })
     if (error) throw error
     return data
   }
@@ -44,6 +77,8 @@ export function AuthProvider({ children }) {
     if (error) throw error
   }
 
+  const onboardingComplete = Boolean(user?.user_metadata?.onboarding_completed_at)
+
   const value = {
     user,
     session,
@@ -51,6 +86,9 @@ export function AuthProvider({ children }) {
     signIn,
     signUp,
     signOut,
+    signInWithApple,
+    signInWithGoogle,
+    onboardingComplete,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

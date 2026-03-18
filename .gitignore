@@ -85,3 +85,6 @@ htmlcov/
 
 # android studio logs
 *.logcat
+
+# keystores
+frontend/android/keystores.properties
