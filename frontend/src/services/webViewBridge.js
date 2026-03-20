@@ -311,6 +311,7 @@ export function createWebViewBridge(config) {
       return new Promise((resolve) => {
         let received = false;
         let messageListener;
+        let urlListener;
         let silentExtractInterval;
         let silentHttpOnlyInjected = false;
 
@@ -352,6 +353,7 @@ export function createWebViewBridge(config) {
           console.log(`${LOG_PREFIX} startSilentSync: ${silentTimeoutMs / 1000}s timeout`);
           if (silentExtractInterval) clearInterval(silentExtractInterval);
           messageListener?.remove?.();
+          urlListener?.remove?.();
           InAppBrowser.close().catch(() => {});
           resolve(null);
         }, silentTimeoutMs);
@@ -362,6 +364,7 @@ export function createWebViewBridge(config) {
           clearTimeout(timeout);
           if (silentExtractInterval) clearInterval(silentExtractInterval);
           messageListener?.remove?.();
+          urlListener?.remove?.();
           InAppBrowser.close().catch(() => {});
           resolve(result);
         };
@@ -416,6 +419,14 @@ export function createWebViewBridge(config) {
               }
             });
 
+            urlListener = await InAppBrowser.addListener('urlChangeEvent', () => {
+              if (received) return;
+              silentHttpOnlyInjected = false;
+              runSilentExtraction();
+              setTimeout(runSilentExtraction, 800);
+              setTimeout(runSilentExtraction, 2500);
+            });
+
             await InAppBrowser.openWebView({
               url: homeUrl,
               isPresentAfterPageLoad: false, // true can block on Android 13+ with redirecting URLs
@@ -432,6 +443,7 @@ export function createWebViewBridge(config) {
             console.error(`${LOG_PREFIX} startSilentSync failed`, err);
             clearTimeout(timeout);
             messageListener?.remove?.();
+            urlListener?.remove?.();
             resolve(null);
           }
         })();
