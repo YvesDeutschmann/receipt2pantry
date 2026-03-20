@@ -49,6 +49,7 @@ async function closeWebView(logPrefix) {
  * @param {string} [config.urlExcludePattern] - URL pattern to exclude from extraction trigger (e.g. '/LogonForm')
  * @param {Object} [config.httpOnlyCookies] - Optional HttpOnly cookie extraction: { url, cookieName, parseToken, injectKey, injectVarName }
  * @param {() => string} [config.preExtractVars] - Optional JS snippet to inject before extract script (e.g. window.__knownOrderIds=...)
+ * @param {() => Promise<string|undefined>} [config.extractCookiesBeforeClose] - Optional: read cookies from InAppBrowser before close (e.g. for native API Cookie header)
  */
 export function createWebViewBridge(config) {
   const {
@@ -71,6 +72,7 @@ export function createWebViewBridge(config) {
     urlExcludePattern = '',
     httpOnlyCookies,
     preExtractVars,
+    extractCookiesBeforeClose,
   } = config;
 
   const LOG_PREFIX = `[${provider}WebViewBridge]`;
@@ -100,11 +102,16 @@ export function createWebViewBridge(config) {
 
   const handleTokensMessage = async (d, finish) => {
     const tokens = extractTokensFromTokensMessage(d);
+    let cookieHeader;
+    if (extractCookiesBeforeClose) {
+      cookieHeader = await extractCookiesBeforeClose().catch(() => undefined);
+    }
     await closeWebView(LOG_PREFIX);
     await tokenStorage.store(tokens);
     finish({
       ...tokens,
       _closeWebViewAfterFetch: true,
+      cookieHeader,
     });
   };
 
@@ -146,7 +153,7 @@ export function createWebViewBridge(config) {
           const code = `window.${httpOnlyCookies.injectVarName}=${escaped};`;
           await InAppBrowser.executeScript({ code });
           httpOnlyTokenInjected = true;
-          console.log(`${LOG_PREFIX} Injected HttpOnly token into WebView (${httpOnlyCookies.injectVarName})`);
+          console.log(`${LOG_PREFIX} Injected HttpOnly token (${httpOnlyCookies.injectVarName})`);
         } catch (err) {
           console.warn(`${LOG_PREFIX} getCookies failed:`, err?.message || err);
         }
@@ -194,15 +201,16 @@ export function createWebViewBridge(config) {
               return;
             }
             if (messageTypes.progress && d?.type === messageTypes.progress) {
+              progressReceived = true;
               if (typeof window !== 'undefined') {
                 window.dispatchEvent(new CustomEvent('webview-progress', { detail: d }));
               }
               return;
             }
-            if (d?.type === messageTypes.receipts) {
+            if (messageTypes.receipts && d?.type === messageTypes.receipts) {
               if (tokensReceived) return;
               tokensReceived = true;
-              console.log(`${LOG_PREFIX} Receipts message received`);
+              console.log(`${LOG_PREFIX} Receipts message received (attempt ${extractionAttempts})`);
               cleanup();
               handleReceiptsMessage(d, (result) => finish.resolve?.(result)).catch((err) => {
                 console.error(`${LOG_PREFIX} receipts handler error`, err?.message || err);
@@ -217,7 +225,7 @@ export function createWebViewBridge(config) {
             if (d?.type === messageTypes.tokens && extractTokensFromTokensMessage(d)) {
               if (tokensReceived) return;
               tokensReceived = true;
-              console.log(`${LOG_PREFIX} Tokens message received (no receipts)`);
+              console.log(`${LOG_PREFIX} Tokens message received (attempt ${extractionAttempts})`);
               cleanup();
               handleTokensMessage(d, (result) => finish.resolve?.(result)).catch((err) => {
                 console.error(`${LOG_PREFIX} tokens handler error`, err?.message || err);
@@ -238,7 +246,7 @@ export function createWebViewBridge(config) {
             pendingGraceTimer = setTimeout(() => {
               if (tokensReceived) return;
               cleanup();
-              finish.reject?.(new Error('WebView closed before receipts were received'));
+              finish.reject?.(new Error('WebView closed before sync completed'));
             }, 3000);
             return;
           }
@@ -372,7 +380,7 @@ export function createWebViewBridge(config) {
                 }
                 return;
               }
-              if (d?.type === messageTypes.receipts) {
+              if (messageTypes.receipts && d?.type === messageTypes.receipts) {
                 if (received) return;
                 const rawReceipts = extractRawReceipts(d) ?? [];
                 const filtered = filterReceipts ? filterReceipts(rawReceipts) : rawReceipts;
@@ -391,13 +399,19 @@ export function createWebViewBridge(config) {
               if (d?.type === messageTypes.tokens) {
                 if (received) return;
                 const tokens = extractTokensFromTokensMessage(d);
-                closeWebView(LOG_PREFIX).then(() =>
-                  tokenStorage.store(tokens)
-                ).then(() => {
-                  finish({ ...tokens, _closeWebViewAfterFetch: true });
-                }).catch((err) => {
+                (async () => {
+                  let cookieHeader;
+                  if (extractCookiesBeforeClose) {
+                    cookieHeader = await extractCookiesBeforeClose().catch(() => undefined);
+                  }
+                  await closeWebView(LOG_PREFIX);
+                  await tokenStorage.store(tokens);
+                  finish({ ...tokens, _closeWebViewAfterFetch: true, cookieHeader });
+                })().catch((err) => {
                   console.error(`${LOG_PREFIX} startSilentSync tokens handler error`, err?.message || err);
-                  tokenStorage.store(tokens).then(() => finish({ ...tokens, _closeWebViewAfterFetch: true }));
+                  tokenStorage.store(tokens).then(() =>
+                    finish({ ...tokens, _closeWebViewAfterFetch: true })
+                  );
                 });
               }
             });

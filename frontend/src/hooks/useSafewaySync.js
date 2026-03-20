@@ -1,11 +1,18 @@
 /**
- * useSafewaySync - React hook for Safeway WebView bridge sync flow
- * Orchestrates: login (WebView) -> in-WebView receipt fetch -> POST to /api/receipts/ingest
+ * useSafewaySync - React hook for Safeway sync flow
+ * WebView extracts token + clubCard; app-layer fetch (safewayApiFetcher) + ingest.
  */
 
 import { useState, useCallback, useEffect } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { hasStoredTokens, startLogin, startSilentSync, clearStoredTokens, setPreExtractContext } from '../services/safewayWebViewBridge';
+import {
+  hasStoredTokens,
+  startLogin,
+  startSilentSync,
+  clearStoredTokens,
+  fetchSafewayReceipts,
+} from '../services/safewayWebViewBridge';
+import { parseSafewayReceipt } from '../services/safewayReceiptParser';
 import { api } from '../services/apiClient';
 
 const LOG_PREFIX = '[SafewaySync]';
@@ -17,6 +24,20 @@ const STATUS = {
   SUCCESS: 'success',
   ERROR: 'error',
 };
+
+async function handleFetchAuthError(err, clearTokens) {
+  const status = err?.status;
+  const msg = err?.message || String(err);
+  const isAuth =
+    status === 401 ||
+    status === 403 ||
+    /401|403|unauthorized|forbidden/i.test(msg);
+  if (isAuth) {
+    await clearTokens();
+    return true;
+  }
+  return false;
+}
 
 export function useSafewaySync(userId) {
   const [status, setStatus] = useState(STATUS.IDLE);
@@ -64,24 +85,35 @@ export function useSafewaySync(userId) {
             .map((r) => r.order_id);
         } catch (_) {}
       }
-      setPreExtractContext({
-        knownOrderIds,
-        daysOverride: hasStoredTokensState ? 3 : 7,
-      });
 
       const tokens = await startLogin();
-      console.log(`${LOG_PREFIX} startSync: login complete`);
+
+      if (!tokens?.accessToken) {
+        throw new Error('Safeway login did not complete. Please try again.');
+      }
+      if (!tokens?.clubCard) {
+        throw new Error(
+          'Could not read your Safeway club card. Please try signing in again.'
+        );
+      }
 
       setStatus(STATUS.FETCHING);
       let receipts;
-
-      if (tokens?.receipts != null && tokens?._fromWebView) {
-        receipts = tokens.receipts;
-        console.log(`${LOG_PREFIX} Using ${receipts?.length ?? 0} receipts from in-WebView fetch`);
-      } else if (tokens?._closeWebViewAfterFetch) {
-        throw new Error('Could not fetch receipts. Please try again and complete your Safeway login.');
-      } else {
-        throw new Error('In-WebView fetch did not return receipts. Please try again after signing in.');
+      try {
+        const raw = await fetchSafewayReceipts({
+          accessToken: tokens.accessToken,
+          clubCard: tokens.clubCard,
+          knownOrderIds,
+          daysOverride: hasStoredTokensState ? 3 : 7,
+          cookieHeader: tokens.cookieHeader,
+        });
+        receipts = (raw || []).map((r) => parseSafewayReceipt(r)).filter(Boolean);
+      } catch (fetchErr) {
+        await handleFetchAuthError(fetchErr, async () => {
+          await clearStoredTokens();
+          setHasStoredTokensState(false);
+        });
+        throw fetchErr;
       }
 
       if (!userId) {
@@ -142,10 +174,6 @@ export function useSafewaySync(userId) {
           .filter((r) => r?.provider === 'safeway' && r?.order_id)
           .map((r) => r.order_id);
       } catch (_) {}
-      setPreExtractContext({
-        knownOrderIds,
-        daysOverride: hasStoredTokensState ? 3 : 7,
-      });
 
       const syncResult = await startSilentSync();
       if (!syncResult) {
@@ -157,7 +185,35 @@ export function useSafewaySync(userId) {
         return;
       }
 
-      const receipts = syncResult.receipts ?? [];
+      if (!syncResult.accessToken) {
+        throw new Error('Safeway session invalid. Please sign in again.');
+      }
+      if (!syncResult.clubCard) {
+        await clearStoredTokens();
+        setHasStoredTokensState(false);
+        setError('Could not read your Safeway club card. Please sign in again.');
+        setStatus(STATUS.ERROR);
+        return;
+      }
+
+      let receipts = [];
+      try {
+        const raw = await fetchSafewayReceipts({
+          accessToken: syncResult.accessToken,
+          clubCard: syncResult.clubCard,
+          knownOrderIds,
+          daysOverride: hasStoredTokensState ? 3 : 7,
+          cookieHeader: syncResult.cookieHeader,
+        });
+        receipts = (raw || []).map((r) => parseSafewayReceipt(r)).filter(Boolean);
+      } catch (fetchErr) {
+        await handleFetchAuthError(fetchErr, async () => {
+          await clearStoredTokens();
+          setHasStoredTokensState(false);
+        });
+        throw fetchErr;
+      }
+
       setProgress(null);
       if (receipts.length > 0) {
         setStatus(STATUS.SUBMITTING);
