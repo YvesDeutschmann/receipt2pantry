@@ -3,7 +3,7 @@
  * expected by store_fetched_receipts / receipt_service.
  *
  * Mirrors field resolution from backend safeway_provider.py (lines 659-679).
- * Used by safewayWebViewBridge when processing safeway-receipts messages.
+ * Used after app-layer Safeway API fetch (safewayApiFetcher) before ingest.
  * Unit-testable: pass raw API objects to verify parsing.
  */
 
