@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../services/apiClient'
 import { useAuth } from '../contexts/AuthContext'
@@ -15,12 +15,6 @@ function Providers() {
   const { user, onboardingComplete } = useAuth()
   const navigate = useNavigate()
   const userId = user?.id
-
-  const maybeContinueColdStartToPantry = useCallback(async () => {
-    if (!onboardingComplete && user?.user_metadata?.cold_start_step === 1) {
-      navigate('/onboarding/pantry-setup', { replace: true })
-    }
-  }, [onboardingComplete, user, navigate])
 
   const [providers, setProviders] = useState([])
   const [providerStatuses, setProviderStatuses] = useState({}) // { providerName: { configured, active } }
@@ -108,7 +102,6 @@ function Providers() {
       const response = await api.fetchReceiptsWithStoredCredentials(provider, userId, 14)
       setFetchedReceipts(response.receipts)
       alert(`✅ Fetched ${response.count} receipts from ${provider}! Added ${response.items_added_to_pantry} items to pantry.`)
-      await maybeContinueColdStartToPantry()
     } catch (err) {
       const errorMessage = err.response?.data?.error || 'Failed to fetch receipts'
       setReceiptError(errorMessage)
@@ -157,7 +150,6 @@ function Providers() {
           setCredentialsModalOpen(false)
           setFetchedReceipts(response.receipts)
           alert(`Fetched ${response.count} receipts from ${selectedProvider}!`)
-          await maybeContinueColdStartToPantry()
         } else if (response.status === 'mfa_required') {
           setCredentialsModalOpen(false)
           setMfaSession({
@@ -244,7 +236,6 @@ function Providers() {
             )
             setFetchedReceipts(receiptsResponse.receipts)
             alert(`Fetched ${receiptsResponse.count} receipts!`)
-            await maybeContinueColdStartToPantry()
           } catch (fetchErr) {
             const fetchError = fetchErr.response?.data?.error || 'Failed to fetch receipts'
             setReceiptError(fetchError)
@@ -372,10 +363,6 @@ function Providers() {
     await new Promise(resolve => setTimeout(resolve, 300))
     // Force immediate status refresh
     await fetchProviders()
-    if (!onboardingComplete) {
-      await maybeContinueColdStartToPantry()
-      return
-    }
     alert('Costco account connected successfully!')
   }
 
@@ -458,13 +445,7 @@ function Providers() {
                       <div className="w-full space-y-3">
                         <div className="p-3 bg-forest-light rounded-mise-md border border-forest-light">
                           <p className="text-xs font-medium text-sage-light mb-2">One-Tap Sync</p>
-                          <CostcoOneTapSync
-                            userId={userId}
-                            days={90}
-                            onSyncSuccess={() => {
-                              maybeContinueColdStartToPantry()
-                            }}
-                          />
+                          <CostcoOneTapSync userId={userId} days={90} />
                         </div>
                         <div className="flex gap-2">
                           {isConnected ? (
