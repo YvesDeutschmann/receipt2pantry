@@ -1,5 +1,6 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
 import { AuthProvider } from './contexts/AuthContext'
+import { ColdStartProvider } from './contexts/ColdStartContext'
 import AppShell from './components/AppShell'
 import Dashboard from './pages/Dashboard'
 import Pantry from './pages/Pantry'
@@ -13,35 +14,39 @@ import OnboardingRoute from './components/OnboardingRoute'
 import HouseholdSize from './pages/onboarding/HouseholdSize'
 import DietaryRestrictions from './pages/onboarding/DietaryRestrictions'
 import BridgeScreen from './pages/onboarding/BridgeScreen'
+import StaplesTemplate from './pages/onboarding/StaplesTemplate'
 
 function App() {
   return (
     <AuthProvider>
-      <Router>
-        <Routes>
-          <Route path="/auth" element={<Auth />} />
-          <Route path="/onboarding" element={<OnboardingRoute />}>
-            <Route index element={<HouseholdSize />} />
-            <Route path="dietary" element={<DietaryRestrictions />} />
-            <Route path="bridge" element={<BridgeScreen />} />
-          </Route>
-          <Route
-            element={
-              <ProtectedRoute>
-                <AppShell />
-              </ProtectedRoute>
-            }
-          >
-            <Route index element={<Dashboard />} />
-            <Route path="pantry" element={<Pantry />} />
-            <Route path="recipes" element={<Recipes />} />
-            <Route path="meal-plan" element={<MealPlan />} />
-            <Route path="settings" element={<Settings />} />
-            <Route path="providers" element={<Providers />} />
-          </Route>
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
-      </Router>
+      <ColdStartProvider>
+        <Router>
+          <Routes>
+            <Route path="/auth" element={<Auth />} />
+            <Route path="/onboarding" element={<OnboardingRoute />}>
+              <Route index element={<HouseholdSize />} />
+              <Route path="dietary" element={<DietaryRestrictions />} />
+              <Route path="bridge" element={<BridgeScreen />} />
+              <Route path="pantry-setup" element={<StaplesTemplate />} />
+            </Route>
+            <Route
+              element={
+                <ProtectedRoute>
+                  <AppShell />
+                </ProtectedRoute>
+              }
+            >
+              <Route index element={<Dashboard />} />
+              <Route path="pantry" element={<Pantry />} />
+              <Route path="recipes" element={<Recipes />} />
+              <Route path="meal-plan" element={<MealPlan />} />
+              <Route path="settings" element={<Settings />} />
+              <Route path="providers" element={<Providers />} />
+            </Route>
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Router>
+      </ColdStartProvider>
     </AuthProvider>
   )
 }

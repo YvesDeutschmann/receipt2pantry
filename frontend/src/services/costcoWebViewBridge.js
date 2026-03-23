@@ -33,7 +33,7 @@ const tokenStorage = createTokenStorage({
 
 const bridge = createWebViewBridge({
   provider: 'costco',
-  loginUrl: 'https://www.costco.com/LogonForm',
+  loginUrl: 'https://www.costco.com',
   homeUrl: 'https://www.costco.com',
   extractDomains: ['costco.com', 'signin.costco.com', 'login.microsoftonline.com', 'b2clogin.com'],
   getExtractScript: () => getExtractScript(COSTCO_GRAPHQL_URL),
@@ -64,9 +64,12 @@ const bridge = createWebViewBridge({
   extractRawReceipts: (d) => d?.receipts ?? [],
   parseReceipts: (raw) => raw.map((r) => parseApiReceipt(r)).filter(Boolean),
   filterReceipts: (raw) =>
-    raw.filter((r) => ((r.receiptType || 'warehouse').toLowerCase() === 'warehouse')),
+    raw.filter((r) => {
+      const t = (r.receiptType || '').toLowerCase();
+      return t !== 'gasstation' && t !== 'carwash' && t !== 'gasandcarwash';
+    }),
   loginTitle: 'Sign in to Costco',
-  urlExcludePattern: '/LogonForm',
+  urlExcludePattern: 'signin.costco.com',
 });
 
 export const startLogin = bridge.startLogin.bind(bridge);

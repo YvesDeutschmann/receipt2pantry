@@ -104,6 +104,21 @@ class SupabaseService:
             logger.error(f"Failed to delete receipt {receipt_id}: {e}")
             raise DatabaseException(f"Failed to delete receipt: {e}")
     
+    def delete_user_receipts(self, user_id: str) -> None:
+        """
+        Delete all receipts for a user (receipt_items cascade via FK).
+
+        Args:
+            user_id: User ID
+        """
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            client.table("receipts").delete().eq("user_id", user_id).execute()
+            logger.info(f"Deleted all receipts for user {user_id}")
+        except Exception as e:
+            logger.error(f"Failed to delete receipts for user {user_id}: {e}")
+            raise DatabaseException(f"Failed to delete user receipts: {e}")
+    
     def store_receipt(self, receipt_data: Dict) -> str:
         """
         Store a receipt in the database
@@ -1229,6 +1244,66 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Failed to get cooking history for household {household_id}: {e}")
             raise DatabaseException(f"Failed to retrieve household cooking history: {e}")
+
+    def get_staples_template_rows(self, active_only: bool = True) -> List[Dict]:
+        """
+        Load staples template rows for cold-start pantry setup (Layer 1).
+        """
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            q = client.table("staples_template").select("*")
+            if active_only:
+                q = q.eq("active", True)
+            response = q.execute()
+            rows = response.data if response.data else []
+            rows.sort(key=lambda r: (r.get("category") or "", r.get("sort_order") or 0))
+            return rows
+        except Exception as e:
+            logger.error(f"Failed to load staples template: {e}")
+            raise DatabaseException(f"Failed to load staples template: {e}")
+
+    def get_receipt_items_for_household(
+        self, household_id: str, receipt_limit: int = 80
+    ) -> List[Dict]:
+        """
+        Receipt line items for a household, each dict includes receipt order_date for enrichment.
+        """
+        try:
+            receipts = self.get_household_receipts(household_id, limit=receipt_limit)
+            if not receipts:
+                return []
+            client = self.admin_client if self.admin_client else self.client
+            out: List[Dict] = []
+            for rec in receipts:
+                rid = rec.get("id")
+                order_date = rec.get("order_date")
+                if not rid:
+                    continue
+                r2 = (
+                    client.table("receipt_items")
+                    .select("*")
+                    .eq("receipt_id", rid)
+                    .execute()
+                )
+                for row in r2.data or []:
+                    row = dict(row)
+                    row["_receipt_order_date"] = order_date
+                    row["_receipt_id"] = rid
+                    out.append(row)
+            return out
+        except Exception as e:
+            logger.error(f"Failed to load receipt items for household {household_id}: {e}")
+            raise DatabaseException(f"Failed to load receipt items for household: {e}")
+
+    def update_pantry_item_fields(self, item_id: str, fields: Dict) -> None:
+        """Partial update of a pantry row (service role)."""
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            client.table("pantry_items").update(fields).eq("id", item_id).execute()
+            logger.info(f"Updated pantry item {item_id} fields: {list(fields.keys())}")
+        except Exception as e:
+            logger.error(f"Failed to update pantry item {item_id}: {e}")
+            raise DatabaseException(f"Failed to update pantry item: {e}")
 
 
 def create_supabase_service(

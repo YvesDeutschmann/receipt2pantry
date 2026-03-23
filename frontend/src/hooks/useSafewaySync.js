@@ -104,7 +104,7 @@ export function useSafewaySync(userId) {
           accessToken: tokens.accessToken,
           clubCard: tokens.clubCard,
           knownOrderIds,
-          daysOverride: hasStoredTokensState ? 3 : 7,
+          daysOverride: hasStoredTokensState ? 3 : 90,
           cookieHeader: tokens.cookieHeader,
         });
         receipts = (raw || []).map((r) => parseSafewayReceipt(r)).filter(Boolean);
@@ -202,7 +202,7 @@ export function useSafewaySync(userId) {
           accessToken: syncResult.accessToken,
           clubCard: syncResult.clubCard,
           knownOrderIds,
-          daysOverride: hasStoredTokensState ? 3 : 7,
+          daysOverride: hasStoredTokensState ? 3 : 90,
           cookieHeader: syncResult.cookieHeader,
         });
         receipts = (raw || []).map((r) => parseSafewayReceipt(r)).filter(Boolean);

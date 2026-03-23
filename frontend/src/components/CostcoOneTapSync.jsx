@@ -3,10 +3,10 @@
  * Renders sync button, status messages, and result summary.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { useCostcoSync, STATUS } from '../hooks/useCostcoSync';
 
-export default function CostcoOneTapSync({ userId, className = '' }) {
+export default function CostcoOneTapSync({ userId, className = '', onSyncSuccess }) {
   const {
     status,
     error,
@@ -18,9 +18,22 @@ export default function CostcoOneTapSync({ userId, className = '' }) {
     isNative,
   } = useCostcoSync(userId);
 
+  const successFiredRef = useRef(false);
+
   useEffect(() => {
     checkStoredTokens();
   }, [checkStoredTokens]);
+
+  useEffect(() => {
+    if (status === STATUS.SUCCESS && result && onSyncSuccess) {
+      if (successFiredRef.current) return;
+      successFiredRef.current = true;
+      onSyncSuccess(result);
+    }
+    if (status !== STATUS.SUCCESS) {
+      successFiredRef.current = false;
+    }
+  }, [status, result, onSyncSuccess]);
 
   const isBusy =
     status === STATUS.AUTHENTICATING ||
@@ -88,7 +101,7 @@ export default function CostcoOneTapSync({ userId, className = '' }) {
         <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex flex-col gap-2">
           <p className="text-red-800">{error}</p>
           <button
-            onClick={startSync}
+            onClick={() => (hasStoredTokens ? startSilent() : startSync())}
             className="self-start px-3 py-1.5 text-sm rounded bg-red-100 text-red-700 hover:bg-red-200"
           >
             Retry

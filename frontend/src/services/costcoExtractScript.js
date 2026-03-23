@@ -51,6 +51,27 @@ export function getExtractScript(graphqlUrl) {
 
   function postDebug(msg,data){try{if(window.mobileApp&&typeof window.mobileApp.postMessage==='function'){window.mobileApp.postMessage(JSON.stringify({detail:{type:'costco-webview-fetch-debug',message:msg,data:data||{}}}));}}catch(_){}}
 
+  if(!window.__costcoOpenWrapped){window.__costcoOpenWrapped=true;(function(){var origOpen=window.open;window.open=function(url,target,features){try{postDebug('window-open-intercepted',{url:String(url||'').slice(0,500),target:target||'',features:String(features||'').slice(0,200)});}catch(_){}return origOpen?origOpen.apply(this,arguments):null;};})();}
+
+  function postDiag(){
+    if(window.__costcoDiagPosted)return;
+    window.__costcoDiagPosted=true;
+    try{
+      var lsKeys=[],ssKeys=[];
+      try{for(var i=0;i<Math.min(localStorage.length,10);i++)lsKeys.push(localStorage.key(i));}catch(_){}
+      try{for(var i=0;i<Math.min(sessionStorage.length,10);i++)ssKeys.push(sessionStorage.key(i));}catch(_){}
+      postDebug('page-diagnostic',{
+        href:location.href||'',
+        title:document.title||'',
+        lsLen:localStorage.length,lsKeys:lsKeys,
+        ssLen:sessionStorage.length,ssKeys:ssKeys,
+        bodyText:(document.body&&document.body.innerText||'').slice(0,300),
+        hasWindowOpen:typeof window.open,
+        ua:navigator.userAgent||''
+      });
+    }catch(_){}
+  }
+
   function postReceiptsFromWebView(receipts,idT,accT,c,rt,rtCid,wcsCid,userAgent){
     if(window.__costcoReceiptsPosted)return true;
     try{if(window.mobileApp&&typeof window.mobileApp.postMessage==='function'){
@@ -115,6 +136,20 @@ export function getExtractScript(graphqlUrl) {
     doFetchReceipts({idT:idT,accT:accT,c:c,rt:rt,rtCid:rtCid,wcs:wcs,userAgent:userAgent||''});
   }
 
+  function injectSyncOverlay(){
+    try{
+      if(document.getElementById('meald-sync-style'))return;
+      var s=document.createElement('style');
+      s.id='meald-sync-style';
+      s.textContent=
+        'body::before{content:"";position:fixed;inset:0;background:#fff;z-index:2147483646;}'+
+        'body::after{content:"Syncing Costco Receipts";position:fixed;top:50%;left:50%;'+
+        'transform:translate(-50%,-50%);z-index:2147483647;'+
+        'font:600 20px/1 sans-serif;color:#333;white-space:nowrap;}';
+      (document.head||document.documentElement).appendChild(s);
+    }catch(_){}
+  }
+
   function tryPost(){
     var idT,accT; try{idT=findIdToken(localStorage);}catch(_){}
     if(!idT)try{idT=findIdToken(sessionStorage);}catch(_){}
@@ -125,13 +160,14 @@ export function getExtractScript(graphqlUrl) {
     if(idT&&isJwtExpired(idT,60))idT=null;
     if(accT&&isJwtExpired(accT,60))accT=null;
     if(!idT&&!accT)return false;
+    injectSyncOverlay();
     var host=typeof location!=='undefined'?location.hostname||'':'';
     if(host.indexOf('www.costco.com')>=0){fetchReceiptsInWebView(idT,accT,c,'${WCS_CLIENT_ID}',r.rt,r.clientId,navigator.userAgent||'');}else{postTokens(idT,accT,c,navigator.userAgent||'',r.rt,r.clientId,'${WCS_CLIENT_ID}');}
     return window.__costcoReceiptsPosted;
   }
 
   function waitBridge(cb){var t0=Date.now();function check(){if(window.mobileApp&&typeof window.mobileApp.postMessage==='function'){cb();return;}if(Date.now()-t0>BRIDGE_MAX)return;setTimeout(check,BRIDGE_POLL);}check();}
-  function pollTokens(){var t0=Date.now(),iv=setInterval(function(){if(tryPost()){clearInterval(iv);if(typeof window!=='undefined')window.__costcoPollActive=false;return;}if(Date.now()-t0>TOKEN_MAX){clearInterval(iv);if(typeof window!=='undefined')window.__costcoPollActive=false;}},TOKEN_POLL);}
+  function pollTokens(){postDiag();var t0=Date.now(),iv=setInterval(function(){if(tryPost()){clearInterval(iv);if(typeof window!=='undefined')window.__costcoPollActive=false;return;}if(Date.now()-t0>TOKEN_MAX){clearInterval(iv);if(typeof window!=='undefined')window.__costcoPollActive=false;}},TOKEN_POLL);}
   if(typeof window!=='undefined'&&!window.__costcoPollActive){window.__costcoPollActive=true;waitBridge(pollTokens);}
 })();
 `;
