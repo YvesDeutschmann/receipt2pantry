@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Store, Users } from 'lucide-react'
 import { api } from '../services/apiClient'
+import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 import HouseholdModal from '../components/HouseholdModal'
 import PageHeader from '../components/PageHeader'
@@ -197,6 +198,34 @@ function Settings() {
             </div>
           </div>
         </div>
+
+        {import.meta.env.DEV && (
+          <div className="card border-dashed border-[var(--color-error)]/50">
+            <h2 className="text-sm font-medium text-[var(--color-error)] mb-2">Dev Tools</h2>
+            <button
+              type="button"
+              onClick={async () => {
+                await api.devResetOnboarding()
+                await supabase.auth.updateUser({
+                  data: {
+                    onboarding_completed_at: null,
+                    cold_start_step: null,
+                    cold_start_grocery_connected: null,
+                    cold_start_pantry_template_completed_at: null,
+                    whats_for_dinner_unlocked: null,
+                    bridge_chose_providers: null,
+                    bridge_chose_manual: null,
+                    cold_start_skip_grocery: null,
+                  },
+                })
+                window.location.reload()
+              }}
+              className="text-sm text-[var(--color-error)] underline"
+            >
+              Reset onboarding state
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Household Modal */}

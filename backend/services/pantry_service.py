@@ -1,7 +1,7 @@
 """Pantry management service for tracking household ingredient inventory"""
 
-from typing import Dict, List, Optional
-from datetime import datetime
+from typing import Any, Dict, List, Optional, Set, Tuple
+from datetime import date, datetime, timezone
 from backend.services.supabase_service import SupabaseService
 from backend.utils.exceptions import DatabaseException, ValidationException
 from backend.utils.logger import get_logger
@@ -382,6 +382,235 @@ class PantryService:
         except Exception as e:
             logger.error(f"Failed to check ingredient availability: {e}")
             raise DatabaseException(f"Failed to check ingredient availability: {e}")
+
+    @staticmethod
+    def _normalize_base_key(base_ingredient: Optional[str]) -> str:
+        return (base_ingredient or "").strip().lower()
+
+    def _find_pantry_by_base(
+        self, pantry_items: List[Dict], base_ingredient: str
+    ) -> Optional[Dict]:
+        key = self._normalize_base_key(base_ingredient)
+        for item in pantry_items:
+            if self._normalize_base_key(item.get("base_ingredient")) == key:
+                return item
+        return None
+
+    async def batch_add_or_merge_items(
+        self,
+        user_id: str,
+        household_id: Optional[str],
+        canonical_items: List[Dict],
+        source: str,
+        *,
+        set_template_confirmed: bool = False,
+    ) -> Dict[str, Any]:
+        """
+        Shared batch path for staples template, future search (L2), and voice (L3).
+
+        Each canonical item: base_ingredient, normalized_name, category (optional).
+
+        Merges on existing household pantry row with same base_ingredient (any variant/unit);
+        otherwise inserts quantity=1, unit=''.
+        """
+        if not household_id:
+            household_id = self._get_household_id_for_user(user_id)
+
+        working = list(self._get_pantry_items(user_id, household_id))
+        inserted = 0
+        merged = 0
+
+        for ci in canonical_items:
+            bi = ci.get("base_ingredient")
+            if not bi:
+                continue
+            nn = ci.get("normalized_name") or bi
+            cat = ci.get("category")
+            ex = self._find_pantry_by_base(working, bi)
+            if ex:
+                merged += 1
+                updates: Dict[str, Any] = {}
+                if set_template_confirmed:
+                    updates["template_confirmed"] = True
+                if updates:
+                    self.supabase.update_pantry_item_fields(ex["id"], updates)
+                continue
+
+            item_data: Dict[str, Any] = {
+                "user_id": user_id,
+                "household_id": household_id,
+                "base_ingredient": bi,
+                "variant": None,
+                "normalized_name": nn,
+                "quantity": 1.0,
+                "unit": "",
+                "product_type": ci.get("product_type"),
+                "category": cat,
+                "tags": ci.get("tags") or [],
+                "metadata": ci.get("metadata") or {},
+                "source": source,
+            }
+            if set_template_confirmed:
+                item_data["template_confirmed"] = True
+
+            new_id = self.supabase.upsert_pantry_item(item_data)
+            inserted += 1
+            working.append(
+                {
+                    "id": new_id,
+                    "base_ingredient": bi,
+                    "variant": None,
+                    "unit": "",
+                }
+            )
+
+        return {"inserted": inserted, "merged": merged, "household_id": household_id}
+
+    def _parse_receipt_order_date(self, raw: Any) -> Optional[date]:
+        if raw is None:
+            return None
+        if isinstance(raw, date) and not isinstance(raw, datetime):
+            return raw
+        if isinstance(raw, datetime):
+            return raw.date()
+        if isinstance(raw, str):
+            try:
+                return date.fromisoformat(raw[:10])
+            except ValueError:
+                return None
+        return None
+
+    async def apply_staple_receipt_enrichment(
+        self,
+        user_id: str,
+        household_id: Optional[str],
+        staple_bases: Set[str],
+        normalizer: Any,
+    ) -> int:
+        """
+        Match normalized receipt lines to canonical staple bases; set purchase_date and
+        receipt_import source on pantry rows. Returns count of staples matched.
+        """
+        if not household_id or not staple_bases or not normalizer:
+            return 0
+
+        lines = self.supabase.get_receipt_items_for_household(household_id)
+        # base -> (best_date, receipt_id)
+        best: Dict[str, Tuple[date, str]] = {}
+
+        for row in lines:
+            name = row.get("name") or ""
+            cat = row.get("category") or "GROCERY"
+            od = self._parse_receipt_order_date(row.get("_receipt_order_date"))
+            rid = row.get("_receipt_id")
+            if not name or not od:
+                continue
+            try:
+                norm = normalizer.normalize_product(name, cat)
+            except Exception as e:
+                logger.warning(f"normalize_product failed for {name!r}: {e}")
+                continue
+            b = self._normalize_base_key(norm.get("base_ingredient"))
+            if not b or b not in staple_bases:
+                continue
+            prev = best.get(b)
+            if prev is None or od > prev[0]:
+                best[b] = (od, str(rid) if rid else "")
+
+        if not best:
+            return 0
+
+        pantry_items = self._get_pantry_items(user_id, household_id)
+        matched = 0
+        for b, (od, rid) in best.items():
+            item = self._find_pantry_by_base(pantry_items, b)
+            if not item:
+                continue
+            pdt = datetime.combine(od, datetime.min.time(), tzinfo=timezone.utc)
+            updates: Dict[str, Any] = {
+                "purchase_date": pdt.isoformat(),
+                "source": "receipt_import",
+            }
+            if rid:
+                updates["last_receipt_id"] = rid
+            self.supabase.update_pantry_item_fields(item["id"], updates)
+            matched += 1
+
+        return matched
+
+    async def list_staple_receipt_matches(
+        self,
+        user_id: str,
+        household_id: Optional[str],
+        candidate_bases: Set[str],
+        normalizer: Any,
+    ) -> List[str]:
+        """Bases (lowercase) among candidate_bases that appear on recent receipts."""
+        if not household_id or not candidate_bases or not normalizer:
+            return []
+        lines = self.supabase.get_receipt_items_for_household(household_id)
+        found: Set[str] = set()
+        for row in lines:
+            name = row.get("name") or ""
+            cat = row.get("category") or "GROCERY"
+            if not name:
+                continue
+            try:
+                norm = normalizer.normalize_product(name, cat)
+            except Exception:
+                continue
+            b = self._normalize_base_key(norm.get("base_ingredient"))
+            if b in candidate_bases:
+                found.add(b)
+        return sorted(found)
+
+    async def confirm_staples_batch(
+        self,
+        user_id: str,
+        selected_base_ingredients: List[str],
+        normalizer: Optional[Any] = None,
+    ) -> Dict[str, Any]:
+        """
+        Confirm staples template selection: merge or insert rows, then receipt enrichment.
+        """
+        household_id = self._get_household_id_for_user(user_id)
+        template_rows = self.supabase.get_staples_template_rows(active_only=True)
+        by_base = {self._normalize_base_key(r["base_ingredient"]): r for r in template_rows}
+
+        canonical_items: List[Dict] = []
+        for raw in selected_base_ingredients:
+            row = by_base.get(self._normalize_base_key(raw))
+            if not row:
+                continue
+            canonical_items.append(
+                {
+                    "base_ingredient": row["base_ingredient"],
+                    "normalized_name": row["display_name"],
+                    "category": row["category"],
+                }
+            )
+
+        batch_result = await self.batch_add_or_merge_items(
+            user_id,
+            household_id,
+            canonical_items,
+            source="template",
+            set_template_confirmed=True,
+        )
+
+        staple_bases = {
+            self._normalize_base_key(c["base_ingredient"]) for c in canonical_items
+        }
+        receipt_matched = await self.apply_staple_receipt_enrichment(
+            user_id, household_id, staple_bases, normalizer
+        )
+
+        return {
+            "added": batch_result["inserted"],
+            "already_existed": batch_result["merged"],
+            "receipt_matched": receipt_matched,
+            "household_id": batch_result.get("household_id"),
+        }
 
 
 def create_pantry_service(supabase: SupabaseService) -> PantryService:

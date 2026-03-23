@@ -19,7 +19,7 @@ function BridgeScreen() {
     return 'email'
   }
 
-  const completeOnboarding = async (navigateTo) => {
+  const proceedFromBridge = async (navigateTo, coldStartMeta) => {
     setError(null)
     setLoading(true)
     try {
@@ -30,8 +30,9 @@ function BridgeScreen() {
 
       await supabase.auth.updateUser({
         data: {
-          onboarding_completed_at: new Date().toISOString(),
+          cold_start_step: 1,
           signup_method: getSignupMethod(),
+          ...coldStartMeta,
         },
       })
 
@@ -59,8 +60,19 @@ function BridgeScreen() {
           <div
             role="button"
             tabIndex={0}
-            onClick={() => completeOnboarding('/providers')}
-            onKeyDown={(e) => e.key === 'Enter' && completeOnboarding('/providers')}
+            onClick={() =>
+              proceedFromBridge('/providers', {
+                cold_start_skip_grocery: false,
+                bridge_chose_providers: true,
+              })
+            }
+            onKeyDown={(e) =>
+              e.key === 'Enter' &&
+              proceedFromBridge('/providers', {
+                cold_start_skip_grocery: false,
+                bridge_chose_providers: true,
+              })
+            }
             className="rounded-mise-md border border-[var(--color-error)] px-3 py-2 text-sm text-[var(--color-error)] bg-[var(--color-error)]/10 mb-6 cursor-pointer"
           >
             {error}
@@ -69,7 +81,12 @@ function BridgeScreen() {
 
         <button
           type="button"
-          onClick={() => completeOnboarding('/providers')}
+          onClick={() =>
+            proceedFromBridge('/providers', {
+              cold_start_skip_grocery: false,
+              bridge_chose_providers: true,
+            })
+          }
           disabled={loading}
           className="w-full btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed mb-4"
         >
@@ -85,7 +102,13 @@ function BridgeScreen() {
 
         <button
           type="button"
-          onClick={() => completeOnboarding('/pantry')}
+          onClick={() =>
+            proceedFromBridge('/onboarding/pantry-setup', {
+              cold_start_skip_grocery: true,
+              bridge_chose_manual: true,
+              cold_start_grocery_connected: true,
+            })
+          }
           disabled={loading}
           className="w-full text-sm text-sage-light hover:text-terra-light transition-colors py-2"
         >

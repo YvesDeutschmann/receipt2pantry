@@ -1,9 +1,12 @@
 import { useState, useEffect } from 'react'
-import { api } from '../services/apiClient'
+import { Link } from 'react-router-dom'
+import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/PageHeader'
 import PullToRefresh from '../components/PullToRefresh'
 
 function Dashboard() {
+  const { user } = useAuth()
+  const whatsForDinnerUnlocked = Boolean(user?.user_metadata?.whats_for_dinner_unlocked)
   const [receipts, setReceipts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -31,6 +34,21 @@ function Dashboard() {
         title="Dashboard"
         subtitle="Welcome to Meald! View your recent receipts and shopping statistics."
       />
+
+      {whatsForDinnerUnlocked && (
+        <div className="mb-8 p-5 rounded-mise-lg border border-[var(--color-terra)]/35 bg-forest-light">
+          <p className="text-cream font-display font-semibold mb-1">You&apos;re all set</p>
+          <p className="text-sage-light text-sm mb-4">
+            Your pantry baseline is saved — see what you can cook tonight.
+          </p>
+          <Link
+            to="/recipes"
+            className="btn btn-primary inline-flex items-center justify-center animate-pulse"
+          >
+            What&apos;s for Dinner
+          </Link>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="card">

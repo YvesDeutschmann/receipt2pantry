@@ -295,6 +295,12 @@ export const api = {
     return response.data
   },
 
+  /** Dev only: backend must run with DEBUG=true */
+  devResetOnboarding: async () => {
+    const response = await apiClient.delete('/dev/reset-onboarding')
+    return response.data
+  },
+
   // Pantry Management
   getPantry: async (userId, householdId = null) => {
     const params = householdId ? { household_id: householdId } : {}
@@ -325,6 +331,25 @@ export const api = {
     const response = await apiClient.delete(`/pantry/items/${itemId}`, {
       headers: { 'X-User-Id': userId }
     })
+    return response.data
+  },
+
+  getStaplesTemplate: async () => {
+    const response = await apiClient.get('/pantry/staples-template')
+    return response.data
+  },
+
+  getStaplesReceiptMatches: async () => {
+    const response = await apiClient.get('/pantry/staples-receipt-matches')
+    return response.data
+  },
+
+  confirmStaples: async (userId, selectedItems, _skipped = false) => {
+    const response = await apiClient.post(
+      '/pantry/confirm-staples',
+      { selected_items: selectedItems },
+      { headers: { 'X-User-Id': userId } }
+    )
     return response.data
   },
 

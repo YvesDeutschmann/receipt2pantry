@@ -7,7 +7,7 @@ import { Capacitor } from '@capacitor/core';
 import { InAppBrowser, ToolBarType } from '@capgo/inappbrowser';
 
 const DEFAULT_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
-const DEFAULT_SILENT_TIMEOUT_MS = 15_000;
+const DEFAULT_SILENT_TIMEOUT_MS = 45_000;
 const DEFAULT_EXTRACT_INTERVAL_MS = 3000;
 
 /**
@@ -429,7 +429,7 @@ export function createWebViewBridge(config) {
 
             await InAppBrowser.openWebView({
               url: homeUrl,
-              isPresentAfterPageLoad: false, // true can block on Android 13+ with redirecting URLs
+              isPresentAfterPageLoad: true, // delay until load so hidden sync can close before user sees WebView
               width: 1,
               height: 1,
               x: -9999,

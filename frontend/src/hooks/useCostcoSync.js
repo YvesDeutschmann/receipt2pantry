@@ -115,9 +115,7 @@ export function useCostcoSync(userId) {
       setStatus(STATUS.FETCHING);
       const result = await startSilentSync();
       if (!result) {
-        await clearStoredTokens();
-        setHasStoredTokensState(false);
-        setError('Costco session expired. Please sign in again.');
+        setError('Sync timed out. Check your connection and try again.');
         setStatus(STATUS.ERROR);
         return;
       }

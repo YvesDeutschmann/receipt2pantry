@@ -1,6 +1,8 @@
 """Pantry management API routes"""
 
 import asyncio
+from typing import Dict
+
 from flask import Blueprint, request, current_app, jsonify
 from backend.utils.logger import get_logger
 from backend.utils.auth import get_user_id_from_request
@@ -24,6 +26,11 @@ def get_supabase_service():
     return current_app.config.get("SUPABASE_SERVICE")
 
 
+def get_normalization_service():
+    """Optional normalization service for receipt matching."""
+    return current_app.config.get("NORMALIZATION_SERVICE")
+
+
 def run_async(coro):
     """Run an async coroutine synchronously"""
     try:
@@ -32,6 +39,114 @@ def run_async(coro):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
     return loop.run_until_complete(coro)
+
+
+@pantry_bp.route("/pantry/staples-template", methods=["GET"])
+def get_staples_template():
+    """
+    Layer 1 cold-start: all active staples grouped by category.
+    """
+    supabase = get_supabase_service()
+    if not supabase:
+        return jsonify({"error": "Database service not available"}), 503
+
+    try:
+        rows = supabase.get_staples_template_rows(active_only=True)
+        categories: Dict[str, list] = {}
+        for row in rows:
+            cat = row.get("category") or "Other"
+            if cat not in categories:
+                categories[cat] = []
+            categories[cat].append(
+                {
+                    "id": row.get("id"),
+                    "base_ingredient": row.get("base_ingredient"),
+                    "display_name": row.get("display_name"),
+                    "pre_selected": bool(row.get("pre_selected")),
+                }
+            )
+        category_list = [
+            {"name": name, "items": items} for name, items in categories.items()
+        ]
+        pre_count = sum(1 for r in rows if r.get("pre_selected"))
+        return jsonify(
+            {
+                "categories": category_list,
+                "total_items": len(rows),
+                "pre_selected_count": pre_count,
+            }
+        )
+    except Exception as e:
+        logger.error(f"Error loading staples template: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@pantry_bp.route("/pantry/staples-receipt-matches", methods=["GET"])
+def staples_receipt_matches():
+    """
+    Which template bases appear on recent household receipts (for UI badges while syncing).
+    """
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    supabase = get_supabase_service()
+    service = get_pantry_service()
+    normalizer = get_normalization_service()
+    if not supabase or not service:
+        return jsonify({"error": "Service not available"}), 503
+    if not normalizer:
+        return jsonify({"matches": [], "message": "Normalization unavailable"}), 200
+
+    try:
+        hh = supabase.get_user_household(user_id)
+        household_id = hh["id"] if hh else None
+        rows = supabase.get_staples_template_rows(active_only=True)
+        candidate = {r["base_ingredient"].strip().lower() for r in rows}
+        matches = run_async(
+            service.list_staple_receipt_matches(
+                user_id, household_id, candidate, normalizer
+            )
+        )
+        return jsonify({"matches": matches})
+    except Exception as e:
+        logger.error(f"Error listing staple receipt matches: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@pantry_bp.route("/pantry/confirm-staples", methods=["POST"])
+def confirm_staples():
+    """
+    Batch confirm staples template selection; dedupe with existing pantry; receipt enrichment.
+    """
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    service = get_pantry_service()
+    if not service:
+        return jsonify({"error": "Pantry service not available"}), 503
+
+    data = request.get_json() or {}
+    selected = data.get("selected_items")
+    if not isinstance(selected, list):
+        return jsonify({"error": "selected_items must be a list of base_ingredient strings"}), 400
+
+    normalizer = get_normalization_service()
+
+    try:
+        result = run_async(
+            service.confirm_staples_batch(user_id, selected, normalizer=normalizer)
+        )
+        return jsonify(result), 200
+    except ValidationException as e:
+        return jsonify({"error": str(e)}), 400
+    except DatabaseException as e:
+        logger.error(f"Database error confirming staples: {e}")
+        return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        logger.error(f"Error confirming staples: {e}")
+        return jsonify({"error": str(e)}), 500
 
 
 @pantry_bp.route("/pantry", methods=["GET"])

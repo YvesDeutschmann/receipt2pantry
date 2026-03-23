@@ -1,6 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../services/apiClient'
 import { useAuth } from '../contexts/AuthContext'
+import { supabase } from '../services/supabaseClient'
 import ProviderCard from '../components/ProviderCard'
 import PageHeader from '../components/PageHeader'
 import CredentialsModal from '../components/CredentialsModal'
@@ -10,8 +12,16 @@ import CostcoOneTapSync from '../components/CostcoOneTapSync'
 import SafewayConnectCard from '../components/SafewayConnectCard'
 
 function Providers() {
-  const { user } = useAuth()
+  const { user, onboardingComplete } = useAuth()
+  const navigate = useNavigate()
   const userId = user?.id
+
+  const maybeContinueColdStartToPantry = useCallback(async () => {
+    if (!onboardingComplete && user?.user_metadata?.cold_start_step === 1) {
+      navigate('/onboarding/pantry-setup', { replace: true })
+    }
+  }, [onboardingComplete, user, navigate])
+
   const [providers, setProviders] = useState([])
   const [providerStatuses, setProviderStatuses] = useState({}) // { providerName: { configured, active } }
   const [loading, setLoading] = useState(true)
@@ -98,6 +108,7 @@ function Providers() {
       const response = await api.fetchReceiptsWithStoredCredentials(provider, userId, 14)
       setFetchedReceipts(response.receipts)
       alert(`✅ Fetched ${response.count} receipts from ${provider}! Added ${response.items_added_to_pantry} items to pantry.`)
+      await maybeContinueColdStartToPantry()
     } catch (err) {
       const errorMessage = err.response?.data?.error || 'Failed to fetch receipts'
       setReceiptError(errorMessage)
@@ -146,6 +157,7 @@ function Providers() {
           setCredentialsModalOpen(false)
           setFetchedReceipts(response.receipts)
           alert(`Fetched ${response.count} receipts from ${selectedProvider}!`)
+          await maybeContinueColdStartToPantry()
         } else if (response.status === 'mfa_required') {
           setCredentialsModalOpen(false)
           setMfaSession({
@@ -232,6 +244,7 @@ function Providers() {
             )
             setFetchedReceipts(receiptsResponse.receipts)
             alert(`Fetched ${receiptsResponse.count} receipts!`)
+            await maybeContinueColdStartToPantry()
           } catch (fetchErr) {
             const fetchError = fetchErr.response?.data?.error || 'Failed to fetch receipts'
             setReceiptError(fetchError)
@@ -359,7 +372,10 @@ function Providers() {
     await new Promise(resolve => setTimeout(resolve, 300))
     // Force immediate status refresh
     await fetchProviders()
-    console.log('Provider statuses after refresh:', providerStatuses)
+    if (!onboardingComplete) {
+      await maybeContinueColdStartToPantry()
+      return
+    }
     alert('Costco account connected successfully!')
   }
 
@@ -384,6 +400,21 @@ function Providers() {
         title="Providers"
         subtitle="Connect your grocery store accounts to automatically sync receipts."
       />
+
+      {!onboardingComplete && user?.user_metadata?.cold_start_step === 1 && (
+        <div className="mb-6 p-4 rounded-mise-md border border-sage/30 bg-forest-light">
+          <p className="text-sm text-cream mb-3">
+            When you&apos;re done connecting or syncing, continue to your pantry staples checklist.
+          </p>
+          <button
+            type="button"
+            onClick={() => navigate('/onboarding/pantry-setup', { replace: true })}
+            className="btn btn-secondary text-sm"
+          >
+            Continue pantry setup
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="text-center py-8 text-sage-light">Loading providers...</div>
@@ -430,6 +461,9 @@ function Providers() {
                           <CostcoOneTapSync
                             userId={userId}
                             days={90}
+                            onSyncSuccess={() => {
+                              maybeContinueColdStartToPantry()
+                            }}
                           />
                         </div>
                         <div className="flex gap-2">
