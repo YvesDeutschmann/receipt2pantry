@@ -65,8 +65,14 @@ const bridge = createWebViewBridge({
   parseReceipts: (raw) => raw.map((r) => parseApiReceipt(r)).filter(Boolean),
   filterReceipts: (raw) =>
     raw.filter((r) => {
-      const t = (r.receiptType || '').toLowerCase();
-      return t !== 'gasstation' && t !== 'carwash' && t !== 'gasandcarwash';
+      const normalized = String(r.receiptType || '')
+        .replace(/[\s-]/g, '')
+        .toLowerCase();
+      return (
+        normalized !== 'gasstation' &&
+        normalized !== 'carwash' &&
+        normalized !== 'gasandcarwash'
+      );
     }),
   loginTitle: 'Sign in to Costco',
   urlExcludePattern: 'signin.costco.com',
