@@ -19,6 +19,7 @@ from backend.utils.costco_receipt_extraction import (
 )
 from backend.utils.exceptions import AuthenticationException, ProviderException, MFARequiredException
 from backend.utils.logger import get_logger
+from backend.utils.costco_receipt_types import is_non_grocery_costco_receipt_type
 from backend.config import Config
 
 logger = get_logger(__name__)
@@ -312,8 +313,15 @@ class CostcoProvider(PlaywrightProvider):
             receipts_data = data.get('data', {}).get('receiptsWithCounts', {})
             raw_receipts = receipts_data.get('receipts', [])
             all_count = len(raw_receipts)
-            raw_receipts = [r for r in raw_receipts if (r.get('receiptType') or 'warehouse').lower() == 'warehouse']
-            logger.info(f"Found {all_count} total receipts via API, {len(raw_receipts)} grocery (warehouse) after filtering out gas/carwash")
+            raw_receipts = [
+                r for r in raw_receipts
+                if not is_non_grocery_costco_receipt_type(str(r.get('receiptType') or ''))
+            ]
+            logger.info(
+                "Found %s total receipts via API, %s grocery after filtering out gas/carwash",
+                all_count,
+                len(raw_receipts),
+            )
             
             receipts = []
             for raw in raw_receipts:

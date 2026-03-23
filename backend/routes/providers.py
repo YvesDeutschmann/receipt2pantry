@@ -9,6 +9,7 @@ from backend.services.receipt_service import store_fetched_receipts
 from backend.services.connection_code_manager import get_connection_code_manager
 from backend.utils.logger import get_logger
 from backend.utils.exceptions import ProviderNotFoundException, AuthenticationException, MFARequiredException, ProviderException
+from backend.utils.costco_receipt_types import is_non_grocery_costco_receipt_type, receipt_type_from_payload
 
 # Thread pool for running Playwright operations (avoids asyncio conflicts)
 _playwright_executor = concurrent.futures.ThreadPoolExecutor(max_workers=2, thread_name_prefix="playwright")
@@ -1074,14 +1075,21 @@ def store_costco_receipts():
         if not isinstance(receipts, list):
             return jsonify({"error": "receipts must be an array"}), 400
 
-        # Filter to grocery/warehouse receipts only - exclude gas, car wash
+        # Exclude gas / car wash only (API uses spaced/hyphenated types e.g. "In-Warehouse", "Gas Station")
         all_count = len(receipts)
-        receipts = [
-            r for r in receipts
-            if (r.get("receipt_type") or r.get("receiptType") or "").lower() == "warehouse"
-        ]
-        if all_count > len(receipts):
-            logger.info(f"Filtered {all_count - len(receipts)} non-grocery receipts (gas/carwash) from store-receipts")
+        incoming_types = [receipt_type_from_payload(r) for r in receipts]
+        logger.debug(
+            "store-costco-receipts incoming receipt_type values: %s",
+            incoming_types,
+        )
+        grocery = [r for r in receipts if not is_non_grocery_costco_receipt_type(receipt_type_from_payload(r))]
+        filtered_count = all_count - len(grocery)
+        receipts = grocery
+        if filtered_count:
+            logger.info(
+                "Filtered %s non-grocery receipts (gas/carwash) from store-receipts",
+                filtered_count,
+            )
 
         store_result = _store_and_process_fetched_receipts(user_id, "costco", receipts)
         return jsonify({

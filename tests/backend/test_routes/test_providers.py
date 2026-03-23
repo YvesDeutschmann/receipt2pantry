@@ -152,12 +152,12 @@ def test_store_costco_receipts_non_array_receipts(client):
 
 
 def test_store_costco_receipts_warehouse_filter(client):
-    """store-receipts filters out non-warehouse (gas/carwash) receipts."""
+    """store-receipts filters out gas station and car wash (Costco API uses spaced types)."""
     payload = {
         'receipts': [
-            {'order_id': 'gas-1', 'receipt_type': 'gas', 'total_amount': 30},
-            {'order_id': 'warehouse-1', 'receipt_type': 'warehouse', 'total_amount': 100},
-            {'order_id': 'carwash-1', 'receiptType': 'carWash', 'total_amount': 10},
+            {'order_id': 'gas-1', 'receipt_type': 'Gas Station', 'total_amount': 30},
+            {'order_id': 'warehouse-1', 'receipt_type': 'In-Warehouse', 'total_amount': 100},
+            {'order_id': 'carwash-1', 'receiptType': 'Car Wash', 'total_amount': 10},
         ],
         'user_id': TEST_USER_ID,
     }
