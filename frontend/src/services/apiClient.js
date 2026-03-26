@@ -353,6 +353,42 @@ export const api = {
     return response.data
   },
 
+  searchIngredients: async (query, exclude = [], limit = 6) => {
+    const params = { q: query, limit }
+    if (exclude.length > 0) {
+      params.exclude = exclude.join(',')
+    }
+    const response = await apiClient.get('/pantry/search-ingredients', { params })
+    return response.data
+  },
+
+  quickAddPantryItem: async (userId, baseIngredient) => {
+    const response = await apiClient.post(
+      '/pantry/quick-add',
+      { base_ingredient: baseIngredient },
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
+  depletePantryItem: async (userId, itemId) => {
+    const response = await apiClient.post(
+      `/pantry/items/${itemId}/deplete`,
+      {},
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
+  restorePantryItem: async (userId, snapshot) => {
+    const response = await apiClient.post(
+      '/pantry/restore-item',
+      { snapshot },
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
   consumeIngredients: async (userId, recipeData) => {
     const response = await apiClient.post('/pantry/consume',
       recipeData,

@@ -62,20 +62,39 @@ Android Studio uses its own SDK path, so `ANDROID_HOME` is not required.
 
 ## Live reload on device
 
-To use the Vite dev server with hot reload on your phone:
+To use the Vite dev server with hot reload on your phone (same Wi‑Fi as your PC; no static IP needed):
 
-1. Get your PC's local IP (e.g. `192.168.50.30`).
-2. In `capacitor.config.ts`, set:
-   ```ts
-   server: {
-     url: 'http://YOUR_IP:5173',
-     cleartext: true,
-     androidScheme: 'https',
-   },
-   ```
-3. Run `npm run dev` in one terminal (Vite is configured with `host: true` so it's reachable on your network).
-4. Run `npx cap sync` then `npx cap run android` (or open in Android Studio and run).
+1. From `frontend`, run **`npm run dev`** in one terminal (Vite uses `host: true` so the dev server is reachable on your LAN).
+2. In another terminal, from `frontend`, run **`npm run cap:dev`**. This script:
+   - Detects your machine’s current LAN IPv4
+   - Updates `android/app/src/main/res/xml/network_security_config.xml` so Android allows HTTP to that IP (cleartext)
+   - Writes **`VITE_API_BASE_URL`** to `.env.local` (e.g. `http://<your-ip>:5000/api`) so a later **`npm run build:mobile`** bakes the correct dev-machine API URL into the production bundle (otherwise the WebView uses `localhost` and API calls hit the phone)
+   - Runs `cap sync` with **`DEV_SERVER_URL`** set so `capacitor.config.ts` points the WebView at `http://<your-ip>:5173/`
 
-Remember to revert the `server.url` when building for production.
+3. Open the Android or iOS project and run on a device (e.g. `npx cap open android` → Run in Android Studio, or use Xcode on macOS).
 
-**If you get `net::ERR_CLEARTEXT_NOT_PERMITTED`:** Android blocks HTTP by default. Add your dev machine's IP to `android/app/src/main/res/xml/network_security_config.xml` in the `domain-config` section (e.g. `<domain includeSubdomains="true">192.168.50.30</domain>`). If your IP changes, update both `capacitor.config.ts` and this file.
+**One-shot from CLI (Android):** `npm run cap:run:android:dev` — same as `cap:dev` but also runs `cap run android`.
+
+**Custom port:** If Vite uses something other than 5173, set `CAP_DEV_PORT` before `cap:dev` (e.g. PowerShell: `$env:CAP_DEV_PORT=5174; npm run cap:dev`).
+
+**Backend / Flask port:** If the API listens on something other than 5000, set `CAP_BACKEND_PORT` before `cap:dev` (e.g. `$env:CAP_BACKEND_PORT=8080; npm run cap:dev`) so `.env.local` gets the matching `VITE_API_BASE_URL`.
+
+**Wrong IP detected:** If you have many virtual adapters (Hyper-V, Docker), set `CAP_DEV_HOST` to your Wi‑Fi IP explicitly (e.g. `$env:CAP_DEV_HOST='192.168.1.42'; npm run cap:dev`).
+
+**Production:** `npm run build:mobile` does not set `DEV_SERVER_URL`, so the app loads the bundled `dist/` and does not embed a dev `server.url`.
+
+**If you get `net::ERR_CLEARTEXT_NOT_PERMITTED`:** Run `npm run cap:dev` again after connecting to a new network so the script refreshes your IP in `network_security_config.xml`. `10.0.2.2` (Android emulator → host loopback) is left unchanged.
+
+---
+
+## Supabase: Google / Apple OAuth on native (required)
+
+After clearing app data, browser-based OAuth must return to the app via a custom URL scheme. The app uses **`com.meald.app://auth-callback`**.
+
+1. In [Supabase Dashboard](https://supabase.com/dashboard) → your project → **Authentication** → **URL Configuration** → **Redirect URLs**, add:
+
+   `com.meald.app://auth-callback`
+
+2. Save. Rebuild/sync the native app after changing OAuth code (`npm run build:mobile` then `npx cap sync`).
+
+For **web** sign-in, the app uses `{origin}/auth` as `redirectTo` automatically (ensure that URL is also allowed in Redirect URLs if you use a custom domain).

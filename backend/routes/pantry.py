@@ -149,6 +149,111 @@ def confirm_staples():
         return jsonify({"error": str(e)}), 500
 
 
+@pantry_bp.route("/pantry/search-ingredients", methods=["GET"])
+def search_ingredients():
+    """
+    Layer 2: autocomplete canonical ingredients (q required, min 2 chars).
+    Query: q, limit (default 6), exclude (comma-separated base_ingredient values).
+    """
+    supabase = get_supabase_service()
+    if not supabase:
+        return jsonify({"error": "Database service not available"}), 503
+
+    q = (request.args.get("q") or "").strip()
+    if len(q) < 2:
+        return jsonify({"results": []})
+
+    try:
+        limit = int(request.args.get("limit", 6))
+    except (TypeError, ValueError):
+        limit = 6
+
+    exclude_raw = request.args.get("exclude") or ""
+    exclude = [x.strip().lower() for x in exclude_raw.split(",") if x.strip()]
+
+    try:
+        rows = supabase.search_canonical_ingredients(q, limit=limit, exclude_bases=exclude)
+        return jsonify({"results": rows})
+    except Exception as e:
+        logger.error(f"Error searching ingredients: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@pantry_bp.route("/pantry/quick-add", methods=["POST"])
+def quick_add_pantry_item():
+    """
+    Layer 2: add one item by canonical base_ingredient (must exist in canonical_ingredients).
+    """
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    service = get_pantry_service()
+    if not service:
+        return jsonify({"error": "Pantry service not available"}), 503
+
+    data = request.get_json() or {}
+    base = data.get("base_ingredient")
+    if not base or not isinstance(base, str):
+        return jsonify({"error": "base_ingredient is required"}), 400
+
+    try:
+        result = run_async(service.quick_add_from_search(user_id, base))
+        return jsonify(result), 200
+    except ValidationException as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error quick-add pantry: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@pantry_bp.route("/pantry/items/<item_id>/deplete", methods=["POST"])
+def deplete_pantry_item(item_id):
+    """Layer 2: remove pantry item (recipe correction); returns snapshot for undo."""
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    service = get_pantry_service()
+    if not service:
+        return jsonify({"error": "Pantry service not available"}), 503
+
+    try:
+        out = service.deplete_pantry_item(user_id, item_id)
+        return jsonify(out), 200
+    except ValidationException as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error depleting pantry item: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@pantry_bp.route("/pantry/restore-item", methods=["POST"])
+def restore_pantry_item():
+    """Undo deplete: body { snapshot: { ... pantry row ... } }"""
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    service = get_pantry_service()
+    if not service:
+        return jsonify({"error": "Pantry service not available"}), 503
+
+    data = request.get_json() or {}
+    snapshot = data.get("snapshot")
+    if not isinstance(snapshot, dict):
+        return jsonify({"error": "snapshot object required"}), 400
+
+    try:
+        new_id = service.restore_pantry_item(user_id, snapshot)
+        return jsonify({"item_id": new_id, "message": "Restored"}), 200
+    except ValidationException as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error restoring pantry item: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @pantry_bp.route("/pantry", methods=["GET"])
 def get_pantry():
     """

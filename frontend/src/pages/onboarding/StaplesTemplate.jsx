@@ -19,6 +19,7 @@ import { useColdStart } from '../../contexts/ColdStartContext'
 import { api } from '../../services/apiClient'
 import { supabase } from '../../services/supabaseClient'
 import ColdStartProgressBar from '../../components/ColdStartProgressBar'
+import PantrySearchOverlay from '../../components/PantrySearchOverlay'
 
 const CATEGORY_ICONS = {
   'Oils & Vinegars': Flame,
@@ -150,6 +151,8 @@ export default function StaplesTemplate() {
   const [toast, setToast] = useState(null)
   const [leaveOpen, setLeaveOpen] = useState(false)
   const [justUnlocked, setJustUnlocked] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [pantryBases, setPantryBases] = useState([])
 
   const initialSelectedRef = useRef(null)
 
@@ -220,6 +223,26 @@ export default function StaplesTemplate() {
       setReceiptSyncStatus('idle')
     }
   }, [setReceiptMatchCount, setReceiptSyncStatus])
+
+  const loadPantryBases = useCallback(async () => {
+    if (!userId) return
+    try {
+      const data = await api.getPantry(userId)
+      const s = new Set()
+      for (const g of data.grouped || []) {
+        if (g.base_ingredient) s.add(String(g.base_ingredient).toLowerCase())
+      }
+      setPantryBases([...s])
+    } catch {
+      /* ignore */
+    }
+  }, [userId])
+
+  const searchExcludeBases = useMemo(() => {
+    const bases = new Set(pantryBases)
+    for (const b of selected) bases.add(b.toLowerCase())
+    return [...bases]
+  }, [pantryBases, selected])
 
   useEffect(() => {
     loadTemplate()
@@ -377,10 +400,13 @@ export default function StaplesTemplate() {
 
         <button
           type="button"
-          disabled
-          className="text-center text-xs text-sage-light/70 mb-6 underline-offset-2 cursor-not-allowed"
+          onClick={() => {
+            loadPantryBases()
+            setSearchOpen(true)
+          }}
+          className="text-center text-sm text-sage-light hover:text-terra-light mb-6 underline underline-offset-2 w-full"
         >
-          Add something else (coming soon)
+          Missing something? Add it to your pantry →
         </button>
       </div>
 
@@ -456,6 +482,14 @@ export default function StaplesTemplate() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <PantrySearchOverlay
+        isOpen={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        userId={userId}
+        excludeBases={searchExcludeBases}
+        onAdded={() => loadPantryBases()}
+      />
     </div>
   )
 }
