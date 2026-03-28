@@ -1,6 +1,6 @@
 import { useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X } from 'lucide-react'
+import { Mic, X } from 'lucide-react'
 import IngredientSearchInput from './IngredientSearchInput'
 
 /**
@@ -12,6 +12,7 @@ export default function PantrySearchOverlay({
   userId,
   excludeBases = [],
   onAdded,
+  onOpenVoice,
   title = 'Add to pantry',
 }) {
   useEffect(() => {
@@ -49,6 +50,23 @@ export default function PantrySearchOverlay({
               excludeBases={excludeBases}
               autoFocus
               onAdded={() => onAdded?.()}
+              renderRight={
+                typeof onOpenVoice === 'function'
+                  ? () => (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose()
+                          onOpenVoice()
+                        }}
+                        className="p-2.5 rounded-mise-md text-sage-light hover:text-cream hover:bg-forest-light shrink-0"
+                        aria-label="Tell us what you have (voice)"
+                      >
+                        <Mic className="w-5 h-5" />
+                      </button>
+                    )
+                  : undefined
+              }
             />
           </div>
         </motion.div>

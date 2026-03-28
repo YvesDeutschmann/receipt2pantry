@@ -389,6 +389,31 @@ export const api = {
     return response.data
   },
 
+  voiceTranscribe: async (audioBlob) => {
+    const formData = new FormData()
+    const ext = audioBlob?.type?.includes('mp4') ? 'mp4' : 'webm'
+    formData.append('audio', audioBlob, `recording.${ext}`)
+    const response = await apiClient.post('/pantry/voice-transcribe', formData, {
+      timeout: 90000,
+      transformRequest: (data, headers) => {
+        if (data instanceof FormData) {
+          delete headers['Content-Type']
+        }
+        return data
+      },
+    })
+    return response.data
+  },
+
+  voiceConfirm: async (userId, items) => {
+    const response = await apiClient.post(
+      '/pantry/voice-confirm',
+      { items },
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
   consumeIngredients: async (userId, recipeData) => {
     const response = await apiClient.post('/pantry/consume',
       recipeData,

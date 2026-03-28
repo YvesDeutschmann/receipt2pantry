@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Plus, Search, Package } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { Plus, Search, Package, Mic } from 'lucide-react'
 import { api } from '../services/apiClient'
 import { useAuth } from '../contexts/AuthContext'
 import PantryList from '../components/PantryList'
@@ -7,6 +8,7 @@ import PantrySearchOverlay from '../components/PantrySearchOverlay'
 import PageHeader from '../components/PageHeader'
 import PullToRefresh from '../components/PullToRefresh'
 import UndoToast from '../components/UndoToast'
+import VoiceInputSheet from '../components/voice/VoiceInputSheet'
 
 function Pantry() {
   const [pantryData, setPantryData] = useState(null)
@@ -14,6 +16,8 @@ function Pantry() {
   const [error, setError] = useState(null)
   const [searchTerm, setSearchTerm] = useState('')
   const [searchOverlayOpen, setSearchOverlayOpen] = useState(false)
+  const [addMenuOpen, setAddMenuOpen] = useState(false)
+  const [voiceOpen, setVoiceOpen] = useState(false)
   const [undo, setUndo] = useState(null)
 
   const { user } = useAuth()
@@ -193,7 +197,7 @@ function Pantry() {
               <p className="text-sage-light mb-4">
                 Add items from our ingredient list or sync receipts from your grocery store.
               </p>
-              <button type="button" onClick={() => setSearchOverlayOpen(true)} className="btn btn-primary">
+              <button type="button" onClick={() => setAddMenuOpen(true)} className="btn btn-primary">
                 Add your first item
               </button>
             </div>
@@ -216,7 +220,66 @@ function Pantry() {
           userId={userId}
           excludeBases={excludeBases}
           onAdded={fetchPantry}
+          onOpenVoice={() => setVoiceOpen(true)}
         />
+
+        <VoiceInputSheet
+          isOpen={voiceOpen}
+          onClose={() => setVoiceOpen(false)}
+          userId={userId}
+          excludeBases={excludeBases}
+          onPantryRefresh={fetchPantry}
+        />
+
+        <AnimatePresence>
+          {addMenuOpen ? (
+            <motion.div
+              key="add-pantry-menu"
+              role="dialog"
+              aria-modal="true"
+              aria-label="Add to pantry"
+              className="fixed inset-0 z-[60] bg-black/50 flex items-end sm:items-center justify-center p-4"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setAddMenuOpen(false)}
+            >
+              <motion.div
+                initial={{ y: 24, opacity: 0 }}
+                animate={{ y: 0, opacity: 1 }}
+                exit={{ y: 16, opacity: 0 }}
+                className="w-full max-w-sm rounded-mise-lg bg-forest-mid border border-sage/30 p-4 shadow-xl"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <p className="text-cream font-display font-semibold mb-3">Add to pantry</p>
+                <div className="flex flex-col gap-2">
+                  <button
+                    type="button"
+                    className="btn btn-primary w-full flex items-center justify-center gap-2"
+                    onClick={() => {
+                      setAddMenuOpen(false)
+                      setSearchOverlayOpen(true)
+                    }}
+                  >
+                    <Search className="w-5 h-5" />
+                    Search
+                  </button>
+                  <button
+                    type="button"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-mise-md border border-sage/30 text-cream hover:bg-forest-light"
+                    onClick={() => {
+                      setAddMenuOpen(false)
+                      setVoiceOpen(true)
+                    }}
+                  >
+                    <Mic className="w-5 h-5 text-terra" />
+                    Tell me
+                  </button>
+                </div>
+              </motion.div>
+            </motion.div>
+          ) : null}
+        </AnimatePresence>
 
         <UndoToast
           open={Boolean(undo)}

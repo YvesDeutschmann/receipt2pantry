@@ -1333,6 +1333,24 @@ class SupabaseService:
             logger.error(f"Failed search_canonical_ingredients: {e}")
             raise DatabaseException(f"Failed to search ingredients: {e}")
 
+    def list_active_canonical_ingredients_compact(self) -> List[Dict]:
+        """
+        All active canonical rows for voice extraction prompt (base_ingredient + display_name).
+        """
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            response = (
+                client.table("canonical_ingredients")
+                .select("base_ingredient, display_name")
+                .eq("active", True)
+                .order("display_name")
+                .execute()
+            )
+            return response.data if response.data else []
+        except Exception as e:
+            logger.error(f"Failed list_active_canonical_ingredients_compact: {e}")
+            raise DatabaseException(f"Failed to load canonical ingredients: {e}")
+
     def get_canonical_ingredient_by_base(self, base_ingredient: str) -> Optional[Dict]:
         """Return one active canonical row by base_ingredient (normalized lowercase)."""
         try:

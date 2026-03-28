@@ -1,5 +1,6 @@
 """AI Service for OpenAI integration with structured outputs"""
 
+import io
 import json
 from typing import Dict, List, Optional, Any
 from datetime import datetime
@@ -159,6 +160,99 @@ class AIService:
         except Exception as e:
             logger.error(f"Unexpected error calling OpenAI: {e}")
             raise AIServiceException(f"Failed to call OpenAI: {e}")
+
+    @retry(
+        retry=retry_if_exception_type((APIConnectionError,)),
+        stop=stop_after_attempt(3),
+        wait=wait_exponential(multiplier=1, min=2, max=10),
+    )
+    def transcribe_audio(self, audio_bytes: bytes, content_type: str, filename: str) -> str:
+        """
+        Pantry Layer 3: transcribe recorded audio to text (Whisper).
+
+        Args:
+            audio_bytes: Raw audio file bytes
+            content_type: MIME type (e.g. audio/webm, audio/mp4)
+            filename: Filename hint for the API (e.g. recording.webm)
+        """
+        if not self.client:
+            raise AIServiceException("OpenAI client not initialized - missing API key")
+        if not audio_bytes:
+            raise AIServiceException("Empty audio payload")
+        try:
+            bio = io.BytesIO(audio_bytes)
+            bio.name = filename or "audio.webm"
+            response = self.client.audio.transcriptions.create(
+                model=self.config.WHISPER_MODEL,
+                file=bio,
+            )
+            self.total_requests += 1
+            text = (response.text or "").strip()
+            if not text:
+                raise AIServiceException("Transcription returned empty text")
+            return text
+        except RateLimitError as e:
+            logger.error(f"OpenAI Whisper rate limit: {e}")
+            raise AIRateLimitException(f"Rate limit exceeded: {e}")
+        except APIError as e:
+            logger.error(f"OpenAI Whisper API error: {e}")
+            raise AIServiceException(f"Transcription failed: {e}")
+        except AIServiceException:
+            raise
+        except Exception as e:
+            logger.error(f"Whisper transcription error: {e}")
+            raise AIServiceException(f"Transcription failed: {e}")
+
+    def extract_ingredients_from_transcript(
+        self,
+        transcript: str,
+        canonical_entries: List[Dict[str, str]],
+    ) -> Dict[str, Any]:
+        """
+        Pantry Layer 3: parse free-form pantry narration into ingredient labels.
+
+        Args:
+            transcript: Whisper output
+            canonical_entries: List of {base_ingredient, display_name} from DB
+
+        Returns:
+            { "items": [str], "uncertain": [ {"heard": str, "suggestion": str} ] }
+        """
+        if not transcript or not transcript.strip():
+            return {"items": [], "uncertain": []}
+
+        system_prompt = """You extract pantry food ingredients from a spoken transcript.
+
+Rules:
+- Return ONLY food/ingredient items. Ignore filler (um, like, you know), chit-chat, and non-food.
+- Map each item to the closest match from the provided canonical list (use that item's display_name string exactly as it appears in the list).
+- Treat quantities as presence only: "a couple cans of tomatoes" -> one "Canned tomatoes" (or closest canonical), never output numeric quantities.
+- Use slang/abbrev expansions consistent with the list (e.g. parm -> Parmesan if in list).
+- If you cannot confidently map something to the list, put it in "uncertain" with "heard" (what they said) and "suggestion" (best guess display_name from list, or null if none).
+- "items" must only contain strings that exactly match display_name values from the canonical list.
+- Deduplicate: each display_name at most once in "items"."""
+
+        canon_json = json.dumps(canonical_entries[:500], ensure_ascii=False)
+        user_prompt = f"""Canonical ingredients (JSON array of objects with base_ingredient and display_name):
+{canon_json}
+
+Transcript:
+\"\"\"{transcript.strip()[:8000]}\"\"\"
+
+Return JSON:
+{{
+  "items": [ "Display Name From List", ... ],
+  "uncertain": [ {{ "heard": "...", "suggestion": "Display Name Or Empty" }} ]
+}}"""
+
+        return self._call_openai(
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+        )
     
     def parse_receipt(self, email_content: str) -> Dict:
         """

@@ -1,14 +1,18 @@
 """Pantry management API routes"""
 
 import asyncio
-from typing import Dict
+from typing import Any, Dict, List, Optional, Set
 
 from flask import Blueprint, request, current_app, jsonify
+from werkzeug.utils import secure_filename
+
 from backend.utils.logger import get_logger
 from backend.utils.auth import get_user_id_from_request
 from backend.utils.exceptions import (
     ValidationException,
     DatabaseException,
+    AIServiceException,
+    AIRateLimitException,
 )
 
 logger = get_logger(__name__)
@@ -39,6 +43,88 @@ def run_async(coro):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
     return loop.run_until_complete(coro)
+
+
+def get_ai_service():
+    return current_app.config.get("AI_SERVICE")
+
+
+# Layer 3: Whisper accepts common WebView / mobile MIME types
+_VOICE_AUDIO_TYPES = frozenset(
+    {
+        "audio/webm",
+        "audio/mp4",
+        "audio/mpeg",
+        "audio/wav",
+        "audio/x-wav",
+        "audio/x-m4a",
+        "audio/m4a",
+        "application/octet-stream",
+    }
+)
+
+
+def _voice_guess_mime(filename: str) -> str:
+    fn = (filename or "").lower()
+    if fn.endswith(".webm"):
+        return "audio/webm"
+    if fn.endswith((".m4a", ".mp4", ".aac")):
+        return "audio/mp4"
+    if fn.endswith(".wav"):
+        return "audio/wav"
+    if fn.endswith(".mp3"):
+        return "audio/mpeg"
+    return "application/octet-stream"
+
+
+def _voice_resolve_canonical_row(supabase, label: str) -> Optional[Dict[str, Any]]:
+    """Resolve a free-text label to one canonical row using base match then search RPC."""
+    s = (label or "").strip()
+    if not s:
+        return None
+    row = supabase.get_canonical_ingredient_by_base(s)
+    if row:
+        return row
+    if len(s) >= 2:
+        hits = supabase.search_canonical_ingredients(s, limit=1, exclude_bases=[])
+        if hits:
+            return {
+                "base_ingredient": hits[0]["base_ingredient"],
+                "display_name": hits[0]["display_name"],
+                "category": hits[0].get("category"),
+            }
+    return None
+
+
+def _voice_try_add_confirmed(
+    label: str,
+    by_display: Dict[str, Dict[str, Any]],
+    by_base: Dict[str, Dict[str, Any]],
+    supabase,
+    seen: Set[str],
+    confirmed: List[Dict[str, str]],
+) -> bool:
+    """Return True if label resolved and is now in confirmed (or duplicate skip); False if unmappable."""
+    s = (label or "").strip()
+    if not s:
+        return True
+    lo = s.lower()
+    row = by_display.get(lo) or by_base.get(lo)
+    if not row:
+        row = _voice_resolve_canonical_row(supabase, s)
+    if not row:
+        return False
+    bkey = str(row["base_ingredient"]).strip().lower()
+    if bkey in seen:
+        return True
+    seen.add(bkey)
+    confirmed.append(
+        {
+            "base_ingredient": row["base_ingredient"],
+            "display_name": row["display_name"],
+        }
+    )
+    return True
 
 
 @pantry_bp.route("/pantry/staples-template", methods=["GET"])
@@ -204,6 +290,187 @@ def quick_add_pantry_item():
         return jsonify({"error": str(e)}), 400
     except Exception as e:
         logger.error(f"Error quick-add pantry: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@pantry_bp.route("/pantry/voice-transcribe", methods=["POST"])
+def voice_transcribe():
+    """
+    Layer 3: upload audio -> Whisper transcript -> GPT extract -> validate against canonical list.
+    """
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    ai = get_ai_service()
+    supabase = get_supabase_service()
+    if not ai or not getattr(ai, "client", None):
+        return jsonify({"error": "AI service not available"}), 503
+    if not supabase:
+        return jsonify({"error": "Database service not available"}), 503
+
+    if "audio" not in request.files:
+        return jsonify({"error": "audio file required"}), 400
+
+    upload = request.files["audio"]
+    if not upload or not upload.filename:
+        return jsonify({"error": "audio file required"}), 400
+
+    raw_bytes = upload.read()
+    if not raw_bytes:
+        return jsonify({"error": "empty audio"}), 400
+
+    mime = (upload.mimetype or "").split(";")[0].strip().lower()
+    safe_name = secure_filename(upload.filename) or "recording"
+    if mime not in _VOICE_AUDIO_TYPES:
+        mime = _voice_guess_mime(safe_name)
+
+    try:
+        transcript = ai.transcribe_audio(raw_bytes, mime, safe_name)
+    except AIRateLimitException as e:
+        logger.warning(f"Voice transcribe rate limited: {e}")
+        return jsonify({"error": "transcription_failed", "message": str(e)}), 429
+    except AIServiceException as e:
+        logger.warning(f"Voice transcribe failed: {e}")
+        return jsonify({"error": "transcription_failed", "message": str(e)}), 422
+    except Exception as e:
+        logger.error(f"Voice transcribe unexpected: {e}")
+        return jsonify({"error": "transcription_failed", "message": str(e)}), 422
+
+    try:
+        canon = supabase.list_active_canonical_ingredients_compact()
+        by_display: Dict[str, Dict[str, Any]] = {}
+        by_base: Dict[str, Dict[str, Any]] = {}
+        for e in canon:
+            bi = (e.get("base_ingredient") or "").strip().lower()
+            dn = (e.get("display_name") or "").strip().lower()
+            if bi:
+                by_base[bi] = e
+            if dn:
+                by_display[dn] = e
+
+        extracted = ai.extract_ingredients_from_transcript(transcript, canon)
+        seen: Set[str] = set()
+        confirmed: List[Dict[str, str]] = []
+        uncertain_out: List[Dict[str, Any]] = []
+
+        for it in extracted.get("items") or []:
+            if not isinstance(it, str):
+                continue
+            if not _voice_try_add_confirmed(
+                it, by_display, by_base, supabase, seen, confirmed
+            ):
+                uncertain_out.append(
+                    {
+                        "heard": it.strip(),
+                        "suggestion": it.strip(),
+                        "base_ingredient": None,
+                    }
+                )
+
+        for u in extracted.get("uncertain") or []:
+            if not isinstance(u, dict):
+                continue
+            heard = (u.get("heard") or "").strip()
+            sug = (u.get("suggestion") or "").strip()
+            if not heard and not sug:
+                continue
+            row = _voice_resolve_canonical_row(supabase, sug) if sug else None
+            uncertain_out.append(
+                {
+                    "heard": heard or sug,
+                    "suggestion": row["display_name"] if row else sug,
+                    "base_ingredient": (row["base_ingredient"] if row else None),
+                }
+            )
+
+        return jsonify(
+            {
+                "confirmed": confirmed,
+                "uncertain": uncertain_out,
+                "transcript": transcript,
+            }
+        ), 200
+    except AIServiceException as e:
+        logger.warning(f"Voice extraction failed: {e}")
+        return jsonify({"error": "extraction_failed", "message": str(e)}), 422
+    except Exception as e:
+        logger.error(f"Voice pipeline error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@pantry_bp.route("/pantry/voice-confirm", methods=["POST"])
+def voice_confirm():
+    """Layer 3: batch add voice-reviewed items (canonical base_ingredient list)."""
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    service = get_pantry_service()
+    supabase = get_supabase_service()
+    if not service or not supabase:
+        return jsonify({"error": "Service not available"}), 503
+
+    data = request.get_json() or {}
+    raw_items = data.get("items")
+    if not isinstance(raw_items, list):
+        return jsonify({"error": "items must be a list of base_ingredient strings"}), 400
+
+    canonical_items: List[Dict[str, Any]] = []
+    skipped_invalid = 0
+    seen_bases: Set[str] = set()
+    for x in raw_items:
+        if not x or not isinstance(x, str):
+            skipped_invalid += 1
+            continue
+        canon = supabase.get_canonical_ingredient_by_base(x)
+        if not canon:
+            skipped_invalid += 1
+            continue
+        bkey = str(canon["base_ingredient"]).strip().lower()
+        if bkey in seen_bases:
+            continue
+        seen_bases.add(bkey)
+        canonical_items.append(
+            {
+                "base_ingredient": canon["base_ingredient"],
+                "normalized_name": canon["display_name"],
+                "category": canon.get("category"),
+            }
+        )
+
+    if not canonical_items:
+        return jsonify(
+            {
+                "added": 0,
+                "already_existed": 0,
+                "total": 0,
+                "skipped_invalid": skipped_invalid,
+            }
+        ), 200
+
+    try:
+        batch_result = run_async(
+            service.batch_add_or_merge_items(
+                user_id,
+                None,
+                canonical_items,
+                source="voice",
+                set_template_confirmed=False,
+            )
+        )
+        inserted = int(batch_result.get("inserted") or 0)
+        merged = int(batch_result.get("merged") or 0)
+        return jsonify(
+            {
+                "added": inserted,
+                "already_existed": merged,
+                "total": inserted + merged,
+                "skipped_invalid": skipped_invalid,
+            }
+        ), 200
+    except Exception as e:
+        logger.error(f"Voice confirm batch error: {e}")
         return jsonify({"error": str(e)}), 500
 
 

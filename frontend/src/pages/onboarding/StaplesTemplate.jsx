@@ -20,6 +20,7 @@ import { api } from '../../services/apiClient'
 import { supabase } from '../../services/supabaseClient'
 import ColdStartProgressBar from '../../components/ColdStartProgressBar'
 import PantrySearchOverlay from '../../components/PantrySearchOverlay'
+import VoiceInputSheet from '../../components/voice/VoiceInputSheet'
 
 const CATEGORY_ICONS = {
   'Oils & Vinegars': Flame,
@@ -368,11 +369,14 @@ export default function StaplesTemplate() {
           anything we missed.
         </p>
 
-        {/* Layer 3 placeholder — hidden until voice ships */}
-        <div className="hidden items-center justify-center gap-2 mb-4 text-sage-light text-xs">
+        <button
+          type="button"
+          onClick={() => setVoiceOpen(true)}
+          className="flex items-center justify-center gap-2 mb-4 text-sage-light text-xs w-full py-2 rounded-mise-md hover:bg-forest-light/60 hover:text-cream transition-colors"
+        >
           <Mic className="w-4 h-4" aria-hidden />
           Or just tell us what you have
-        </div>
+        </button>
 
         {error && (
           <div className="mb-4 rounded-mise-md border border-[var(--color-error)] px-3 py-2 text-sm text-[var(--color-error)] bg-[var(--color-error)]/10">
@@ -489,6 +493,32 @@ export default function StaplesTemplate() {
         userId={userId}
         excludeBases={searchExcludeBases}
         onAdded={() => loadPantryBases()}
+        onOpenVoice={() => setVoiceOpen(true)}
+      />
+
+      <VoiceInputSheet
+        isOpen={voiceOpen}
+        onClose={() => setVoiceOpen(false)}
+        userId={userId}
+        excludeBases={searchExcludeBases}
+        onAfterBatchSuccess={async () => {
+          if (!userId) return
+          const list = Array.from(selected)
+          const result = await api.confirmStaples(userId, list, false)
+          await completeOnboardingMeta()
+          setJustUnlocked(true)
+          const n = result.receipt_matched ?? 0
+          if (n > 0) {
+            setToast(`We matched ${n} of your staples to your recent receipts ✓`)
+            setTimeout(() => setToast(null), 4500)
+          }
+          setTimeout(
+            () => {
+              navigate('/', { replace: true })
+            },
+            n > 0 ? 600 : 0
+          )
+        }}
       />
     </div>
   )

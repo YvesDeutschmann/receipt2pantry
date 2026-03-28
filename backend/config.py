@@ -51,6 +51,7 @@ class Config:
     OPENAI_BATCH_SIZE: int = int(os.getenv("OPENAI_BATCH_SIZE", "20"))
     OPENAI_MAX_RETRIES: int = int(os.getenv("OPENAI_MAX_RETRIES", "3"))
     OPENAI_TIMEOUT: int = int(os.getenv("OPENAI_TIMEOUT", "60"))
+    WHISPER_MODEL: str = os.getenv("WHISPER_MODEL", "whisper-1")
     
     # Google Gemini
     GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
