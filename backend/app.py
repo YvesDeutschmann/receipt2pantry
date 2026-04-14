@@ -17,6 +17,7 @@ from backend.routes.households import households_bp
 from backend.routes.pantry import pantry_bp
 from backend.routes.recipes import recipes_bp
 from backend.routes.meal_plan import meal_plan_bp
+from backend.routes.pool import pool_bp
 
 
 def create_app(config=None):
@@ -116,6 +117,23 @@ def create_app(config=None):
                     shopping_list_service = create_shopping_list_service(supabase_service)
                     app.config["SHOPPING_LIST_SERVICE"] = shopping_list_service
                     logger.info("Shopping list service initialized")
+
+                    from backend.services.pool_store_service import create_pool_store_service
+                    from backend.services.depletion_engine import create_depletion_engine
+                    from backend.services.pool_generator import create_pool_generator
+
+                    pool_store_service = create_pool_store_service(supabase_service)
+                    depletion_engine = create_depletion_engine(pantry_service)
+                    pool_generator = create_pool_generator(
+                        pool_store_service,
+                        depletion_engine,
+                        recipe_service,
+                        meal_plan_service,
+                    )
+                    app.config["POOL_STORE_SERVICE"] = pool_store_service
+                    app.config["DEPLETION_ENGINE"] = depletion_engine
+                    app.config["POOL_GENERATOR"] = pool_generator
+                    logger.info("Suggestion pool services initialized")
                 except Exception as e:
                     logger.warning(f"Failed to initialize Meal plan services: {e}")
             else:
@@ -220,6 +238,7 @@ def create_app(config=None):
     app.register_blueprint(pantry_bp, url_prefix="/api")
     app.register_blueprint(recipes_bp, url_prefix="/api")
     app.register_blueprint(meal_plan_bp, url_prefix="/api")
+    app.register_blueprint(pool_bp, url_prefix="/api")
     
     logger.info("Routes registered")
     

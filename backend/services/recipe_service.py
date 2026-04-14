@@ -33,7 +33,13 @@ class RecipeService:
         self._cache: Dict[str, tuple] = {}
         self._cache_ttl = 3600  # 1 hour in seconds
     
-    def _get_cache_key(self, household_id: Optional[str], user_id: str, ingredients: List[str]) -> str:
+    def _get_cache_key(
+        self,
+        household_id: Optional[str],
+        user_id: str,
+        ingredients: List[str],
+        number: int = 20,
+    ) -> str:
         """
         Generate cache key from household/user ID and ingredients
         
@@ -41,13 +47,14 @@ class RecipeService:
             household_id: Household ID (if available)
             user_id: User ID
             ingredients: List of ingredient names
+            number: Max recipes requested from API (affects cache entry)
         
         Returns:
             Cache key string
         """
         identifier = household_id or user_id
         ingredients_str = ",".join(sorted(ingredients))
-        return f"{identifier}:{hash(ingredients_str)}"
+        return f"{identifier}:{number}:{hash(ingredients_str)}"
     
     def _is_cache_valid(self, cache_entry: tuple) -> bool:
         """
@@ -98,7 +105,11 @@ class RecipeService:
             raise ValidationException(f"Failed to get pantry ingredients: {e}")
     
     def get_recipes_by_pantry(
-        self, household_id: Optional[str], user_id: str, available_ingredients: Optional[List[str]] = None
+        self,
+        household_id: Optional[str],
+        user_id: str,
+        available_ingredients: Optional[List[str]] = None,
+        number: int = 20,
     ) -> List[Dict]:
         """
         Get recipe suggestions based on pantry items
@@ -107,6 +118,7 @@ class RecipeService:
             household_id: Household ID (optional)
             user_id: User ID
             available_ingredients: Optional list of ingredient names (for session pantry)
+            number: Max recipes to request from Spoonacular (default 20)
         
         Returns:
             List of recipe dictionaries with id, title, image, missedIngredientCount
@@ -126,7 +138,7 @@ class RecipeService:
                 return []
             
             # Check cache
-            cache_key = self._get_cache_key(household_id, user_id, ingredients)
+            cache_key = self._get_cache_key(household_id, user_id, ingredients, number)
             cached_entry = self._cache.get(cache_key)
             
             if cached_entry and self._is_cache_valid(cached_entry):
@@ -140,7 +152,7 @@ class RecipeService:
             params = {
                 "apiKey": self.api_key,
                 "ingredients": ingredients_str,
-                "number": 20,  # Number of recipes to return (increased for more alternatives)
+                "number": max(1, min(100, int(number))),  # API allows up to 100
                 "ranking": 2,  # Maximize used ingredients
                 "ignorePantry": False  # Include pantry staples
             }

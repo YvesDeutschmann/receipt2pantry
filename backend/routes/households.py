@@ -240,6 +240,7 @@ def update_profile():
     Request body:
         - size: integer 1-99 (optional)
         - dietary_restrictions: string array (optional)
+        - suggestion_meal_slots: object with breakfast/lunch/dinner booleans (optional)
 
     Returns:
         Updated household details
@@ -255,12 +256,14 @@ def update_profile():
     data = request.get_json() or {}
     size = data.get("size")
     dietary_restrictions = data.get("dietary_restrictions")
+    suggestion_meal_slots = data.get("suggestion_meal_slots")
 
     try:
         household = service.update_household_profile(
             user_id,
             size=size,
             dietary_restrictions=dietary_restrictions,
+            suggestion_meal_slots=suggestion_meal_slots,
         )
         return jsonify({"household": household})
     except ValidationException as e:
