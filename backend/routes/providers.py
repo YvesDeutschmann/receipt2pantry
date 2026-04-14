@@ -208,7 +208,7 @@ def fetch_receipts_with_stored_credentials(provider_name):
         }
     """
     try:
-        data = request.get_json() or {}
+        data = request.get_json(silent=True) or {}
         user_id = data.get("user_id")
         days = data.get("days", 90)
         

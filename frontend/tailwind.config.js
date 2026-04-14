@@ -13,7 +13,7 @@ export default {
       padding: {
         'safe-top': 'env(safe-area-inset-top)',
         'safe-bottom': 'env(safe-area-inset-bottom)',
-        'tab-bar': 'calc(56px + env(safe-area-inset-bottom, 0px))',
+        'tab-bar': 'calc(64px + env(safe-area-inset-bottom, 0px))',
       },
       minHeight: {
         touch: '44px',
