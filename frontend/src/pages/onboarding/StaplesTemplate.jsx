@@ -19,6 +19,8 @@ import { useColdStart } from '../../contexts/ColdStartContext'
 import { api } from '../../services/apiClient'
 import { supabase } from '../../services/supabaseClient'
 import ColdStartProgressBar from '../../components/ColdStartProgressBar'
+import PantrySearchOverlay from '../../components/PantrySearchOverlay'
+import VoiceInputSheet from '../../components/voice/VoiceInputSheet'
 
 const CATEGORY_ICONS = {
   'Oils & Vinegars': Flame,
@@ -150,6 +152,8 @@ export default function StaplesTemplate() {
   const [toast, setToast] = useState(null)
   const [leaveOpen, setLeaveOpen] = useState(false)
   const [justUnlocked, setJustUnlocked] = useState(false)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [pantryBases, setPantryBases] = useState([])
 
   const initialSelectedRef = useRef(null)
 
@@ -220,6 +224,26 @@ export default function StaplesTemplate() {
       setReceiptSyncStatus('idle')
     }
   }, [setReceiptMatchCount, setReceiptSyncStatus])
+
+  const loadPantryBases = useCallback(async () => {
+    if (!userId) return
+    try {
+      const data = await api.getPantry(userId)
+      const s = new Set()
+      for (const g of data.grouped || []) {
+        if (g.base_ingredient) s.add(String(g.base_ingredient).toLowerCase())
+      }
+      setPantryBases([...s])
+    } catch {
+      /* ignore */
+    }
+  }, [userId])
+
+  const searchExcludeBases = useMemo(() => {
+    const bases = new Set(pantryBases)
+    for (const b of selected) bases.add(b.toLowerCase())
+    return [...bases]
+  }, [pantryBases, selected])
 
   useEffect(() => {
     loadTemplate()
@@ -345,11 +369,14 @@ export default function StaplesTemplate() {
           anything we missed.
         </p>
 
-        {/* Layer 3 placeholder — hidden until voice ships */}
-        <div className="hidden items-center justify-center gap-2 mb-4 text-sage-light text-xs">
+        <button
+          type="button"
+          onClick={() => setVoiceOpen(true)}
+          className="flex items-center justify-center gap-2 mb-4 text-sage-light text-xs w-full py-2 rounded-mise-md hover:bg-forest-light/60 hover:text-cream transition-colors"
+        >
           <Mic className="w-4 h-4" aria-hidden />
           Or just tell us what you have
-        </div>
+        </button>
 
         {error && (
           <div className="mb-4 rounded-mise-md border border-[var(--color-error)] px-3 py-2 text-sm text-[var(--color-error)] bg-[var(--color-error)]/10">
@@ -377,10 +404,13 @@ export default function StaplesTemplate() {
 
         <button
           type="button"
-          disabled
-          className="text-center text-xs text-sage-light/70 mb-6 underline-offset-2 cursor-not-allowed"
+          onClick={() => {
+            loadPantryBases()
+            setSearchOpen(true)
+          }}
+          className="text-center text-sm text-sage-light hover:text-terra-light mb-6 underline underline-offset-2 w-full"
         >
-          Add something else (coming soon)
+          Missing something? Add it to your pantry →
         </button>
       </div>
 
@@ -456,6 +486,40 @@ export default function StaplesTemplate() {
           </motion.div>
         )}
       </AnimatePresence>
+
+      <PantrySearchOverlay
+        isOpen={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        userId={userId}
+        excludeBases={searchExcludeBases}
+        onAdded={() => loadPantryBases()}
+        onOpenVoice={() => setVoiceOpen(true)}
+      />
+
+      <VoiceInputSheet
+        isOpen={voiceOpen}
+        onClose={() => setVoiceOpen(false)}
+        userId={userId}
+        excludeBases={searchExcludeBases}
+        onAfterBatchSuccess={async () => {
+          if (!userId) return
+          const list = Array.from(selected)
+          const result = await api.confirmStaples(userId, list, false)
+          await completeOnboardingMeta()
+          setJustUnlocked(true)
+          const n = result.receipt_matched ?? 0
+          if (n > 0) {
+            setToast(`We matched ${n} of your staples to your recent receipts ✓`)
+            setTimeout(() => setToast(null), 4500)
+          }
+          setTimeout(
+            () => {
+              navigate('/', { replace: true })
+            },
+            n > 0 ? 600 : 0
+          )
+        }}
+      />
     </div>
   )
 }

@@ -1305,6 +1305,101 @@ class SupabaseService:
             logger.error(f"Failed to update pantry item {item_id}: {e}")
             raise DatabaseException(f"Failed to update pantry item: {e}")
 
+    def search_canonical_ingredients(
+        self,
+        query: str,
+        limit: int = 6,
+        exclude_bases: Optional[List[str]] = None,
+    ) -> List[Dict]:
+        """
+        Layer 2: autocomplete against canonical_ingredients via RPC.
+        """
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            q = (query or "").strip()
+            if len(q) < 2:
+                return []
+            ex = exclude_bases or []
+            response = client.rpc(
+                "search_canonical_ingredients",
+                {
+                    "p_query": q,
+                    "p_limit": min(max(limit, 1), 25),
+                    "p_exclude": ex,
+                },
+            ).execute()
+            return response.data if response.data else []
+        except Exception as e:
+            logger.error(f"Failed search_canonical_ingredients: {e}")
+            raise DatabaseException(f"Failed to search ingredients: {e}")
+
+    def list_active_canonical_ingredients_compact(self) -> List[Dict]:
+        """
+        All active canonical rows for voice extraction prompt (base_ingredient + display_name).
+        """
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            response = (
+                client.table("canonical_ingredients")
+                .select("base_ingredient, display_name")
+                .eq("active", True)
+                .order("display_name")
+                .execute()
+            )
+            return response.data if response.data else []
+        except Exception as e:
+            logger.error(f"Failed list_active_canonical_ingredients_compact: {e}")
+            raise DatabaseException(f"Failed to load canonical ingredients: {e}")
+
+    def get_canonical_ingredient_by_base(self, base_ingredient: str) -> Optional[Dict]:
+        """Return one active canonical row by base_ingredient (normalized lowercase)."""
+        try:
+            key = (base_ingredient or "").strip().lower()
+            if not key:
+                return None
+            client = self.admin_client if self.admin_client else self.client
+            response = (
+                client.table("canonical_ingredients")
+                .select("base_ingredient, display_name, category")
+                .eq("active", True)
+                .eq("base_ingredient", key)
+                .limit(1)
+                .execute()
+            )
+            rows = response.data or []
+            return rows[0] if rows else None
+        except Exception as e:
+            logger.error(f"Failed get_canonical_ingredient_by_base: {e}")
+            raise DatabaseException(f"Failed to load canonical ingredient: {e}")
+
+    def get_pantry_item_by_id(self, item_id: str) -> Optional[Dict]:
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            response = (
+                client.table("pantry_items")
+                .select("*")
+                .eq("id", item_id)
+                .limit(1)
+                .execute()
+            )
+            rows = response.data if response.data else []
+            return rows[0] if rows else None
+        except Exception as e:
+            logger.error(f"Failed get_pantry_item_by_id: {e}")
+            raise DatabaseException(f"Failed to get pantry item: {e}")
+
+    def insert_pantry_item_row(self, row: Dict) -> str:
+        """Insert a pantry row as-is (restore after deplete). Returns id."""
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            response = client.table("pantry_items").insert(row).execute()
+            if response.data and len(response.data) > 0:
+                return response.data[0]["id"]
+            raise DatabaseException("No data returned after pantry insert")
+        except Exception as e:
+            logger.error(f"Failed insert_pantry_item_row: {e}")
+            raise DatabaseException(f"Failed to restore pantry item: {e}")
+
 
 def create_supabase_service(
     url: str, key: str, service_role_key: Optional[str] = None

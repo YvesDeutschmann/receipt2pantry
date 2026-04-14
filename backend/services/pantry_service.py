@@ -612,6 +612,106 @@ class PantryService:
             "household_id": batch_result.get("household_id"),
         }
 
+    _PANTRY_RESTORE_KEYS = frozenset(
+        {
+            "id",
+            "user_id",
+            "household_id",
+            "base_ingredient",
+            "variant",
+            "normalized_name",
+            "product_type",
+            "category",
+            "quantity",
+            "unit",
+            "added_at",
+            "last_receipt_id",
+            "expires_at",
+            "tags",
+            "metadata",
+            "source",
+            "template_confirmed",
+            "purchase_date",
+        }
+    )
+
+    def _user_can_access_pantry_item(self, user_id: str, item: Dict) -> bool:
+        hh = self._get_household_id_for_user(user_id)
+        if hh and item.get("household_id") and str(item["household_id"]) == str(hh):
+            return True
+        if str(item.get("user_id") or "") == str(user_id) and not item.get(
+            "household_id"
+        ):
+            return True
+        return False
+
+    async def quick_add_from_search(
+        self, user_id: str, base_ingredient: str
+    ) -> Dict[str, Any]:
+        """
+        Layer 2: add one canonical ingredient from search (validates against canonical_ingredients).
+        """
+        canon = self.supabase.get_canonical_ingredient_by_base(base_ingredient)
+        if not canon:
+            raise ValidationException(
+                "Ingredient not recognized — pick from suggestions"
+            )
+        household_id = self._get_household_id_for_user(user_id)
+        canonical_items = [
+            {
+                "base_ingredient": canon["base_ingredient"],
+                "normalized_name": canon["display_name"],
+                "category": canon.get("category"),
+            }
+        ]
+        batch_result = await self.batch_add_or_merge_items(
+            user_id,
+            household_id,
+            canonical_items,
+            source="search",
+            set_template_confirmed=False,
+        )
+        refreshed = self._get_pantry_items(user_id, batch_result.get("household_id"))
+        row = self._find_pantry_by_base(refreshed, canon["base_ingredient"])
+        return {
+            "item": {
+                "base_ingredient": canon["base_ingredient"],
+                "display_name": canon["display_name"],
+            },
+            "item_id": row["id"] if row else None,
+            "was_new": batch_result["inserted"] > 0,
+            "already_in_pantry": batch_result["merged"] > 0,
+            "household_id": batch_result.get("household_id"),
+        }
+
+    def deplete_pantry_item(self, user_id: str, item_id: str) -> Dict[str, Any]:
+        """Remove a pantry row (recipe card correction); returns snapshot for undo."""
+        item = self.supabase.get_pantry_item_by_id(item_id)
+        if not item:
+            raise ValidationException("Item not found")
+        if not self._user_can_access_pantry_item(user_id, item):
+            raise ValidationException("Forbidden")
+        snapshot = dict(item)
+        meta = dict(snapshot.get("metadata") or {})
+        meta["depleted"] = True
+        meta["depleted_at"] = datetime.now(timezone.utc).isoformat()
+        snapshot["metadata"] = meta
+        self.supabase.delete_pantry_item(item_id)
+        return {"snapshot": snapshot}
+
+    def restore_pantry_item(self, user_id: str, snapshot: Dict) -> str:
+        """Re-insert a row from deplete snapshot (undo)."""
+        if not snapshot or not isinstance(snapshot, dict):
+            raise ValidationException("snapshot required")
+        if not self._user_can_access_pantry_item(user_id, snapshot):
+            raise ValidationException("Forbidden")
+        row = {k: snapshot[k] for k in self._PANTRY_RESTORE_KEYS if k in snapshot}
+        meta = dict(row.get("metadata") or {})
+        meta.pop("depleted", None)
+        meta.pop("depleted_at", None)
+        row["metadata"] = meta
+        return self.supabase.insert_pantry_item_row(row)
+
 
 def create_pantry_service(supabase: SupabaseService) -> PantryService:
     """

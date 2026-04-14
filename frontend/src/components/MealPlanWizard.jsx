@@ -1,8 +1,10 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { format, addDays, startOfWeek } from 'date-fns'
 import { api } from '../services/apiClient'
 import RecipeSwipeCard from './RecipeSwipeCard'
+import PantryCheckSheet from './PantryCheckSheet'
 import { AnimatePresence, motion } from 'framer-motion'
+import { itemsForPantryCheck, getPantryCheckSessionDismissals } from '../utils/pantryCheck'
 
 const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) => {
   const [step, setStep] = useState('setup') // setup | selection | review
@@ -31,6 +33,9 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
   const [threshold, setThreshold] = useState(0.9)
   const [isAdjustingThreshold, setIsAdjustingThreshold] = useState(false)
   const [acceptingRecipeId, setAcceptingRecipeId] = useState(null)
+  const [pantryCheck, setPantryCheck] = useState(null)
+
+  const closePantryCheck = useCallback(() => setPantryCheck(null), [])
 
   // Generate meal slots list
   const generateMealSlots = () => {
@@ -150,7 +155,16 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
       if (!isStaple && !acceptedRecipeIds.includes(recipeId)) {
         setAcceptedRecipeIds([...acceptedRecipeIds, recipeId])
       }
-      
+
+      const missed = itemsForPantryCheck(recipe.missedIngredients || [])
+      if (missed.length > 0 && getPantryCheckSessionDismissals() < 3 && !isStaple) {
+        setPantryCheck({
+          id: recipeId,
+          title: recipe.title || 'Recipe',
+          missed,
+        })
+      }
+
       // Clear rejected recipes for next slot (soft rejects are slot-only)
       setRejectedRecipeIds([])
       
@@ -637,6 +651,15 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
           )}
         </motion.div>
       )}
+
+      <PantryCheckSheet
+        key={pantryCheck?.id || 'pc'}
+        open={Boolean(pantryCheck)}
+        userId={userId}
+        recipeTitle={pantryCheck?.title}
+        missedItems={pantryCheck?.missed || []}
+        onClose={closePantryCheck}
+      />
     </div>
   )
 }

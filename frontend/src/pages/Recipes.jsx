@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { api } from '../services/apiClient'
 import { useAuth } from '../contexts/AuthContext'
 import RecipeDetailModal from '../components/RecipeDetailModal'
@@ -12,12 +12,22 @@ function Recipes() {
   const [selectedRecipe, setSelectedRecipe] = useState(null)
   const [detailModalOpen, setDetailModalOpen] = useState(false)
   const [loadingDetails, setLoadingDetails] = useState(false)
-  
+  const [pantryData, setPantryData] = useState(null)
+
   const { user } = useAuth()
   const userId = user?.id
-  
-  // Get household ID from localStorage or API
+
   const [householdId, setHouseholdId] = useState(null)
+
+  const fetchPantry = useCallback(async () => {
+    if (!userId) return
+    try {
+      const data = await api.getPantry(userId, householdId)
+      setPantryData(data)
+    } catch (err) {
+      console.error('Failed to fetch pantry:', err)
+    }
+  }, [userId, householdId])
 
   useEffect(() => {
     fetchHousehold()
@@ -26,8 +36,9 @@ function Recipes() {
   useEffect(() => {
     if (userId) {
       fetchRecipes()
+      fetchPantry()
     }
-  }, [userId, householdId])
+  }, [userId, householdId, fetchPantry])
 
   const fetchHousehold = async () => {
     try {
@@ -186,6 +197,9 @@ function Recipes() {
         }}
         recipe={selectedRecipe}
         loading={loadingDetails}
+        userId={userId}
+        pantryData={pantryData}
+        onPantryUpdated={fetchPantry}
       />
     </div></PullToRefresh>
   )

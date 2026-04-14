@@ -10,6 +10,8 @@
     "lint": "eslint .",
     "test": "vitest",
     "cap:sync": "node scripts/patch-capacitor-proguard.js && cap sync",
+    "cap:dev": "node scripts/patch-capacitor-proguard.js && node scripts/cap-dev.js",
+    "cap:run:android:dev": "node scripts/patch-capacitor-proguard.js && node scripts/cap-dev.js --run-android",
     "cap:open:android": "cap open android",
     "cap:open:ios": "cap open ios",
     "cap:run:android": "node scripts/patch-capacitor-proguard.js && cap run android",

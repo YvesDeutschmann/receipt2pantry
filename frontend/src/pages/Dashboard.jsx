@@ -1,21 +1,44 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
+import { api } from '../services/apiClient'
 import PageHeader from '../components/PageHeader'
 import PullToRefresh from '../components/PullToRefresh'
+import PantrySearchOverlay from '../components/PantrySearchOverlay'
 
 function Dashboard() {
   const { user } = useAuth()
+  const userId = user?.id
   const whatsForDinnerUnlocked = Boolean(user?.user_metadata?.whats_for_dinner_unlocked)
   const [receipts, setReceipts] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [pantryBases, setPantryBases] = useState([])
+
+  const loadPantryBases = useCallback(async () => {
+    if (!userId) return
+    try {
+      const data = await api.getPantry(userId)
+      const s = new Set()
+      for (const g of data.grouped || []) {
+        if (g.base_ingredient) s.add(String(g.base_ingredient).toLowerCase())
+      }
+      setPantryBases([...s])
+    } catch {
+      /* ignore */
+    }
+  }, [userId])
+
+  const excludeBases = useMemo(() => pantryBases, [pantryBases])
 
   useEffect(() => {
-    // For demo purposes, we'll skip actual API calls
-    // In production, you would call: api.getReceipts(userId)
     setLoading(false)
   }, [])
+
+  useEffect(() => {
+    loadPantryBases()
+  }, [loadPantryBases])
 
   const handleRefresh = async () => {
     setLoading(true)
@@ -47,8 +70,26 @@ function Dashboard() {
           >
             What&apos;s for Dinner
           </Link>
+          <button
+            type="button"
+            onClick={() => {
+              loadPantryBases()
+              setSearchOpen(true)
+            }}
+            className="block w-full text-center text-sm text-sage-light hover:text-terra-light mt-4 underline underline-offset-2"
+          >
+            Missing something? Add it to your pantry →
+          </button>
         </div>
       )}
+
+      <PantrySearchOverlay
+        isOpen={searchOpen}
+        onClose={() => setSearchOpen(false)}
+        userId={userId}
+        excludeBases={excludeBases}
+        onAdded={() => loadPantryBases()}
+      />
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
         <div className="card">

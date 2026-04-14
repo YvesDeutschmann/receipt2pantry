@@ -160,7 +160,8 @@ class RecipeService:
                     "image": recipe.get("image"),
                     "missedIngredientCount": recipe.get("missedIngredientCount", 0),
                     "usedIngredientCount": recipe.get("usedIngredientCount", 0),
-                    "likes": recipe.get("likes", 0)
+                    "likes": recipe.get("likes", 0),
+                    "missedIngredients": recipe.get("missedIngredients") or [],
                 })
             
             # Cache the results

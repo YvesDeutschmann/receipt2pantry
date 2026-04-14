@@ -11,18 +11,31 @@ import type { CapacitorConfig } from '@capacitor/cli';
  * Deep Linking (Future): When ready, register pantryapp:// scheme in native
  * projects and use App.addListener('appUrlOpen', ...) to handle return-trips
  * from external browsers.
+ *
+ * Live dev: Set DEV_SERVER_URL (e.g. npm run cap:dev sets it for `cap sync`).
+ * Production builds omit server so the app loads from bundled webDir.
  */
+const devServerUrl = process.env.DEV_SERVER_URL;
+const serverUrl =
+  devServerUrl && devServerUrl.length > 0
+    ? devServerUrl.endsWith('/')
+      ? devServerUrl
+      : `${devServerUrl}/`
+    : undefined;
+
 const config: CapacitorConfig = {
   appId: 'com.meald.app',
   appName: 'Meald',
   webDir: 'dist',
-  server: {
-    // For local dev, point to the Vite dev server so live-reload works.
-    // Uncomment and set your machine's IP (see MOBILE_SETUP.md):
-    url: 'http://192.168.50.30:5173/',
-    cleartext: true,
-    androidScheme: 'https',
-  },
+  ...(serverUrl
+    ? {
+        server: {
+          url: serverUrl,
+          cleartext: true,
+          androidScheme: 'https',
+        },
+      }
+    : {}),
   plugins: {
     CapacitorHttp: { enabled: true },
     SplashScreen: {
