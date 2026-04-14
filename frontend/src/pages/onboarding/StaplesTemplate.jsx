@@ -153,6 +153,7 @@ export default function StaplesTemplate() {
   const [leaveOpen, setLeaveOpen] = useState(false)
   const [justUnlocked, setJustUnlocked] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [voiceOpen, setVoiceOpen] = useState(false)
   const [pantryBases, setPantryBases] = useState([])
 
   const initialSelectedRef = useRef(null)
@@ -278,6 +279,13 @@ export default function StaplesTemplate() {
     })
   }
 
+  const fireSuggestionPoolWarmup = () => {
+    if (!userId) return
+    void api.suggestions
+      .triggerGeneration(userId, { triggerReason: 'onboarding' })
+      .catch(() => {})
+  }
+
   const handleConfirm = async (opts = { skip: false }) => {
     if (!userId) return
     setSubmitting(true)
@@ -318,6 +326,7 @@ export default function StaplesTemplate() {
     try {
       await api.confirmStaples(userId, Array.from(selected), false)
       await completeOnboardingMeta()
+      fireSuggestionPoolWarmup()
       navigate('/', { replace: true })
     } catch (e) {
       setError(e.response?.data?.error || 'Save failed.')
@@ -506,6 +515,7 @@ export default function StaplesTemplate() {
           const list = Array.from(selected)
           const result = await api.confirmStaples(userId, list, false)
           await completeOnboardingMeta()
+          fireSuggestionPoolWarmup()
           setJustUnlocked(true)
           const n = result.receipt_matched ?? 0
           if (n > 0) {

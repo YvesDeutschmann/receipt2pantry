@@ -870,6 +870,8 @@ class SupabaseService:
                     "created_at": household.get("created_at"),
                     "size": household.get("size", 2),
                     "dietary_restrictions": household.get("dietary_restrictions") or [],
+                    "suggestion_meal_slots": household.get("suggestion_meal_slots")
+                    or {"breakfast": True, "lunch": True, "dinner": True},
                     "role": membership.get("role"),
                     "joined_at": membership.get("joined_at")
                 }
