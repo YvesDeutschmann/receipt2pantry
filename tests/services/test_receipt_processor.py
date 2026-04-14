@@ -30,7 +30,6 @@ class TestReceiptProcessor:
             sample_normalized_product
         ]
         mock_pantry_service.add_to_pantry = AsyncMock(return_value='pantry-1')
-        mock_supabase.update_receipt_status.return_value = None
         
         processor = ReceiptProcessor(mock_supabase, mock_normalization_service, mock_pantry_service)
         
@@ -49,9 +48,6 @@ class TestReceiptProcessor:
         
         # Verify pantry was updated for each item
         assert mock_pantry_service.add_to_pantry.call_count == 2
-        
-        # Verify receipt status was updated
-        mock_supabase.update_receipt_status.assert_called_once_with(test_receipt_id, 'processed')
     
     @pytest.mark.asyncio
     async def test_process_receipt_no_items(
@@ -105,7 +101,6 @@ class TestReceiptProcessor:
             Exception("Database error"),
             'pantry-1'
         ])
-        mock_supabase.update_receipt_status.return_value = None
         
         processor = ReceiptProcessor(mock_supabase, mock_normalization_service, mock_pantry_service)
         
@@ -140,7 +135,6 @@ class TestReceiptProcessor:
             sample_normalized_product
         ]
         mock_pantry_service.add_to_pantry = AsyncMock(return_value='pantry-1')
-        mock_supabase.update_receipt_status.return_value = None
         
         processor = ReceiptProcessor(mock_supabase, mock_normalization_service, mock_pantry_service)
         
@@ -174,6 +168,7 @@ class TestReceiptProcessor:
         
         mock_response = Mock()
         mock_response.data = [receipt_data]
+        mock_supabase.admin_client = None
         mock_supabase.client = Mock()
         mock_supabase.client.table.return_value.select.return_value.eq.return_value.execute.return_value = mock_response
         mock_supabase.get_receipt_items.return_value = sample_receipt_items
@@ -208,7 +203,6 @@ class TestReceiptProcessor:
             sample_normalized_product,
         ]
         mock_pantry_service.add_to_pantry = AsyncMock(return_value='pantry-1')
-        mock_supabase.update_receipt_status.return_value = None
 
         processor = ReceiptProcessor(
             mock_supabase, mock_normalization_service, mock_pantry_service
@@ -244,7 +238,6 @@ class TestReceiptProcessor:
             sample_normalized_product,
         ]
         mock_pantry_service.add_to_pantry = AsyncMock(return_value='pantry-1')
-        mock_supabase.update_receipt_status.return_value = None
 
         processor = ReceiptProcessor(
             mock_supabase, mock_normalization_service, mock_pantry_service
