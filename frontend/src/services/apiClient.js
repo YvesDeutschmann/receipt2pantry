@@ -239,10 +239,11 @@ export const api = {
     return response.data
   },
 
-  updateHouseholdProfile: async (userId, { size, dietaryRestrictions }) => {
+  updateHouseholdProfile: async (userId, { size, dietaryRestrictions, suggestionMealSlots }) => {
     const body = {}
     if (size !== undefined) body.size = size
     if (dietaryRestrictions !== undefined) body.dietary_restrictions = dietaryRestrictions
+    if (suggestionMealSlots !== undefined) body.suggestion_meal_slots = suggestionMealSlots
     const response = await apiClient.put('/households/profile', body, {
       headers: { 'X-User-Id': userId }
     })
@@ -445,6 +446,46 @@ export const api = {
       headers: { 'X-User-Id': userId }
     })
     return response.data
+  },
+
+  /** Pre-generated suggestion pool (Spoonacular work done in background). */
+  suggestions: {
+    getPool: async (userId, householdId = null) => {
+      const params = {}
+      if (householdId) params.household_id = householdId
+      const response = await apiClient.get('/suggestions/pool', {
+        params,
+        headers: { 'X-User-Id': userId }
+      })
+      return response.data
+    },
+    getDepth: async (userId, householdId = null) => {
+      const params = {}
+      if (householdId) params.household_id = householdId
+      const response = await apiClient.get('/suggestions/pool/depth', {
+        params,
+        headers: { 'X-User-Id': userId }
+      })
+      return response.data
+    },
+    swipe: async (userId, suggestionId, householdId = null) => {
+      const response = await apiClient.post(
+        `/suggestions/pool/${suggestionId}/swipe`,
+        { household_id: householdId },
+        { headers: { 'X-User-Id': userId } }
+      )
+      return response.data
+    },
+    triggerGeneration: async (userId, { triggerReason, householdId = null, mealTypes = null }) => {
+      const body = { trigger_reason: triggerReason }
+      if (householdId) body.household_id = householdId
+      if (mealTypes?.length) body.meal_types = mealTypes
+      const response = await apiClient.post('/suggestions/pool/generate', body, {
+        headers: { 'X-User-Id': userId },
+        timeout: 600000
+      })
+      return response.data
+    }
   },
 
   // Meal Planning

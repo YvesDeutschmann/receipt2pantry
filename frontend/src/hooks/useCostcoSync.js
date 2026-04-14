@@ -67,6 +67,12 @@ export function useCostcoSync(userId) {
 
       setStatus(STATUS.SUBMITTING);
       const finalBackend = await submitToBackend(receipts, userId);
+      const itemsAddedCostco = finalBackend.items_added_to_pantry ?? 0;
+      if (itemsAddedCostco >= 3) {
+        void api.suggestions
+          .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
+          .catch(() => {});
+      }
       if (userId && tokens) {
         try {
           await api.connectCostcoFromApp(userId, tokens);
@@ -78,7 +84,7 @@ export function useCostcoSync(userId) {
         receipts,
         count: receipts.length,
         receipts_stored: finalBackend.receipts_stored ?? receipts.length,
-        items_added_to_pantry: finalBackend.items_added_to_pantry ?? 0,
+        items_added_to_pantry: itemsAddedCostco,
         errors: finalBackend.errors,
       });
       setStatus(STATUS.SUCCESS);
@@ -124,6 +130,12 @@ export function useCostcoSync(userId) {
       if (receipts.length > 0) {
         setStatus(STATUS.SUBMITTING);
         const finalBackend = await submitToBackend(receipts, userId);
+        const itemsAddedSilent = finalBackend.items_added_to_pantry ?? 0;
+        if (itemsAddedSilent >= 3) {
+          void api.suggestions
+            .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
+            .catch(() => {});
+        }
         if (result.idToken || result.accessToken) {
           try {
             await api.connectCostcoFromApp(userId, result);
@@ -135,7 +147,7 @@ export function useCostcoSync(userId) {
           receipts,
           count: receipts.length,
           receipts_stored: finalBackend.receipts_stored ?? receipts.length,
-          items_added_to_pantry: finalBackend.items_added_to_pantry ?? 0,
+          items_added_to_pantry: itemsAddedSilent,
           errors: finalBackend.errors,
         });
       } else {

@@ -38,7 +38,12 @@ export function useCostcoAutoSync() {
         isSyncingRef.current = true;
         const result = await startSilentSync();
         if (result?.receipts?.length > 0) {
-          await submitToBackend(result.receipts, userId);
+          const storeRes = await submitToBackend(result.receipts, userId);
+          if ((storeRes?.items_added_to_pantry ?? 0) >= 3) {
+            void api.suggestions
+              .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
+              .catch(() => {});
+          }
           if (result.idToken || result.accessToken) {
             try {
               await api.connectCostcoFromApp(userId, result);

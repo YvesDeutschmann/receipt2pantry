@@ -7,7 +7,7 @@ from backend.config import Config
 # Import parsers and providers to register them
 from backend.parsers import safeway_parser  # noqa: F401
 from backend.parsers import ai_parser  # noqa: F401
-from backend.providers import safeway_provider  # noqa: F401
+from backend.providers._deprecated import safeway_provider  # noqa: F401
 
 
 class TestConfig(Config):

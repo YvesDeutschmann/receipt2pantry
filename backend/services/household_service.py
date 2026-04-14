@@ -2,7 +2,7 @@
 
 import random
 import string
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from backend.services.supabase_service import SupabaseService
 from backend.utils.exceptions import (
@@ -107,6 +107,8 @@ class HouseholdService:
             "join_code": household["join_code"],
             "size": household.get("size", 2),
             "dietary_restrictions": household.get("dietary_restrictions") or [],
+            "suggestion_meal_slots": household.get("suggestion_meal_slots")
+            or {"breakfast": True, "lunch": True, "dinner": True},
             "role": "owner",
             "created_at": household["created_at"]
         }
@@ -153,6 +155,8 @@ class HouseholdService:
             "id": household["id"],
             "name": household["name"],
             "join_code": household["join_code"],
+            "suggestion_meal_slots": household.get("suggestion_meal_slots")
+            or {"breakfast": True, "lunch": True, "dinner": True},
             "role": "member",
             "created_at": household["created_at"]
         }
@@ -352,14 +356,16 @@ class HouseholdService:
         user_id: str,
         size: Optional[int] = None,
         dietary_restrictions: Optional[List[str]] = None,
+        suggestion_meal_slots: Optional[Dict[str, Any]] = None,
     ) -> Dict:
         """
-        Update household size and/or dietary restrictions (any member can update).
+        Update household profile fields (any household member can update).
 
         Args:
             user_id: User ID (must be in a household)
             size: New household size (1-99), optional
             dietary_restrictions: New dietary restrictions list, optional
+            suggestion_meal_slots: Which meal types to use for suggestion pool (breakfast/lunch/dinner booleans), optional
 
         Returns:
             Updated household dictionary
@@ -378,6 +384,17 @@ class HouseholdService:
             updates["size"] = size
         if dietary_restrictions is not None:
             updates["dietary_restrictions"] = dietary_restrictions
+        if suggestion_meal_slots is not None:
+            slots = {
+                "breakfast": bool(suggestion_meal_slots.get("breakfast")),
+                "lunch": bool(suggestion_meal_slots.get("lunch")),
+                "dinner": bool(suggestion_meal_slots.get("dinner")),
+            }
+            if not any(slots.values()):
+                raise ValidationException(
+                    "Select at least one meal type for recipe suggestions (breakfast, lunch, or dinner)."
+                )
+            updates["suggestion_meal_slots"] = slots
 
         if not updates:
             return {
@@ -386,6 +403,8 @@ class HouseholdService:
                 "join_code": household["join_code"],
                 "size": household.get("size", 2),
                 "dietary_restrictions": household.get("dietary_restrictions") or [],
+                "suggestion_meal_slots": household.get("suggestion_meal_slots")
+                or {"breakfast": True, "lunch": True, "dinner": True},
                 "role": household["role"]
             }
 
@@ -393,12 +412,23 @@ class HouseholdService:
 
         logger.info(f"User {user_id} updated household {household['id']} profile")
 
+        new_slots = updates.get("suggestion_meal_slots")
+        if new_slots is None:
+            new_slots = household.get("suggestion_meal_slots") or {
+                "breakfast": True,
+                "lunch": True,
+                "dinner": True,
+            }
+
         return {
             "id": household["id"],
             "name": household["name"],
             "join_code": household["join_code"],
             "size": updates.get("size", household.get("size", 2)),
-            "dietary_restrictions": updates.get("dietary_restrictions", household.get("dietary_restrictions") or []),
+            "dietary_restrictions": updates.get(
+                "dietary_restrictions", household.get("dietary_restrictions") or []
+            ),
+            "suggestion_meal_slots": new_slots,
             "role": household["role"]
         }
 

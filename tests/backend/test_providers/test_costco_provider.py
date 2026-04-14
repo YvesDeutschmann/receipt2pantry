@@ -123,15 +123,12 @@ def test_costco_provider_extract_order_date():
     assert date3.year == 2026
 
 
-def test_costco_provider_extract_pdf_text():
-    """Test PDF text extraction"""
+def test_costco_provider_extract_order_id_empty_text():
+    """Order id helper falls back to hash when text has no ID (PDF parsing lives in app flow, not on provider)."""
     provider = CostcoProvider()
-    
-    # Create a simple PDF-like content (in real tests, this would be actual PDF bytes)
-    # For now, we'll just test that the method exists and handles empty input
-    empty_pdf = b""
-    text = provider._extract_pdf_text(empty_pdf)
-    assert text == ""
+    oid = provider._extract_order_id("")
+    assert oid.startswith("COSTCO_")
+    assert len(oid) == len("COSTCO_") + 12
 
 
 def test_costco_provider_cleanup():

@@ -126,11 +126,17 @@ export function useSafewaySync(userId) {
       setStatus(STATUS.SUBMITTING);
       const finalBackend = await api.ingestReceipts('safeway', receipts, userId);
       setProgress(null);
+      const itemsAdded = finalBackend.items_added_to_pantry ?? 0;
+      if (itemsAdded >= 3) {
+        void api.suggestions
+          .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
+          .catch(() => {});
+      }
       setResult({
         receipts,
         count: receipts.length,
         receipts_stored: finalBackend.receipts_stored ?? receipts.length,
-        items_added_to_pantry: finalBackend.items_added_to_pantry ?? 0,
+        items_added_to_pantry: itemsAdded,
         errors: finalBackend.errors ?? [],
       });
       setStatus(STATUS.SUCCESS);
@@ -218,11 +224,17 @@ export function useSafewaySync(userId) {
       if (receipts.length > 0) {
         setStatus(STATUS.SUBMITTING);
         const finalBackend = await api.ingestReceipts('safeway', receipts, userId);
+        const itemsAddedSilent = finalBackend.items_added_to_pantry ?? 0;
+        if (itemsAddedSilent >= 3) {
+          void api.suggestions
+            .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
+            .catch(() => {});
+        }
         setResult({
           receipts,
           count: receipts.length,
           receipts_stored: finalBackend.receipts_stored ?? receipts.length,
-          items_added_to_pantry: finalBackend.items_added_to_pantry ?? 0,
+          items_added_to_pantry: itemsAddedSilent,
           errors: finalBackend.errors ?? [],
         });
       } else {

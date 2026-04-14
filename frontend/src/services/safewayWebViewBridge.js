@@ -8,6 +8,21 @@ import { createWebViewBridge } from './webViewBridge';
 import { createTokenStorage } from './tokenStorage';
 import { getExtractScript } from './safewayExtractScript';
 
+/** Only auth + edge/WAF cookies; analytics (reese84, AMCV*, _ga, Optanon*, etc.) bloat the header → HTTP 431. */
+function isAllowedSafewayCookieKey(k) {
+  if (!k || typeof k !== 'string') return false;
+  return (
+    k.startsWith('SWY_') ||
+    k.startsWith('ACI_S_') ||
+    k === 'JSESSIONID' ||
+    k === 'abs_gsession' ||
+    k.startsWith('akacd_PR-') ||
+    k.startsWith('visid_incap_') ||
+    k.startsWith('nlbi_') ||
+    k.startsWith('incap_ses_')
+  );
+}
+
 /** Cookie header for safewayApiFetcher before InAppBrowser closes (session cookies not in main WebView). */
 async function extractSafewayCookies() {
   const cookies = await InAppBrowser.getCookies({
@@ -15,7 +30,9 @@ async function extractSafewayCookies() {
     includeHttpOnly: true,
   });
   if (!cookies || typeof cookies !== 'object') return undefined;
-  const pairs = Object.entries(cookies).filter(([, v]) => v != null && String(v).length > 0);
+  const pairs = Object.entries(cookies).filter(
+    ([k, v]) => isAllowedSafewayCookieKey(k) && v != null && String(v).length > 0
+  );
   if (!pairs.length) return undefined;
   return pairs.map(([k, v]) => `${k}=${String(v)}`).join('; ');
 }

@@ -13,6 +13,8 @@ const DEFAULT_HEADERS = {
   accept: '*/*',
   origin: 'https://www.safeway.com',
   referer: 'https://www.safeway.com/order-account/orders',
+  'user-agent':
+    'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Mobile Safari/537.36',
 };
 
 const CONCURRENCY = 8;

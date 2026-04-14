@@ -31,10 +31,12 @@ def test_get_provider_status_missing_user_id(client):
 
 
 def test_test_provider_connection_missing_body(client):
-    """Test testing provider connection without request body"""
+    """Safeway Playwright test route is deprecated; before_request returns 410 first."""
     response = client.post('/api/providers/safeway/test')
     
-    assert response.status_code == 400
+    assert response.status_code == 410
+    data = json.loads(response.data)
+    assert data.get("deprecated") is True
 
 
 def test_test_provider_connection_invalid_provider(client):
