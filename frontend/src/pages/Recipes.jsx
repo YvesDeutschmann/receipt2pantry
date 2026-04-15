@@ -1,71 +1,61 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
-import { AnimatePresence, motion } from 'framer-motion'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../services/apiClient'
 import { useAuth } from '../contexts/AuthContext'
-import RecipeDetailModal from '../components/RecipeDetailModal'
-import RecipeSwipeCard from '../components/RecipeSwipeCard'
+import HealthCard from '../components/HealthCard'
+import SuggestionDetailModal from '../components/SuggestionDetailModal'
+import SuggestionRecipeCard from '../components/SuggestionRecipeCard'
 import PageHeader from '../components/PageHeader'
 import PullToRefresh from '../components/PullToRefresh'
 
-const MEALS = ['breakfast', 'lunch', 'dinner']
-
-const defaultSlots = () => ({
-  breakfast: true,
-  lunch: true,
-  dinner: true,
-})
-
-function mealTypesFromSlots(slots) {
-  return MEALS.filter((m) => slots[m])
+const EMPTY_SUGGESTIONS = {
+  use_soon_shelf: [],
+  cook_tonight: [],
+  probably_have: [],
+  check_first: [],
 }
 
-function flattenPool(poolGrouped, mealOrder) {
-  const rows = []
-  for (const mt of mealOrder) {
-    const list = poolGrouped[mt] || []
-    rows.push(...list)
+function orderedUseSoonNames(shelfRecipes) {
+  const ordered = []
+  const seen = new Set()
+  for (const r of shelfRecipes) {
+    for (const f of r.ingredient_flags || []) {
+      if (f.is_use_soon && f.ingredient_name) {
+        const n = String(f.ingredient_name).trim()
+        const key = n.toLowerCase()
+        if (!seen.has(key)) {
+          seen.add(key)
+          ordered.push(n)
+        }
+      }
+    }
   }
-  return rows
+  return ordered
 }
 
-function rowToCardRecipe(row) {
-  const data = row.recipe_data || {}
-  const id = data.id ?? row.recipe_id
-  return {
-    ...data,
-    id,
-    title: data.title || row.recipe_name,
-    image: data.image || row.recipe_image,
-    poolSuggestionId: row.id,
-    meal_type: row.meal_type,
-  }
-}
-
-function needsRefill(depth, slots) {
-  const types = mealTypesFromSlots(slots)
-  if (!types.length) return false
-  const total = types.reduce((s, m) => s + (depth[m] ?? 0), 0)
-  const minTotal = 2 * types.length
-  if (total < minTotal) return true
-  return false
+function useSoonShelfSubtitle(shelfRecipes) {
+  const names = orderedUseSoonNames(shelfRecipes)
+  if (names.length === 0) return null
+  if (names.length >= 3) return 'Recipes using what needs using up'
+  if (names.length === 1) return `Recipes using your ${names[0]}`
+  return `Recipes using your ${names[0]} and ${names[1]}`
 }
 
 function Recipes() {
-  const [deck, setDeck] = useState([])
+  const [suggestions, setSuggestions] = useState(EMPTY_SUGGESTIONS)
   const [loading, setLoading] = useState(true)
+  const [healthCardVisible, setHealthCardVisible] = useState(false)
+  const [healthCardItems, setHealthCardItems] = useState([])
+  const [cookedConfirmation, setCookedConfirmation] = useState(null)
   const [error, setError] = useState(null)
+  const [householdId, setHouseholdId] = useState(null)
   const [selectedRecipe, setSelectedRecipe] = useState(null)
   const [detailModalOpen, setDetailModalOpen] = useState(false)
-  const [loadingDetails, setLoadingDetails] = useState(false)
   const [pantryData, setPantryData] = useState(null)
-  const [householdId, setHouseholdId] = useState(null)
-  const [mealSlots, setMealSlots] = useState(defaultSlots)
-  const [generatingHint, setGeneratingHint] = useState(false)
 
   const { user } = useAuth()
   const userId = user?.id
 
-  const mealOrder = useMemo(() => mealTypesFromSlots(mealSlots), [mealSlots])
+  const initialLoadDoneRef = useRef(false)
 
   const fetchPantry = useCallback(async () => {
     if (!userId) return
@@ -83,212 +73,142 @@ function Recipes() {
       const response = await api.getHousehold(userId)
       if (response.household) {
         setHouseholdId(response.household.id)
-        const s = response.household.suggestion_meal_slots
-        if (s && typeof s === 'object') {
-          setMealSlots({
-            breakfast: !!s.breakfast,
-            lunch: !!s.lunch,
-            dinner: !!s.dinner,
-          })
-        }
       }
     } catch (err) {
       console.error('Failed to fetch household:', err)
     }
   }, [userId])
 
-  const loadPoolFromApi = useCallback(
-    async (slotsOverride) => {
-      if (!userId || !householdId) return
-      // #region agent log
-      const _tLoad = performance.now()
-      // #endregion
-      const data = await api.suggestions.getPool(userId, householdId)
-      const slots = slotsOverride !== undefined ? slotsOverride : mealSlots
-      const order = mealTypesFromSlots(slots)
-      const rows = flattenPool(data.pool || {}, order.length ? order : MEALS)
-      setDeck(rows.map(rowToCardRecipe))
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/756eb072-bf2c-4867-826e-94b8531d6a1d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ef2920'},body:JSON.stringify({sessionId:'ef2920',location:'Recipes.jsx:loadPoolFromApi',message:'getPool done',data:{elapsedMs:Math.round(performance.now()-_tLoad),rowCount:rows.length,mealOrder:order},timestamp:Date.now(),hypothesisId:'H2-H5'})}).catch(()=>{});
-      // #endregion
-    },
-    [userId, householdId, mealSlots]
-  )
-
-  const maybeTriggerRegeneration = useCallback(
-    async (triggerReason, { useMealTypes, slotsForReload } = {}) => {
-      if (!userId || !householdId) return
-      const types = useMealTypes ?? mealTypesFromSlots(mealSlots)
-      if (!types.length) return
-      // #region agent log
-      const _tGen = performance.now()
-      fetch('http://127.0.0.1:7242/ingest/756eb072-bf2c-4867-826e-94b8531d6a1d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ef2920'},body:JSON.stringify({sessionId:'ef2920',location:'Recipes.jsx:maybeTriggerRegeneration:start',message:'triggerGeneration start',data:{triggerReason,mealTypes:types},timestamp:Date.now(),hypothesisId:'H1-H4'})}).catch(()=>{});
-      // #endregion
-      try {
-        setGeneratingHint(true)
-        await api.suggestions.triggerGeneration(userId, {
-          triggerReason,
-          householdId,
-          mealTypes: types,
-        })
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/756eb072-bf2c-4867-826e-94b8531d6a1d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ef2920'},body:JSON.stringify({sessionId:'ef2920',location:'Recipes.jsx:maybeTriggerRegeneration:afterPost',message:'triggerGeneration HTTP returned',data:{elapsedMs:Math.round(performance.now()-_tGen),triggerReason},timestamp:Date.now(),hypothesisId:'H1-H4'})}).catch(()=>{});
-        // #endregion
-        await loadPoolFromApi(slotsForReload)
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/756eb072-bf2c-4867-826e-94b8531d6a1d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ef2920'},body:JSON.stringify({sessionId:'ef2920',location:'Recipes.jsx:maybeTriggerRegeneration:afterReload',message:'loadPool after generation',data:{totalElapsedMs:Math.round(performance.now()-_tGen),triggerReason},timestamp:Date.now(),hypothesisId:'H1-H2'})}).catch(()=>{});
-        // #endregion
-      } catch (e) {
-        console.warn('Pool generation:', e?.message || e)
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/756eb072-bf2c-4867-826e-94b8531d6a1d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ef2920'},body:JSON.stringify({sessionId:'ef2920',location:'Recipes.jsx:maybeTriggerRegeneration:error',message:'trigger failed',data:{elapsedMs:Math.round(performance.now()-_tGen),err:String(e?.message||e)},timestamp:Date.now(),hypothesisId:'H1'})}).catch(()=>{});
-        // #endregion
-      } finally {
-        setGeneratingHint(false)
-      }
-    },
-    [userId, householdId, mealSlots, loadPoolFromApi]
-  )
-
-  const checkDepthAndRefill = useCallback(
-    async () => {
-      if (!userId || !householdId) return
-      try {
-        // #region agent log
-        const _tDepth = performance.now()
-        // #endregion
-        const { depth } = await api.suggestions.getDepth(userId, householdId)
-        const needs = needsRefill(depth, mealSlots)
-        const types = mealTypesFromSlots(mealSlots)
-        const totalUnused = types.reduce((s, m) => s + (depth[m] ?? 0), 0)
-        const allEmpty = types.length && types.every((mt) => (depth[mt] ?? 0) === 0)
-        // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/756eb072-bf2c-4867-826e-94b8531d6a1d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ef2920'},body:JSON.stringify({sessionId:'ef2920',location:'Recipes.jsx:checkDepthAndRefill',message:'depth after getDepth',data:{elapsedMs:Math.round(performance.now()-_tDepth),depth,needsRefill:needs,totalUnused,minTotal:2*types.length,allEmpty,refillFireAndForget:true},timestamp:Date.now(),hypothesisId:'H1-H4'})}).catch(()=>{});
-        // #endregion
-        if (!needs) return
-        void maybeTriggerRegeneration('low_watermark', {})
-      } catch (e) {
-        console.warn('depth check', e)
-      }
-    },
-    [userId, householdId, mealSlots, maybeTriggerRegeneration]
-  )
-
-  const fetchRecipes = useCallback(async () => {
+  const loadSuggestions = useCallback(async () => {
     if (!userId) return
-    // #region agent log
-    const _tFetch = performance.now()
-    fetch('http://127.0.0.1:7242/ingest/756eb072-bf2c-4867-826e-94b8531d6a1d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ef2920'},body:JSON.stringify({sessionId:'ef2920',location:'Recipes.jsx:fetchRecipes:start',message:'fetchRecipes start',data:{householdId,mealSlots},timestamp:Date.now(),hypothesisId:'H3'})}).catch(()=>{});
-    // #endregion
-    setLoading(true)
+    if (!initialLoadDoneRef.current) {
+      setLoading(true)
+    }
     setError(null)
     try {
-      await loadPoolFromApi()
-      if (mealTypesFromSlots(mealSlots).length) {
-        await checkDepthAndRefill()
-        await loadPoolFromApi()
-      }
+      const data = await api.getSuggestions(userId, householdId)
+      initialLoadDoneRef.current = true
+      setSuggestions({
+        use_soon_shelf: data.use_soon_shelf || [],
+        cook_tonight: data.cook_tonight || [],
+        probably_have: data.probably_have || [],
+        check_first: data.check_first || [],
+      })
     } catch (err) {
-      console.error('Failed to load suggestion pool:', err)
+      console.error('Failed to load suggestions:', err)
       setError(err.response?.data?.error || 'Failed to load recipe suggestions.')
+      setSuggestions(EMPTY_SUGGESTIONS)
     } finally {
       setLoading(false)
-      // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/756eb072-bf2c-4867-826e-94b8531d6a1d',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'ef2920'},body:JSON.stringify({sessionId:'ef2920',location:'Recipes.jsx:fetchRecipes:finally',message:'fetchRecipes done loading=false',data:{totalElapsedMs:Math.round(performance.now()-_tFetch)},timestamp:Date.now(),hypothesisId:'H1-H3'})}).catch(()=>{});
-      // #endregion
     }
-  }, [userId, loadPoolFromApi, checkDepthAndRefill, mealSlots])
+  }, [userId, householdId])
 
   useEffect(() => {
-    fetchHousehold()
+    void fetchHousehold()
   }, [fetchHousehold])
 
   useEffect(() => {
-    if (userId && householdId) {
-      fetchRecipes()
-      fetchPantry()
-    }
-  }, [userId, householdId, fetchRecipes, fetchPantry])
-
-  const toggleMealSlot = async (key) => {
-    const next = { ...mealSlots, [key]: !mealSlots[key] }
-    if (!next.breakfast && !next.lunch && !next.dinner) {
-      setError('Select at least one meal type.')
-      return
-    }
-    setMealSlots(next)
-    setError(null)
     if (!userId) return
-    try {
-      await api.updateHouseholdProfile(userId, { suggestionMealSlots: next })
-      void maybeTriggerRegeneration('manual_refresh', {
-        useMealTypes: mealTypesFromSlots(next),
-        slotsForReload: next,
-      })
-    } catch (e) {
-      console.error(e)
-      setError(e.response?.data?.error || 'Could not save meal preferences.')
-    }
-  }
+    void loadSuggestions()
+    void fetchPantry()
+  }, [userId, householdId, loadSuggestions, fetchPantry])
 
   const handleRefreshPull = async () => {
-    await maybeTriggerRegeneration('manual_refresh', {})
+    await loadSuggestions()
   }
 
-  const handleRecipeClick = async (recipe) => {
-    const rid = recipe?.id
-    const isStaple =
-      recipe?.is_staple || String(rid || '').startsWith('staple_')
-    setSelectedRecipe(null)
-    setDetailModalOpen(true)
-    if (isStaple || !rid || !userId) {
-      setSelectedRecipe({
-        id: rid,
-        title: recipe.title,
-        image: recipe.image,
-        extendedIngredients: [],
-        instructions: '',
-        summary: '',
-        is_staple: true,
+  const handleCookedIt = async (recipe) => {
+    if (!userId) return
+    const flags = recipe.ingredient_flags || []
+    const ingredients =
+      flags.length > 0
+        ? flags.map((f) => ({
+            name: f.ingredient_name,
+            amount: 1,
+            unit: 'serving',
+          }))
+        : [{ name: recipe.title || 'meal', amount: 1, unit: 'serving' }]
+    try {
+      await api.markCooked(userId, {
+        recipeId: recipe.id,
+        recipeName: recipe.title,
+        servings: recipe.servings || 4,
+        ingredients,
+        householdId,
       })
-      setLoadingDetails(false)
-      return
-    }
-    const hasDetail =
-      recipe.extendedIngredients &&
-      Array.isArray(recipe.extendedIngredients) &&
-      recipe.extendedIngredients.length > 0
-    if (hasDetail) {
-      setSelectedRecipe(recipe)
-      setLoadingDetails(false)
-      return
-    }
-    setLoadingDetails(true)
-    try {
-      const details = await api.getRecipeDetails(userId, rid)
-      setSelectedRecipe(details)
+      setCookedConfirmation('Nice! Pantry updated.')
+      setTimeout(() => setCookedConfirmation(null), 2500)
+      const updated = await api.getSuggestions(userId, householdId)
+      setSuggestions({
+        use_soon_shelf: updated.use_soon_shelf || [],
+        cook_tonight: updated.cook_tonight || [],
+        probably_have: updated.probably_have || [],
+        check_first: updated.check_first || [],
+      })
+      void fetchPantry()
+      try {
+        const hc = await api.getHealthCard(userId, householdId)
+        if (hc.show && hc.items?.length > 0) {
+          setHealthCardItems(hc.items)
+          setHealthCardVisible(true)
+        }
+      } catch {
+        /* health card is non-critical */
+      }
     } catch (err) {
-      console.error('Failed to fetch recipe details:', err)
-      setError(err.response?.data?.error || 'Failed to load recipe details.')
-    } finally {
-      setLoadingDetails(false)
+      setError(err.response?.data?.error || 'Failed to record cook event.')
     }
   }
 
-  const removeTopAndSwipe = async (recipe) => {
-    const sid = recipe.poolSuggestionId
-    if (!sid || !userId) return
-    setDeck((prev) => prev.filter((r) => r.poolSuggestionId !== sid))
+  const handleDismiss = async (recipe) => {
+    setSuggestions((prev) => {
+      const next = { ...prev }
+      for (const key of Object.keys(next)) {
+        next[key] = next[key].filter((r) => r.id !== recipe.id)
+      }
+      return next
+    })
+    if (!userId) return
     try {
-      await api.suggestions.swipe(userId, sid, householdId)
-    } catch (e) {
-      console.error(e)
-      setError(e.response?.data?.error || 'Could not update suggestion.')
+      await api.dismissSuggestion(userId, recipe.id, householdId)
+    } catch (err) {
+      console.error('dismiss failed', err)
     }
-    void checkDepthAndRefill()
   }
 
-  const topThree = deck.slice(0, 3)
+  const handleExpand = (recipe) => {
+    setSelectedRecipe(recipe)
+    setDetailModalOpen(true)
+  }
+
+  const renderShelf = (key, title, subtitle, list) => {
+    if (!list || list.length === 0) return null
+    return (
+      <section key={key} className="mb-8">
+        <div className="mb-4">
+          <h2 className="text-xl font-display font-semibold text-cream mb-1">{title}</h2>
+          {subtitle ? <p className="text-sm text-sage-light">{subtitle}</p> : null}
+        </div>
+        {list.map((recipe) => (
+          <SuggestionRecipeCard
+            key={`${key}-${recipe.id}`}
+            recipe={recipe}
+            tier={key}
+            onCookedIt={handleCookedIt}
+            onDismiss={handleDismiss}
+            onExpand={handleExpand}
+          />
+        ))}
+      </section>
+    )
+  }
+
+  const hasAnyRecipes =
+    (suggestions.use_soon_shelf?.length || 0) +
+      (suggestions.cook_tonight?.length || 0) +
+      (suggestions.probably_have?.length || 0) +
+      (suggestions.check_first?.length || 0) >
+    0
 
   return (
     <PullToRefresh onRefresh={handleRefreshPull}>
@@ -297,6 +217,12 @@ function Recipes() {
           title="Recipe Ideas"
           subtitle="Discover recipes based on ingredients in your pantry."
         />
+
+        {cookedConfirmation && (
+          <div className="mb-4 p-3 rounded-mise-md bg-forest-light text-cream text-center text-sm border border-forest-light">
+            {cookedConfirmation}
+          </div>
+        )}
 
         {error && (
           <div className="mb-6 p-4 border border-[var(--color-error)] rounded-mise-md text-[var(--color-error)] bg-[var(--color-error)]/10">
@@ -311,34 +237,12 @@ function Recipes() {
           </div>
         )}
 
-        <div className="card mb-4">
-          <p className="text-sm text-sage-light mb-2">
-            Include these meals in your suggestion pool (used for background generation):
-          </p>
-          <div className="flex flex-wrap gap-3">
-            {MEALS.map((m) => (
-              <label
-                key={m}
-                className="inline-flex items-center gap-2 cursor-pointer text-cream capitalize"
-              >
-                <input
-                  type="checkbox"
-                  checked={!!mealSlots[m]}
-                  onChange={() => toggleMealSlot(m)}
-                  className="rounded border-forest-light"
-                />
-                {m}
-              </label>
-            ))}
-          </div>
-        </div>
-
         <div className="card">
           {loading ? (
             <div className="flex justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terra" />
             </div>
-          ) : deck.length === 0 ? (
+          ) : !hasAnyRecipes ? (
             <div className="text-center py-12">
               <div className="mx-auto w-16 h-16 bg-forest-light rounded-full flex items-center justify-center mb-4">
                 <svg
@@ -355,68 +259,76 @@ function Recipes() {
                   />
                 </svg>
               </div>
-              <h3 className="text-lg font-display font-medium text-cream mb-2">
-                {generatingHint ? 'Generating suggestions…' : 'No suggestions yet'}
-              </h3>
+              <h3 className="text-lg font-display font-medium text-cream mb-2">No suggestions yet</h3>
               <p className="text-sage-light mb-4">
-                {generatingHint
-                  ? 'We are filling your pool in the background. Pull to refresh or check back in a moment.'
-                  : 'Pull down to refresh or add pantry items—we will match recipes to what you have.'}
+                Pull down to refresh or add pantry items—we will match recipes to what you have.
               </p>
-              <button
-                type="button"
-                className="btn btn-primary"
-                onClick={() => maybeTriggerRegeneration('manual_refresh', {})}
-              >
+              <button type="button" className="btn btn-primary" onClick={() => void loadSuggestions()}>
                 Refresh suggestions
               </button>
             </div>
           ) : (
-            <div
-              className="relative mb-6 w-full max-w-lg mx-auto"
-              style={{ minHeight: '520px' }}
-            >
-              <p className="text-xs text-sage-light mb-2 text-center">
-                Swipe right to open details · Swipe left to dismiss · Swipe up to dismiss
-              </p>
-              <AnimatePresence>
-                {topThree.map((recipe, index) => (
-                  <motion.div
-                    key={recipe.poolSuggestionId || recipe.id || index}
-                    className="absolute inset-x-0 w-full"
-                    style={{
-                      zIndex: 3 - index,
-                      transformOrigin: 'top center',
-                      transform: `scale(${1 - index * 0.05}) translateY(${index * 10}px)`,
-                    }}
-                  >
-                    <RecipeSwipeCard
-                      recipe={recipe}
-                      onAccept={() => handleRecipeClick(recipe)}
-                      onReject={() => removeTopAndSwipe(recipe)}
-                      onBan={() => removeTopAndSwipe(recipe)}
-                      isFirstCard={index === 0}
-                      zIndex={3 - index}
-                    />
-                  </motion.div>
-                ))}
-              </AnimatePresence>
+            <div className="w-full max-w-lg mx-auto">
+              {renderShelf(
+                'use_soon',
+                'Use before it\'s gone',
+                useSoonShelfSubtitle(suggestions.use_soon_shelf),
+                suggestions.use_soon_shelf
+              )}
+              {renderShelf('cook_tonight', 'Cook tonight', null, suggestions.cook_tonight)}
+              {renderShelf(
+                'probably_have',
+                'Probably have everything',
+                null,
+                suggestions.probably_have
+              )}
+              {renderShelf('check_first', 'Quick check needed', null, suggestions.check_first)}
             </div>
           )}
         </div>
 
-        <RecipeDetailModal
+        <SuggestionDetailModal
           isOpen={detailModalOpen}
           onClose={() => {
             setDetailModalOpen(false)
             setSelectedRecipe(null)
           }}
           recipe={selectedRecipe}
-          loading={loadingDetails}
+          loading={false}
           userId={userId}
           pantryData={pantryData}
-          onPantryUpdated={fetchPantry}
+          onCookedIt={async (r) => {
+            await handleCookedIt(r)
+            setDetailModalOpen(false)
+            setSelectedRecipe(null)
+          }}
+          onIngredientCorrected={() => {
+            void loadSuggestions()
+            void fetchPantry()
+          }}
         />
+
+        {userId ? (
+          <HealthCard
+            userId={userId}
+            items={healthCardItems}
+            visible={healthCardVisible}
+            onDismiss={() => {
+              setHealthCardVisible(false)
+              setHealthCardItems([])
+            }}
+            onItemUpdated={async () => {
+              const updated = await api.getSuggestions(userId, householdId)
+              setSuggestions({
+                use_soon_shelf: updated.use_soon_shelf || [],
+                cook_tonight: updated.cook_tonight || [],
+                probably_have: updated.probably_have || [],
+                check_first: updated.check_first || [],
+              })
+              await fetchPantry()
+            }}
+          />
+        ) : null}
       </div>
     </PullToRefresh>
   )

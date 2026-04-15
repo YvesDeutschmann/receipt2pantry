@@ -1,6 +1,7 @@
 """Pantry management API routes"""
 
 import asyncio
+from datetime import date, timedelta
 from typing import Any, Dict, List, Optional, Set
 
 from flask import Blueprint, request, current_app, jsonify
@@ -8,6 +9,15 @@ from werkzeug.utils import secure_filename
 
 from backend.utils.logger import get_logger
 from backend.utils.auth import get_user_id_from_request
+from backend.services.confidence_engine import (
+    _rpc_soft_delete_pantry_item,
+    _to_date,
+    compute_confidence,
+    get_calibrated_days_supply,
+    get_engagement_multiplier,
+    process_cook_event,
+    process_put_back,
+)
 from backend.utils.exceptions import (
     ValidationException,
     DatabaseException,
@@ -43,6 +53,62 @@ def run_async(coro):
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
     return loop.run_until_complete(coro)
+
+
+def _enrich_pantry_summary_with_confidence(
+    supabase: Any, user_id: str, summary: Dict[str, Any]
+) -> None:
+    """Mutates summary: adds confidence and depletion_class to each item (grouped variants share refs)."""
+    today = date.today()
+    client = supabase.admin_client or supabase.client
+    engagement = get_engagement_multiplier(client, user_id)
+    prefs_row = supabase.get_user_preferences(user_id)
+    user_prefs = {
+        "depletion_multiplier": float((prefs_row or {}).get("depletion_multiplier") or 1.0)
+    }
+    bases = list(
+        {(it.get("base_ingredient") or "").strip().lower() for it in summary["items"]}
+    )
+    classifications = supabase.get_item_classifications_by_names(bases)
+    for item in summary["items"]:
+        base = (item.get("base_ingredient") or "").strip().lower()
+        cls = classifications.get(base, {})
+        default_days = cls.get("default_days_supply") or 45
+        cal = get_calibrated_days_supply(client, user_id, base, int(default_days))
+        item["confidence"] = compute_confidence(
+            item,
+            user_prefs,
+            cls,
+            today=today,
+            calibrated_days=cal,
+            engagement_multiplier=engagement,
+        )
+        item["depletion_class"] = (
+            item.get("depletion_class") or cls.get("depletion_class") or "STAPLE"
+        )
+
+
+def _graveyard_normalized_name(supabase: Any, item_name: str) -> str:
+    """Map depletion_history.item_name to canonical display_name when possible."""
+    if not (item_name or "").strip():
+        return ""
+    row = supabase.get_canonical_ingredient_by_base(item_name)
+    if not row or not isinstance(row, dict):
+        return item_name
+    dn = row.get("display_name")
+    if dn is not None and str(dn).strip():
+        return str(dn).strip()
+    return item_name
+
+
+def _health_card_cooldown_active(prefs_row: Optional[Dict], today: date) -> bool:
+    if not prefs_row:
+        return False
+    raw = prefs_row.get("last_health_card_shown")
+    last = _to_date(raw)
+    if last is None:
+        return False
+    return (today - last).days < 7
 
 
 def get_ai_service():
@@ -541,15 +607,315 @@ def get_pantry():
         return jsonify({"error": "Pantry service not available"}), 503
     
     household_id = request.args.get("household_id")
-    
+
+    supabase = get_supabase_service()
+    if not supabase:
+        return jsonify({"error": "Database service not available"}), 503
+
     try:
         summary = run_async(service.get_pantry_summary(user_id, household_id))
+        _enrich_pantry_summary_with_confidence(supabase, user_id, summary)
         return jsonify(summary)
     except DatabaseException as e:
         logger.error(f"Database error getting pantry: {e}")
         return jsonify({"error": str(e)}), 500
     except Exception as e:
         logger.error(f"Error getting pantry: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@pantry_bp.route("/pantry/cook", methods=["POST"])
+def pantry_cook():
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    supabase = get_supabase_service()
+    if not supabase:
+        return jsonify({"error": "Database service not available"}), 503
+
+    body = request.get_json() or {}
+    if (
+        "recipe_id" not in body
+        or body["recipe_id"] is None
+        or str(body["recipe_id"]).strip() == ""
+    ):
+        return jsonify({"error": "recipe_id is required"}), 400
+    if "servings" not in body:
+        return jsonify({"error": "servings is required"}), 400
+    try:
+        servings = int(body["servings"])
+    except (TypeError, ValueError):
+        return jsonify({"error": "servings must be an integer"}), 400
+    if servings < 1:
+        return jsonify({"error": "servings must be at least 1"}), 400
+
+    ingredients = body.get("ingredients")
+    if not isinstance(ingredients, list) or len(ingredients) == 0:
+        return jsonify({"error": "ingredients must be a non-empty list"}), 400
+    for i, ing in enumerate(ingredients):
+        if not isinstance(ing, dict):
+            return jsonify({"error": f"ingredients[{i}] must be an object"}), 400
+        name = ing.get("name")
+        if name is None or str(name).strip() == "":
+            return jsonify({"error": f"ingredients[{i}] must have a name"}), 400
+
+    try:
+        client = supabase.admin_client or supabase.client
+        process_cook_event(
+            client,
+            user_id,
+            str(body["recipe_id"]),
+            servings,
+            ingredients,
+            today=date.today(),
+            recipe_name=body.get("recipe_name", ""),
+            household_id=body.get("household_id"),
+        )
+        return jsonify({"ok": True})
+    except Exception as e:
+        logger.error(f"Error processing cook event: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@pantry_bp.route("/pantry/graveyard", methods=["GET"])
+def pantry_graveyard():
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    supabase = get_supabase_service()
+    if not supabase:
+        return jsonify({"error": "Database service not available"}), 503
+
+    try:
+        cutoff = (date.today() - timedelta(days=7)).isoformat()
+        rows = (
+            supabase.admin_client.table("depletion_history")
+            .select(
+                "id, pantry_item_id, item_name, deleted_at, reason, put_back_count"
+            )
+            .eq("user_id", user_id)
+            .gte("deleted_at", cutoff)
+            .in_("reason", ["AUTO_EXPIRED", "USER_REMOVED"])
+            .order("deleted_at", desc=True)
+            .execute()
+        )
+        raw = rows.data if rows.data else []
+        names = list({r.get("item_name") for r in raw if r.get("item_name")})
+        classifications = supabase.get_item_classifications_by_names(names)
+        normalized_by_name: Dict[str, str] = {
+            n: _graveyard_normalized_name(supabase, n) for n in names
+        }
+        out: List[Dict[str, Any]] = []
+        for r in raw:
+            name = r.get("item_name") or ""
+            sub = (classifications.get(name) or {}).get("sub_class")
+            out.append(
+                {
+                    "depletion_history_id": str(r["id"]),
+                    "pantry_item_id": str(r["pantry_item_id"]),
+                    "base_ingredient": name,
+                    "normalized_name": normalized_by_name.get(name, name),
+                    "deleted_at": r.get("deleted_at"),
+                    "reason": r.get("reason"),
+                    "put_back_count": int(r.get("put_back_count") or 0),
+                    "sub_class": sub,
+                }
+            )
+        return jsonify({"items": out})
+    except Exception as e:
+        logger.error(f"Error loading graveyard: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@pantry_bp.route("/pantry/put-back", methods=["POST"])
+def pantry_put_back():
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    supabase = get_supabase_service()
+    if not supabase:
+        return jsonify({"error": "Database service not available"}), 503
+
+    body = request.get_json() or {}
+    hid = body.get("depletion_history_id")
+    if not hid or not str(hid).strip():
+        return jsonify({"error": "depletion_history_id is required"}), 400
+
+    try:
+        client = supabase.admin_client or supabase.client
+        item, error_code = process_put_back(
+            client,
+            user_id,
+            str(hid),
+            today=date.today(),
+        )
+        if error_code == "MAX_PUT_BACK_REACHED":
+            return jsonify({"error": "MAX_PUT_BACK_REACHED"}), 409
+        if error_code:
+            return jsonify({"error": error_code}), 400
+        return jsonify({"ok": True, "item": item})
+    except Exception as e:
+        logger.error(f"Error processing put-back: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@pantry_bp.route("/pantry/health-card", methods=["GET"])
+def pantry_health_card():
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    supabase = get_supabase_service()
+    service = get_pantry_service()
+    if not supabase or not service:
+        return jsonify({"error": "Service not available"}), 503
+
+    household_id = request.args.get("household_id")
+    today = date.today()
+
+    try:
+        prefs_row = supabase.get_user_preferences(user_id)
+        if _health_card_cooldown_active(prefs_row, today):
+            return jsonify({"show": False, "items": []})
+
+        summary = run_async(service.get_pantry_summary(user_id, household_id))
+        items = summary.get("items") or []
+
+        client = supabase.admin_client or supabase.client
+        engagement = get_engagement_multiplier(client, user_id)
+        user_prefs = {
+            "depletion_multiplier": float((prefs_row or {}).get("depletion_multiplier") or 1.0)
+        }
+        bases = list(
+            {(it.get("base_ingredient") or "").strip().lower() for it in items}
+        )
+        classifications = supabase.get_item_classifications_by_names(bases)
+
+        scored: List[Dict[str, Any]] = []
+        for item in items:
+            base = (item.get("base_ingredient") or "").strip().lower()
+            cls = classifications.get(base, {})
+            default_days = cls.get("default_days_supply") or 45
+            cal = get_calibrated_days_supply(client, user_id, base, int(default_days))
+            conf = compute_confidence(
+                item,
+                user_prefs,
+                cls,
+                today=today,
+                calibrated_days=cal,
+                engagement_multiplier=engagement,
+            )
+            if 0.20 <= conf <= 0.60:
+                scored.append(
+                    {
+                        "item_id": str(item.get("id")),
+                        "base_ingredient": item.get("base_ingredient") or "",
+                        "normalized_name": item.get("normalized_name") or "",
+                        "confidence": conf,
+                        "depletion_class": (
+                            item.get("depletion_class")
+                            or cls.get("depletion_class")
+                            or "STAPLE"
+                        ),
+                    }
+                )
+
+        scored.sort(key=lambda x: x["confidence"])
+        limited = scored[:5]
+        if not limited:
+            return jsonify({"show": False, "items": []})
+        return jsonify({"show": True, "items": limited})
+    except Exception as e:
+        logger.error(f"Error building health card: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@pantry_bp.route("/pantry/health-card/dismiss", methods=["POST"])
+def pantry_health_card_dismiss():
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    supabase = get_supabase_service()
+    if not supabase:
+        return jsonify({"error": "Database service not available"}), 503
+
+    try:
+        prefs = supabase.get_user_preferences(user_id)
+        row: Dict[str, Any] = {
+            "user_id": user_id,
+            "last_health_card_shown": date.today().isoformat(),
+        }
+        if prefs is None:
+            row["household_size"] = "TWO"
+            row["depletion_multiplier"] = 1.5
+        supabase.admin_client.table("user_preferences").upsert(
+            row,
+            on_conflict="user_id",
+        ).execute()
+        return jsonify({"ok": True})
+    except Exception as e:
+        logger.error(f"Error dismissing health card: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@pantry_bp.route("/pantry/items/<item_id>/correction", methods=["POST"])
+def pantry_item_correction(item_id):
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    supabase = get_supabase_service()
+    service = get_pantry_service()
+    if not supabase or not service:
+        return jsonify({"error": "Service not available"}), 503
+
+    body = request.get_json() or {}
+    action = body.get("action")
+    valid = frozenset({"still_have_it", "used_it_up", "never_had_it"})
+    if action not in valid:
+        return jsonify({"error": "action must be still_have_it, used_it_up, or never_had_it"}), 400
+
+    item = supabase.get_pantry_item_by_id(item_id)
+    if not item or item.get("deleted_at"):
+        return jsonify({"error": "Item not found"}), 404
+    if not service.user_can_access_pantry_item(user_id, item):
+        return jsonify({"error": "Item not found"}), 404
+
+    today = date.today()
+    c = supabase.admin_client or supabase.client
+
+    try:
+        if action == "still_have_it":
+            expires = (today + timedelta(days=14)).isoformat()
+            c.table("pantry_items").update(
+                {
+                    "confidence_override": 0.80,
+                    "confidence_override_expires": expires,
+                }
+            ).eq("id", item_id).execute()
+            return jsonify({"ok": True})
+
+        reason = "USER_REMOVED" if action == "used_it_up" else "NEVER_HAD"
+        purchase = _to_date(item.get("purchase_date"))
+        _rpc_soft_delete_pantry_item(
+            c,
+            user_id=user_id,
+            pantry_item_id=str(item_id),
+            item_name=item.get("base_ingredient") or item.get("normalized_name") or "",
+            depletion_class=item.get("depletion_class") or "STAPLE",
+            purchase_date=purchase,
+            today=today,
+            reason=reason,
+            was_cooked=False,
+            put_back_count=int(item.get("put_back_count") or 0),
+        )
+        return jsonify({"ok": True})
+    except Exception as e:
+        logger.error(f"Error applying pantry correction: {e}")
         return jsonify({"error": str(e)}), 500
 
 

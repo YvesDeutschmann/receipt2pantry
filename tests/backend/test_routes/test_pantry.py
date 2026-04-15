@@ -2,7 +2,7 @@
 
 import json
 import pytest
-from unittest.mock import Mock, AsyncMock
+from unittest.mock import Mock, AsyncMock, patch
 from backend.utils.exceptions import ValidationException, DatabaseException
 
 
@@ -41,29 +41,35 @@ class TestPantryRoutes:
     # GET /api/pantry tests
     # =========================================================================
     
-    def test_get_pantry_success(self, client_with_services, mock_pantry_service):
+    @patch('backend.routes.pantry.get_calibrated_days_supply', return_value=45)
+    @patch('backend.routes.pantry.get_engagement_multiplier', return_value=1.0)
+    def test_get_pantry_success(
+        self, mock_eng, mock_cal, client_with_services, mock_pantry_service, mock_supabase_service
+    ):
         """Test getting pantry summary"""
-        # Setup
+        mock_supabase_service.get_user_preferences.return_value = None
+        mock_supabase_service.get_item_classifications_by_names.return_value = {}
+        butter = {
+            'id': '1',
+            'base_ingredient': 'butter',
+            'normalized_name': 'butter (unsalted)',
+            'quantity': 2,
+            'unit': 'count',
+        }
+        milk = {
+            'id': '2',
+            'base_ingredient': 'milk',
+            'normalized_name': 'milk (whole)',
+            'quantity': 1,
+            'unit': 'gallon',
+        }
         mock_pantry_service.get_pantry_summary.return_value = {
             'total_items': 5,
             'unique_ingredients': 3,
-            'items': [
-                {'id': '1', 'normalized_name': 'butter (unsalted)', 'quantity': 2, 'unit': 'count'},
-                {'id': '2', 'normalized_name': 'milk (whole)', 'quantity': 1, 'unit': 'gallon'},
-            ],
+            'items': [butter, milk],
             'grouped': [
-                {
-                    'base_ingredient': 'butter',
-                    'variants': [
-                        {'id': '1', 'normalized_name': 'butter (unsalted)', 'quantity': 2, 'unit': 'count'}
-                    ]
-                },
-                {
-                    'base_ingredient': 'milk',
-                    'variants': [
-                        {'id': '2', 'normalized_name': 'milk (whole)', 'quantity': 1, 'unit': 'gallon'}
-                    ]
-                }
+                {'base_ingredient': 'butter', 'variants': [butter]},
+                {'base_ingredient': 'milk', 'variants': [milk]},
             ],
             'household_id': 'household-123'
         }
@@ -81,9 +87,12 @@ class TestPantryRoutes:
         assert data['unique_ingredients'] == 3
         assert len(data['grouped']) == 2
     
-    def test_get_pantry_empty(self, client_with_services, mock_pantry_service):
+    @patch('backend.routes.pantry.get_engagement_multiplier', return_value=1.0)
+    def test_get_pantry_empty(
+        self, mock_eng, client_with_services, mock_pantry_service, mock_supabase_service
+    ):
         """Test getting empty pantry"""
-        # Setup
+        mock_supabase_service.get_user_preferences.return_value = None
         mock_pantry_service.get_pantry_summary.return_value = {
             'total_items': 0,
             'unique_ingredients': 0,

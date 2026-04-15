@@ -409,6 +409,12 @@ class SuggestionService:
                     "is_soft_required": is_soft,
                     "is_use_soon": is_use_soon,
                     "status_label": label,
+                    "sub_class": cls_row.get("sub_class"),
+                    "put_back_count": (
+                        int(pantry_item.get("put_back_count") or 0)
+                        if pantry_item
+                        else 0
+                    ),
                 }
             )
 

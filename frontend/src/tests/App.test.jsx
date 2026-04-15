@@ -6,12 +6,19 @@ import App from '../App'
 vi.mock('../contexts/AuthContext', () => ({
   AuthProvider: ({ children }) => children,
   useAuth: () => ({
-    user: { id: '00000000-0000-0000-0000-000000000001', email: 'test@example.com' },
+    user: {
+      id: '00000000-0000-0000-0000-000000000001',
+      email: 'test@example.com',
+      user_metadata: { onboarding_completed_at: '2026-01-01' },
+    },
     session: {},
     loading: false,
+    onboardingComplete: true,
     signIn: vi.fn(),
     signUp: vi.fn(),
     signOut: vi.fn(),
+    signInWithApple: vi.fn(),
+    signInWithGoogle: vi.fn(),
   }),
 }))
 

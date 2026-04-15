@@ -32,6 +32,16 @@ vi.mock('../services/costcoNativeSync', () => ({
 vi.mock('../services/apiClient', () => ({
   api: {
     connectCostcoFromApp: (...args) => mockConnectCostcoFromApp(...args),
+    getSuggestions: vi.fn(() =>
+      Promise.resolve({
+        use_soon_shelf: [],
+        cook_tonight: [],
+        probably_have: [],
+        check_first: [],
+      })
+    ),
+    getPantry: vi.fn(),
+    getHousehold: vi.fn(),
   },
 }))
 

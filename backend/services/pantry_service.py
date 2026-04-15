@@ -645,6 +645,10 @@ class PantryService:
             return True
         return False
 
+    def user_can_access_pantry_item(self, user_id: str, item: Dict) -> bool:
+        """Whether the user may read/update this pantry row (household or legacy user scope)."""
+        return self._user_can_access_pantry_item(user_id, item)
+
     async def quick_add_from_search(
         self, user_id: str, base_ingredient: str
     ) -> Dict[str, Any]:

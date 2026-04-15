@@ -7,8 +7,8 @@ import PantryList from '../components/PantryList'
 import PantrySearchOverlay from '../components/PantrySearchOverlay'
 import PageHeader from '../components/PageHeader'
 import PullToRefresh from '../components/PullToRefresh'
-import UndoToast from '../components/UndoToast'
 import VoiceInputSheet from '../components/voice/VoiceInputSheet'
+import GraveyardSection from '../components/GraveyardSection'
 
 function Pantry() {
   const [pantryData, setPantryData] = useState(null)
@@ -18,7 +18,7 @@ function Pantry() {
   const [searchOverlayOpen, setSearchOverlayOpen] = useState(false)
   const [addMenuOpen, setAddMenuOpen] = useState(false)
   const [voiceOpen, setVoiceOpen] = useState(false)
-  const [undo, setUndo] = useState(null)
+  const [householdId, setHouseholdId] = useState(null)
 
   const { user } = useAuth()
   const userId = user?.id
@@ -28,7 +28,7 @@ function Pantry() {
     setLoading(true)
     setError(null)
     try {
-      const data = await api.getPantry(userId)
+      const data = await api.getPantry(userId, householdId)
       setPantryData(data)
     } catch (err) {
       console.error('Failed to fetch pantry:', err)
@@ -36,80 +36,73 @@ function Pantry() {
     } finally {
       setLoading(false)
     }
+  }, [userId, householdId])
+
+  const fetchHousehold = useCallback(async () => {
+    if (!userId) return
+    try {
+      const response = await api.getHousehold(userId)
+      if (response.household) {
+        setHouseholdId(response.household.id)
+      }
+    } catch (err) {
+      console.error('Failed to fetch household:', err)
+    }
   }, [userId])
 
   useEffect(() => {
-    fetchPantry()
-  }, [fetchPantry])
+    fetchHousehold()
+  }, [fetchHousehold])
+
+  useEffect(() => {
+    if (userId && householdId) {
+      fetchPantry()
+    }
+  }, [userId, householdId, fetchPantry])
+
+  const activeItems = useMemo(() => {
+    const rows = pantryData?.items || []
+    return rows.filter((i) => !i.deleted_at)
+  }, [pantryData])
 
   const excludeBases = useMemo(() => {
     const s = new Set()
-    for (const g of pantryData?.grouped || []) {
-      if (g.base_ingredient) s.add(String(g.base_ingredient).toLowerCase())
+    for (const i of activeItems) {
+      if (i.base_ingredient) s.add(String(i.base_ingredient).toLowerCase())
     }
     return [...s]
-  }, [pantryData])
+  }, [activeItems])
 
-  const handleUpdateQuantity = async (itemId, newQuantity) => {
+  const filteredItems = useMemo(() => {
+    if (!searchTerm) return activeItems
+    const term = searchTerm.toLowerCase()
+    return activeItems.filter(
+      (i) =>
+        i.normalized_name?.toLowerCase().includes(term) ||
+        i.base_ingredient?.toLowerCase().includes(term) ||
+        i.category?.toLowerCase().includes(term)
+    )
+  }, [activeItems, searchTerm])
+
+  const handleCorrection = async (itemId, action) => {
     try {
-      await api.updatePantryItem(userId, itemId, newQuantity)
-      fetchPantry()
+      await api.correctPantryItem(userId, itemId, action)
+      await fetchPantry()
     } catch (err) {
-      console.error('Failed to update item:', err)
-      setError('Failed to update item quantity.')
+      console.error('Correction failed:', err)
+      setError('Failed to update item.')
     }
   }
 
-  const handleDeleteItem = async (itemId) => {
+  const handleRemove = async (itemId) => {
     try {
-      const { snapshot } = await api.depletePantryItem(userId, itemId)
-      const name =
-        snapshot?.normalized_name || snapshot?.base_ingredient || 'Item'
-      setUndo({ snapshot, message: `Removed ${name} from your pantry` })
-      fetchPantry()
+      await api.correctPantryItem(userId, itemId, 'used_it_up')
+      await fetchPantry()
     } catch (err) {
-      console.error('Failed to remove item:', err)
+      console.error('Remove failed:', err)
       setError('Failed to remove item.')
     }
   }
-
-  const handleUndoDelete = async () => {
-    if (!undo?.snapshot || !userId) return
-    try {
-      await api.restorePantryItem(userId, undo.snapshot)
-      setUndo(null)
-      fetchPantry()
-    } catch (err) {
-      console.error('Failed to undo:', err)
-      setError('Could not restore item.')
-    }
-  }
-
-  const getFilteredData = () => {
-    if (!pantryData || !searchTerm) return pantryData
-
-    const term = searchTerm.toLowerCase()
-    const filteredGrouped = pantryData.grouped
-      .map((group) => ({
-        ...group,
-        variants: group.variants.filter(
-          (v) =>
-            v.normalized_name?.toLowerCase().includes(term) ||
-            v.base_ingredient?.toLowerCase().includes(term) ||
-            v.category?.toLowerCase().includes(term)
-        ),
-      }))
-      .filter((group) => group.variants.length > 0)
-
-    return {
-      ...pantryData,
-      grouped: filteredGrouped,
-      total_items: filteredGrouped.reduce((sum, g) => sum + g.variants.length, 0),
-      unique_ingredients: filteredGrouped.length,
-    }
-  }
-
-  const filteredData = getFilteredData()
 
   return (
     <PullToRefresh onRefresh={fetchPantry}>
@@ -129,26 +122,11 @@ function Pantry() {
           }
         />
 
-        {pantryData && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-            <div className="card">
-              <h3 className="text-sm font-medium text-sage-light mb-2">Total Items</h3>
-              <p className="text-3xl font-display font-bold text-cream">{pantryData.total_items}</p>
-            </div>
-            <div className="card">
-              <h3 className="text-sm font-medium text-sage-light mb-2">Unique Ingredients</h3>
-              <p className="text-3xl font-display font-bold text-cream">
-                {pantryData.unique_ingredients}
-              </p>
-            </div>
-            <div className="card">
-              <h3 className="text-sm font-medium text-sage-light mb-2">Categories</h3>
-              <p className="text-3xl font-display font-bold text-cream">
-                {new Set(pantryData.items?.map((i) => i.category).filter(Boolean)).size}
-              </p>
-            </div>
-          </div>
-        )}
+        {pantryData && activeItems.length > 0 ? (
+          <p className="text-sage-light text-sm mb-6">
+            {activeItems.length} {activeItems.length === 1 ? 'item' : 'items'} in your pantry
+          </p>
+        ) : null}
 
         <div className="mb-6">
           <div className="relative">
@@ -188,7 +166,7 @@ function Pantry() {
             <div className="flex justify-center py-12">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terra"></div>
             </div>
-          ) : !pantryData || pantryData.total_items === 0 ? (
+          ) : !pantryData || activeItems.length === 0 ? (
             <div className="text-center py-12">
               <div className="mx-auto w-16 h-16 bg-forest-light rounded-full flex items-center justify-center mb-4">
                 <Package className="w-8 h-8 text-sage-light" />
@@ -201,18 +179,18 @@ function Pantry() {
                 Add your first item
               </button>
             </div>
-          ) : filteredData.total_items === 0 ? (
+          ) : filteredItems.length === 0 ? (
             <div className="text-center py-12">
               <p className="text-sage-light">No items match your search.</p>
             </div>
           ) : (
-            <PantryList
-              groupedItems={filteredData.grouped}
-              onUpdateQuantity={handleUpdateQuantity}
-              onDeleteItem={handleDeleteItem}
-            />
+            <PantryList items={filteredItems} onCorrection={handleCorrection} onRemove={handleRemove} />
           )}
         </div>
+
+        {userId ? (
+          <GraveyardSection userId={userId} householdId={householdId} onPutBack={fetchPantry} />
+        ) : null}
 
         <PantrySearchOverlay
           isOpen={searchOverlayOpen}
@@ -280,13 +258,6 @@ function Pantry() {
             </motion.div>
           ) : null}
         </AnimatePresence>
-
-        <UndoToast
-          open={Boolean(undo)}
-          message={undo?.message || ''}
-          onAction={handleUndoDelete}
-          onDismiss={() => setUndo(null)}
-        />
       </div>
     </PullToRefresh>
   )
