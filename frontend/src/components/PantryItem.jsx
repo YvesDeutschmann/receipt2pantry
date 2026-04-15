@@ -1,151 +1,77 @@
-import { useState } from 'react'
-import { Trash2, Check, X, Minus, Plus } from 'lucide-react'
+import { useRef } from 'react'
+import { motion, useMotionValue, animate } from 'framer-motion'
+import IngredientCorrection from './IngredientCorrection'
+import { getStatusLabel, getStatusLabelClassName } from '../utils/pantryConfidence'
 
-function PantryItem({ item, onUpdateQuantity, onDeleteItem }) {
-  const [isEditing, setIsEditing] = useState(false)
-  const [editQuantity, setEditQuantity] = useState(item.quantity)
-  const [isUpdating, setIsUpdating] = useState(false)
+function PantryItem({
+  item,
+  onCorrection,
+  onRemove,
+  correctionOpen,
+  onToggleCorrection,
+}) {
+  const x = useMotionValue(0)
+  const dragMoved = useRef(false)
 
-  const handleSave = async () => {
-    const newQuantity = parseFloat(editQuantity)
-    if (isNaN(newQuantity) || newQuantity < 0) {
-      return
-    }
+  const displayName = item.normalized_name || item.base_ingredient || ''
+  const statusLabel = getStatusLabel(item)
+  const statusClass = getStatusLabelClassName(item)
+  const isFaded = (item.confidence ?? 0) < 0.2
 
-    setIsUpdating(true)
-    try {
-      await onUpdateQuantity(item.id, newQuantity)
-      setIsEditing(false)
-    } catch (err) {
-      console.error('Failed to update:', err)
-    } finally {
-      setIsUpdating(false)
-    }
-  }
-
-  const handleCancel = () => {
-    setEditQuantity(item.quantity)
-    setIsEditing(false)
-  }
-
-  const handleKeyDown = (e) => {
-    if (e.key === 'Enter') {
-      handleSave()
-    } else if (e.key === 'Escape') {
-      handleCancel()
-    }
-  }
-
-  // Determine if quantity is low (less than 1 for count items, less than 0.5 for weight)
-  const isLowStock = item.unit === 'count' 
-    ? item.quantity <= 1 
-    : item.quantity <= 0.5
-
-  // Format quantity display
-  const formatQuantity = (qty, unit) => {
-    if (unit === 'count') {
-      return qty % 1 === 0 ? qty.toString() : qty.toFixed(1)
-    }
-    return `${qty.toFixed(2)} ${unit}`
+  const handleCorrection = async (itemId, action) => {
+    await onCorrection(itemId, action)
   }
 
   return (
-    <div className="flex items-center justify-between p-3 min-h-touch hover:bg-forest-light transition-colors">
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-2">
-          <span className="text-cream truncate">
-            {item.normalized_name || `${item.base_ingredient}${item.variant ? ` (${item.variant})` : ''}`}
-          </span>
-          {isLowStock && (
-            <span className="px-2 py-0.5 bg-terra/20 text-terra-light text-xs font-medium rounded">
-              Low Stock
-            </span>
-          )}
-        </div>
-        {item.variant && item.variant !== item.base_ingredient && (
-          <span className="text-sm text-gray-500">{item.variant}</span>
-        )}
+    <div className="relative overflow-hidden rounded-mise-md border border-forest-light/80">
+      <div className="absolute inset-0 flex items-center justify-end pr-4 bg-[var(--color-error)]/90 text-cream text-sm font-medium pointer-events-none">
+        Remove
       </div>
-
-      <div className="flex items-center gap-3">
-        {/* Quantity */}
-        {isEditing ? (
-          <div className="flex items-center gap-2">
-            <input
-              type="number"
-              value={editQuantity}
-              onChange={(e) => setEditQuantity(e.target.value)}
-              onKeyDown={handleKeyDown}
-              className="input w-20 px-2 py-1 text-right"
-              step={item.unit === 'count' ? '1' : '0.1'}
-              min="0"
-              autoFocus
-            />
-            <span className="text-sm text-gray-500 w-12">{item.unit}</span>
-            <button
-              onClick={handleSave}
-              disabled={isUpdating}
-              className="p-1 text-green-600 hover:bg-green-50 rounded"
-              title="Save"
-            >
-              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-              </svg>
-            </button>
-            <button
-              onClick={handleCancel}
-              disabled={isUpdating}
-              className="p-1 text-sage-light hover:bg-forest-light rounded"
-              title="Cancel"
-            >
-              <X className="w-5 h-5" />
-            </button>
+      <motion.div
+        style={{ x }}
+        drag="x"
+        dragConstraints={{ left: -120, right: 0 }}
+        dragElastic={0.1}
+        onDragStart={() => {
+          dragMoved.current = false
+        }}
+        onDrag={(_, info) => {
+          if (Math.abs(info.offset.x) > 12) dragMoved.current = true
+        }}
+        onDragEnd={(_, info) => {
+          if (info.offset.x < -80) {
+            onRemove(item.id)
+            void animate(x, 0, { duration: 0.15 })
+            return
+          }
+          void animate(x, 0, { type: 'spring', stiffness: 400, damping: 35 })
+        }}
+        onTap={() => {
+          if (dragMoved.current) return
+          onToggleCorrection()
+        }}
+        className={`relative bg-forest ${isFaded ? 'opacity-50' : ''}`}
+      >
+        <div className="p-3 min-h-touch">
+          <div className="flex items-start justify-between gap-3">
+            <span className="text-cream font-medium leading-snug flex-1 min-w-0">{displayName}</span>
+            <span className={`text-sm shrink-0 ${statusClass}`}>{statusLabel}</span>
           </div>
-        ) : (
-          <>
-            <button
-              onClick={() => setIsEditing(true)}
-              className="flex items-center gap-1 px-3 py-1 bg-forest-light hover:bg-forest-light/80 rounded-full transition-colors"
-              title="Click to edit quantity"
+          {correctionOpen ? (
+            <div
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => e.stopPropagation()}
             >
-              <span className={`font-medium ${isLowStock ? 'text-amber-600' : 'text-gray-900'}`}>
-                {formatQuantity(item.quantity, item.unit)}
-              </span>
-            </button>
-
-            {/* Quick adjust buttons */}
-            <div className="flex items-center">
-              <button
-                onClick={() => onUpdateQuantity(item.id, Math.max(0, item.quantity - 1))}
-                className="p-1 text-sage-light hover:text-cream hover:bg-forest-light rounded"
-                title="Decrease"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-                </svg>
-              </button>
-              <button
-                onClick={() => onUpdateQuantity(item.id, item.quantity + 1)}
-                className="p-1 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded"
-                title="Increase"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                </svg>
-              </button>
+              <IngredientCorrection
+                itemId={item.id}
+                ingredientName=""
+                onCorrection={handleCorrection}
+                onDismiss={() => {}}
+              />
             </div>
-
-            {/* Delete button */}
-            <button
-              onClick={() => onDeleteItem(item.id)}
-              className="p-1 text-sage-light hover:text-[var(--color-error)] hover:bg-[var(--color-error)]/10 rounded"
-              title="Remove item"
-            >
-              <Trash2 className="w-5 h-5" />
-            </button>
-          </>
-        )}
-      </div>
+          ) : null}
+        </div>
+      </motion.div>
     </div>
   )
 }

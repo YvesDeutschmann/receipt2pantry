@@ -415,6 +415,84 @@ export const api = {
     return response.data
   },
 
+  getSuggestions: async (userId, householdId = null) => {
+    const params = householdId ? { household_id: householdId } : {}
+    const response = await apiClient.get('/suggestions', {
+      params,
+      headers: { 'X-User-Id': userId },
+    })
+    return response.data
+  },
+
+  dismissSuggestion: async (userId, recipeId, householdId = null) => {
+    const response = await apiClient.post(
+      '/suggestions/dismiss',
+      { recipe_id: recipeId, household_id: householdId },
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
+  markCooked: async (userId, { recipeId, recipeName, servings, ingredients, householdId }) => {
+    const response = await apiClient.post(
+      '/pantry/cook',
+      {
+        recipe_id: recipeId,
+        recipe_name: recipeName,
+        servings,
+        ingredients,
+        household_id: householdId,
+      },
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
+  correctPantryItem: async (userId, itemId, action) => {
+    const response = await apiClient.post(
+      `/pantry/items/${itemId}/correction`,
+      { action },
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
+  getGraveyard: async (userId, householdId = null) => {
+    const params = householdId ? { household_id: householdId } : {}
+    const response = await apiClient.get('/pantry/graveyard', {
+      params,
+      headers: { 'X-User-Id': userId },
+    })
+    return response.data
+  },
+
+  putBack: async (userId, depletionHistoryId) => {
+    const response = await apiClient.post(
+      '/pantry/put-back',
+      { depletion_history_id: depletionHistoryId },
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
+  getHealthCard: async (userId, householdId = null) => {
+    const params = householdId ? { household_id: householdId } : {}
+    const response = await apiClient.get('/pantry/health-card', {
+      params,
+      headers: { 'X-User-Id': userId },
+    })
+    return response.data
+  },
+
+  dismissHealthCard: async (userId) => {
+    const response = await apiClient.post(
+      '/pantry/health-card/dismiss',
+      {},
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
   consumeIngredients: async (userId, recipeData) => {
     const response = await apiClient.post('/pantry/consume',
       recipeData,
