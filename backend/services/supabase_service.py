@@ -1402,6 +1402,94 @@ class SupabaseService:
             logger.error(f"Failed insert_pantry_item_row: {e}")
             raise DatabaseException(f"Failed to restore pantry item: {e}")
 
+    def get_user_preferences(self, user_id: str) -> Optional[Dict]:
+        """Depletion user_preferences row (household_size, depletion_multiplier)."""
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            response = (
+                client.table("user_preferences")
+                .select("*")
+                .eq("user_id", user_id)
+                .limit(1)
+                .execute()
+            )
+            rows = response.data if response.data else []
+            return rows[0] if rows else None
+        except Exception as e:
+            logger.error(f"Failed get_user_preferences: {e}")
+            raise DatabaseException(f"Failed to get user preferences: {e}")
+
+    def get_item_classifications_by_names(
+        self, item_names: List[str]
+    ) -> Dict[str, Dict]:
+        """Map item_name -> item_classification row (empty if none)."""
+        if not item_names:
+            return {}
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            response = (
+                client.table("item_classification")
+                .select("*")
+                .in_("item_name", list(dict.fromkeys(item_names)))
+                .execute()
+            )
+            rows = response.data if response.data else []
+            return {r["item_name"]: r for r in rows}
+        except Exception as e:
+            logger.error(f"Failed get_item_classifications_by_names: {e}")
+            raise DatabaseException(f"Failed to get item classifications: {e}")
+
+    def get_ingredient_signal_counts(self, user_id: str) -> Dict[str, int]:
+        """Map item_name -> dismiss_count for Phase 3 aspirational signal."""
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            response = (
+                client.table("ingredient_signals")
+                .select("item_name, dismiss_count")
+                .eq("user_id", user_id)
+                .execute()
+            )
+            rows = response.data if response.data else []
+            return {r["item_name"]: int(r.get("dismiss_count") or 0) for r in rows}
+        except Exception as e:
+            logger.error(f"Failed get_ingredient_signal_counts: {e}")
+            raise DatabaseException(f"Failed to get ingredient signals: {e}")
+
+    def increment_ingredient_dismiss_counts(
+        self, user_id: str, item_names: List[str]
+    ) -> None:
+        """Increment dismiss_count per item_name (insert at 1 if missing)."""
+        if not item_names:
+            return
+        client = self.admin_client if self.admin_client else self.client
+        for name in dict.fromkeys(item_names):
+            try:
+                resp = (
+                    client.table("ingredient_signals")
+                    .select("id, dismiss_count")
+                    .eq("user_id", user_id)
+                    .eq("item_name", name)
+                    .limit(1)
+                    .execute()
+                )
+                rows = resp.data if resp.data else []
+                if rows:
+                    new_c = int(rows[0].get("dismiss_count") or 0) + 1
+                    client.table("ingredient_signals").update(
+                        {"dismiss_count": new_c}
+                    ).eq("id", rows[0]["id"]).execute()
+                else:
+                    client.table("ingredient_signals").insert(
+                        {
+                            "user_id": user_id,
+                            "item_name": name,
+                            "dismiss_count": 1,
+                        }
+                    ).execute()
+            except Exception as e:
+                logger.error(f"increment_ingredient_dismiss_counts failed for {name}: {e}")
+                raise DatabaseException(f"Failed to update ingredient signal: {e}")
+
 
 def create_supabase_service(
     url: str, key: str, service_role_key: Optional[str] = None
