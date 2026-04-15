@@ -29,9 +29,11 @@ class RecipeService:
         self.timeout = config.SPOONACULAR_TIMEOUT
         
         # In-memory cache: {cache_key: (recipes, timestamp)}
-        # Cache key format: f"{household_id or user_id}:{ingredients_hash}"
         self._cache: Dict[str, tuple] = {}
-        self._cache_ttl = 3600  # 1 hour in seconds
+        self._cache_ttl = 3600  # 1 hour in seconds (default for findByIngredients)
+        # Recipe information cache (Phase 3 suggestion scoring)
+        self._details_cache: Dict[int, tuple] = {}
+        self._details_cache_ttl = 3600  # 1 hour in seconds
     
     def _get_cache_key(
         self,
@@ -39,6 +41,8 @@ class RecipeService:
         user_id: str,
         ingredients: List[str],
         number: int = 20,
+        ranking: int = 2,
+        ignore_pantry: bool = False,
     ) -> str:
         """
         Generate cache key from household/user ID and ingredients
@@ -48,20 +52,23 @@ class RecipeService:
             user_id: User ID
             ingredients: List of ingredient names
             number: Max recipes requested from API (affects cache entry)
+            ranking: Spoonacular ranking (1=maximize used ingredients, 2=minimize missing)
+            ignore_pantry: Spoonacular ignorePantry flag
         
         Returns:
             Cache key string
         """
         identifier = household_id or user_id
         ingredients_str = ",".join(sorted(ingredients))
-        return f"{identifier}:{number}:{hash(ingredients_str)}"
+        return f"{identifier}:{number}:r{ranking}:ip{int(ignore_pantry)}:{hash(ingredients_str)}"
     
-    def _is_cache_valid(self, cache_entry: tuple) -> bool:
+    def _is_cache_valid(self, cache_entry: tuple, ttl_seconds: Optional[int] = None) -> bool:
         """
         Check if cache entry is still valid
         
         Args:
             cache_entry: Tuple of (recipes, timestamp)
+            ttl_seconds: Override TTL (default: self._cache_ttl)
         
         Returns:
             True if cache is valid, False otherwise
@@ -70,7 +77,8 @@ class RecipeService:
             return False
         recipes, timestamp = cache_entry
         age = time.time() - timestamp
-        return age < self._cache_ttl
+        ttl = ttl_seconds if ttl_seconds is not None else self._cache_ttl
+        return age < ttl
     
     def _get_ingredients_from_pantry(
         self, household_id: Optional[str], user_id: str
@@ -110,6 +118,10 @@ class RecipeService:
         user_id: str,
         available_ingredients: Optional[List[str]] = None,
         number: int = 20,
+        *,
+        ranking: int = 2,
+        ignore_pantry: bool = False,
+        cache_ttl_seconds: Optional[int] = None,
     ) -> List[Dict]:
         """
         Get recipe suggestions based on pantry items
@@ -119,6 +131,9 @@ class RecipeService:
             user_id: User ID
             available_ingredients: Optional list of ingredient names (for session pantry)
             number: Max recipes to request from Spoonacular (default 20)
+            ranking: 1 = maximize used ingredients (Phase 3), 2 = minimize missing
+            ignore_pantry: True = do not assume staples (Phase 3)
+            cache_ttl_seconds: Override cache TTL (e.g. 1800 for 30-minute Phase 3 cache)
         
         Returns:
             List of recipe dictionaries with id, title, image, missedIngredientCount
@@ -138,10 +153,13 @@ class RecipeService:
                 return []
             
             # Check cache
-            cache_key = self._get_cache_key(household_id, user_id, ingredients, number)
+            cache_key = self._get_cache_key(
+                household_id, user_id, ingredients, number, ranking, ignore_pantry
+            )
             cached_entry = self._cache.get(cache_key)
+            ttl = cache_ttl_seconds if cache_ttl_seconds is not None else self._cache_ttl
             
-            if cached_entry and self._is_cache_valid(cached_entry):
+            if cached_entry and self._is_cache_valid(cached_entry, ttl_seconds=ttl):
                 logger.info(f"Returning cached recipes for {len(ingredients)} ingredients")
                 return cached_entry[0]
             
@@ -153,8 +171,8 @@ class RecipeService:
                 "apiKey": self.api_key,
                 "ingredients": ingredients_str,
                 "number": max(1, min(100, int(number))),  # API allows up to 100
-                "ranking": 2,  # Maximize used ingredients
-                "ignorePantry": False  # Include pantry staples
+                "ranking": int(ranking),
+                "ignorePantry": bool(ignore_pantry),
             }
             
             logger.info(f"Calling Spoonacular API with {len(ingredients)} ingredients")
@@ -209,6 +227,12 @@ class RecipeService:
         """
         if not self.api_key:
             raise ValidationException("Spoonacular API key not configured")
+
+        cached = self._details_cache.get(recipe_id)
+        if cached:
+            payload, ts = cached
+            if time.time() - ts < self._details_cache_ttl:
+                return payload
         
         try:
             url = f"{self.base_url}/recipes/{recipe_id}/information"
@@ -225,7 +249,7 @@ class RecipeService:
             recipe = response.json()
             
             # Transform to include only needed fields
-            return {
+            out = {
                 "id": recipe.get("id"),
                 "title": recipe.get("title"),
                 "summary": recipe.get("summary", ""),
@@ -238,6 +262,8 @@ class RecipeService:
                 "sourceUrl": recipe.get("sourceUrl"),
                 "spoonacularSourceUrl": recipe.get("spoonacularSourceUrl")
             }
+            self._details_cache[recipe_id] = (out, time.time())
+            return out
             
         except requests.exceptions.HTTPError as e:
             logger.error(f"Spoonacular API HTTP error: {e}")

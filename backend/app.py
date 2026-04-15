@@ -94,11 +94,27 @@ def create_app(config=None):
             if config.SPOONACULAR_API_KEY:
                 try:
                     from backend.services.recipe_service import create_recipe_service
+
                     recipe_service = create_recipe_service(pantry_service, config)
                     app.config["RECIPE_SERVICE"] = recipe_service
                     logger.info("Recipe service initialized")
                 except Exception as e:
                     logger.warning(f"Failed to initialize Recipe service: {e}")
+                else:
+                    try:
+                        from backend.services.suggestion_service import (
+                            create_suggestion_service,
+                        )
+
+                        suggestion_service = create_suggestion_service(
+                            supabase_service, pantry_service, recipe_service, config
+                        )
+                        app.config["SUGGESTION_SERVICE"] = suggestion_service
+                        logger.info("Suggestion service initialized")
+                    except Exception as e2:
+                        logger.warning(
+                            f"Failed to initialize Suggestion service: {e2}"
+                        )
             else:
                 logger.info("Spoonacular API key not configured (Recipe features disabled)")
             

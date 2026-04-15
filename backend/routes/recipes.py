@@ -18,6 +18,11 @@ def get_recipe_service():
     return current_app.config.get("RECIPE_SERVICE")
 
 
+def get_suggestion_service():
+    """Phase 3: ranked recipe suggestions from pantry + depletion."""
+    return current_app.config.get("SUGGESTION_SERVICE")
+
+
 @recipes_bp.route("/recipes", methods=["GET"])
 def get_recipes():
     """
@@ -83,4 +88,64 @@ def get_recipe_details(recipe_id):
         return jsonify({"error": str(e)}), 500
     except Exception as e:
         logger.error(f"Error getting recipe details: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@recipes_bp.route("/suggestions", methods=["GET"])
+def get_suggestions():
+    """
+    Phase 3: tiered recipe suggestions (use_soon_shelf, cook_tonight, probably_have, check_first).
+    Query params: household_id (optional).
+    """
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    svc = get_suggestion_service()
+    if not svc:
+        return jsonify({"error": "Suggestion service not available"}), 503
+
+    household_id = request.args.get("household_id")
+
+    try:
+        result = svc.get_recipe_suggestions(user_id, household_id)
+        return jsonify(result)
+    except ValidationException as e:
+        logger.error(f"Validation error getting suggestions: {e}")
+        return jsonify({"error": str(e)}), 400
+    except AIServiceException as e:
+        logger.error(f"API service error getting suggestions: {e}")
+        return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        logger.error(f"Error getting suggestions: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@recipes_bp.route("/suggestions/dismiss", methods=["POST"])
+def dismiss_suggestion():
+    """Record recipe dismiss for aspirational ingredient signal (Phase 3)."""
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    svc = get_suggestion_service()
+    if not svc:
+        return jsonify({"error": "Suggestion service not available"}), 503
+
+    body = request.get_json(silent=True) or {}
+    recipe_id = body.get("recipe_id")
+    if recipe_id is None:
+        return jsonify({"error": "recipe_id required"}), 400
+
+    household_id = body.get("household_id")
+
+    try:
+        svc.on_recipe_dismiss(user_id, int(recipe_id), household_id=household_id)
+        return jsonify({"ok": True})
+    except ValidationException as e:
+        return jsonify({"error": str(e)}), 400
+    except AIServiceException as e:
+        return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        logger.error(f"Error recording dismiss: {e}")
         return jsonify({"error": str(e)}), 500
