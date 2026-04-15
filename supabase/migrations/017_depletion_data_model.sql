@@ -728,7 +728,7 @@ INSERT INTO pantry_items (
   depletion_class, quantity_purchased, quantity_remaining, hard_expire_date,
   put_back_count, quantity_known
 ) VALUES (
-  '00000000-0000-0000-0000-0000000000g1',
+  '00000000-0000-0000-0000-000000000011',
   '00000000-0000-0000-0000-000000000001',
   '00000000-0000-0000-0000-000000000002',
   'paprika',
@@ -753,7 +753,7 @@ INSERT INTO pantry_items (
   depletion_class, quantity_purchased, quantity_remaining, hard_expire_date,
   put_back_count, quantity_known
 ) VALUES (
-  '00000000-0000-0000-0000-0000000000h1',
+  '00000000-0000-0000-0000-000000000012',
   '00000000-0000-0000-0000-000000000001',
   '00000000-0000-0000-0000-000000000002',
   'canned chickpeas',
@@ -778,7 +778,7 @@ INSERT INTO pantry_items (
   depletion_class, quantity_purchased, quantity_remaining, hard_expire_date,
   put_back_count, quantity_known
 ) VALUES (
-  '00000000-0000-0000-0000-0000000000i1',
+  '00000000-0000-0000-0000-000000000013',
   '00000000-0000-0000-0000-000000000001',
   '00000000-0000-0000-0000-000000000002',
   'canned chickpeas',
