@@ -20,6 +20,21 @@ const mockApi = vi.hoisted(() => ({
   getPantry: vi.fn(),
   markCooked: vi.fn(),
   dismissSuggestion: vi.fn(),
+  suggestions: {
+    getPool: vi.fn(() =>
+      Promise.resolve({
+        pool: { breakfast: [], lunch: [], dinner: [] },
+        household_id: 'household-1',
+      })
+    ),
+    getDepth: vi.fn(() =>
+      Promise.resolve({
+        depth: { breakfast: 5, lunch: 5, dinner: 5 },
+      })
+    ),
+    swipe: vi.fn(() => Promise.resolve({ ok: true })),
+    triggerGeneration: vi.fn(() => Promise.resolve({ status: 'completed' })),
+  },
 }))
 
 vi.mock('../services/apiClient', () => ({
@@ -442,6 +457,11 @@ describe('Recipes health card after cook', () => {
     mockApi.getPantry.mockReset()
     mockApi.markCooked.mockReset()
     mockApi.getHealthCard.mockReset()
+    mockApi.suggestions.getPool.mockReset()
+    mockApi.suggestions.getPool.mockResolvedValue({
+      pool: { breakfast: [], lunch: [], dinner: [] },
+      household_id: 'household-1',
+    })
     mockApi.getHousehold.mockResolvedValue({
       household: { id: 'household-1', suggestion_meal_slots: { breakfast: true, lunch: true, dinner: true } },
     })

@@ -11,6 +11,8 @@ function Settings() {
   const [household, setHousehold] = useState(null)
   const [loading, setLoading] = useState(true)
   const [householdModalOpen, setHouseholdModalOpen] = useState(false)
+  const [refreshingSuggestions, setRefreshingSuggestions] = useState(false)
+  const [refreshSuggestionsMessage, setRefreshSuggestionsMessage] = useState(null)
   
   const { user } = useAuth()
   const userId = user?.id
@@ -32,6 +34,27 @@ function Settings() {
 
   const handleHouseholdChange = (newHousehold) => {
     setHousehold(newHousehold)
+  }
+
+  const handleRefreshSuggestions = async () => {
+    if (!userId) return
+    setRefreshingSuggestions(true)
+    setRefreshSuggestionsMessage(null)
+    try {
+      await api.suggestions.triggerGeneration(userId, {
+        triggerReason: 'manual_refresh',
+        householdId: household?.id ?? null,
+      })
+      setRefreshSuggestionsMessage('Suggestions updated.')
+      setTimeout(() => setRefreshSuggestionsMessage(null), 4000)
+    } catch (err) {
+      console.error('Refresh suggestions failed:', err)
+      setRefreshSuggestionsMessage(
+        err.response?.data?.error || 'Could not refresh suggestions. Try again later.'
+      )
+    } finally {
+      setRefreshingSuggestions(false)
+    }
   }
 
   return (
@@ -105,6 +128,26 @@ function Settings() {
         </div>
 
         {/* Connected Stores - links to Providers */}
+        <div className="card">
+          <h2 className="text-xl font-display font-semibold text-cream mb-2">Recipe suggestions</h2>
+          <p className="text-sm text-sage-light mb-4">
+            Regenerate your background suggestion pool from your current pantry (may take a minute).
+          </p>
+          {refreshSuggestionsMessage && (
+            <p className="text-sm text-cream mb-3" role="status">
+              {refreshSuggestionsMessage}
+            </p>
+          )}
+          <button
+            type="button"
+            className="btn btn-primary"
+            disabled={refreshingSuggestions || !userId}
+            onClick={() => void handleRefreshSuggestions()}
+          >
+            {refreshingSuggestions ? 'Refreshing…' : 'Refresh suggestions'}
+          </button>
+        </div>
+
         <Link to="/providers" className="block">
           <div className="card hover:shadow-lg transition-shadow cursor-pointer">
             <div className="flex items-center justify-between">
