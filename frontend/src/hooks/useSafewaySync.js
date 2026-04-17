@@ -127,7 +127,7 @@ export function useSafewaySync(userId) {
       const finalBackend = await api.ingestReceipts('safeway', receipts, userId);
       setProgress(null);
       const itemsAdded = finalBackend.items_added_to_pantry ?? 0;
-      if (itemsAdded >= 3) {
+      if (itemsAdded > 3) {
         void api.suggestions
           .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
           .catch(() => {});
@@ -225,7 +225,7 @@ export function useSafewaySync(userId) {
         setStatus(STATUS.SUBMITTING);
         const finalBackend = await api.ingestReceipts('safeway', receipts, userId);
         const itemsAddedSilent = finalBackend.items_added_to_pantry ?? 0;
-        if (itemsAddedSilent >= 3) {
+        if (itemsAddedSilent > 3) {
           void api.suggestions
             .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
             .catch(() => {});

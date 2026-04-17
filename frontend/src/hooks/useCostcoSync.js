@@ -68,7 +68,7 @@ export function useCostcoSync(userId) {
       setStatus(STATUS.SUBMITTING);
       const finalBackend = await submitToBackend(receipts, userId);
       const itemsAddedCostco = finalBackend.items_added_to_pantry ?? 0;
-      if (itemsAddedCostco >= 3) {
+      if (itemsAddedCostco > 3) {
         void api.suggestions
           .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
           .catch(() => {});
@@ -131,7 +131,7 @@ export function useCostcoSync(userId) {
         setStatus(STATUS.SUBMITTING);
         const finalBackend = await submitToBackend(receipts, userId);
         const itemsAddedSilent = finalBackend.items_added_to_pantry ?? 0;
-        if (itemsAddedSilent >= 3) {
+        if (itemsAddedSilent > 3) {
           void api.suggestions
             .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
             .catch(() => {});

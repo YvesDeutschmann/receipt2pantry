@@ -216,12 +216,14 @@ class PoolGenerator:
         total_inserted = 0
         final_status = "completed"
         err_msg: Optional[str] = None
+        accumulated_rows: List[Dict[str, Any]] = []
 
         try:
             swiped = self.pool_store.get_swiped_recipe_ids(household_id)
             banned = self._load_banned_ids(user_id)
             simulated = self.depletion.snapshot_pantry(user_id, household_id)
-            self.pool_store.clear_unused(household_id)
+            # Do not clear_unused until generation completes successfully — preserves
+            # existing pool on partial/failed runs (SUG-015/016).
 
             run_ids: Set[str] = set()
 
@@ -266,12 +268,10 @@ class PoolGenerator:
                             }
                         )
 
-                    n = self.pool_store.add_suggestions(
-                        household_id, user_id, gen_id, rows
-                    )
-                    total_inserted += n
                     for r in rows:
                         run_ids.add(str(r["recipe_id"]))
+
+                    accumulated_rows.extend(rows)
 
                     top = candidates[0]
                     top_id = str(top.get("id", ""))
@@ -292,6 +292,15 @@ class PoolGenerator:
                         )
                     except Exception as e:
                         logger.warning(f"Depletion step skipped for recipe {top_id}: {e}")
+
+                if stop_steps:
+                    break
+
+            if final_status == "completed":
+                self.pool_store.clear_unused(household_id)
+                total_inserted = self.pool_store.add_suggestions(
+                    household_id, user_id, gen_id, accumulated_rows
+                )
 
         except Exception as e:
             logger.error(f"Pool generation failed: {e}", exc_info=True)

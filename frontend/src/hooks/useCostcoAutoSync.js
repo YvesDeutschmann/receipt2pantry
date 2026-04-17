@@ -39,7 +39,7 @@ export function useCostcoAutoSync() {
         const result = await startSilentSync();
         if (result?.receipts?.length > 0) {
           const storeRes = await submitToBackend(result.receipts, userId);
-          if ((storeRes?.items_added_to_pantry ?? 0) >= 3) {
+          if ((storeRes?.items_added_to_pantry ?? 0) > 3) {
             void api.suggestions
               .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
               .catch(() => {});

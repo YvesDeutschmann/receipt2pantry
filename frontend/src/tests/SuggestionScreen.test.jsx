@@ -20,6 +20,10 @@ const {
   getPantry,
   getHealthCard,
   dismissHealthCard,
+  getPool,
+  getDepth,
+  swipeSuggestion,
+  triggerGeneration,
 } = vi.hoisted(() => ({
   getSuggestions: vi.fn(),
   markCooked: vi.fn(),
@@ -28,6 +32,22 @@ const {
   getPantry: vi.fn(),
   getHealthCard: vi.fn(() => Promise.resolve({ show: false, items: [] })),
   dismissHealthCard: vi.fn(() => Promise.resolve({})),
+  getPool: vi.fn(() =>
+    Promise.resolve({
+      pool: { breakfast: [], lunch: [], dinner: [] },
+      household_id: 'h1',
+    })
+  ),
+  getDepth: vi.fn(() =>
+    Promise.resolve({
+      depth: { breakfast: 5, lunch: 5, dinner: 5 },
+      household_id: 'h1',
+    })
+  ),
+  swipeSuggestion: vi.fn(() => Promise.resolve({ ok: true })),
+  triggerGeneration: vi.fn(() =>
+    Promise.resolve({ status: 'completed', suggestions_generated: 1 })
+  ),
 }))
 
 vi.mock('../contexts/AuthContext', () => ({
@@ -104,6 +124,12 @@ vi.mock('../services/apiClient', () => ({
       })
     ),
     correctPantryItem: vi.fn(() => Promise.resolve({ ok: true })),
+    suggestions: {
+      getPool,
+      getDepth,
+      swipe: swipeSuggestion,
+      triggerGeneration,
+    },
   },
 }))
 
@@ -129,10 +155,26 @@ describe('SuggestionScreen', () => {
     getPantry.mockClear()
     getHealthCard.mockClear()
     dismissHealthCard.mockClear()
+    getPool.mockClear()
+    getDepth.mockClear()
+    swipeSuggestion.mockClear()
+    triggerGeneration.mockClear()
     getHousehold.mockResolvedValue({ household: { id: 'h1' } })
     getPantry.mockResolvedValue({ grouped: [] })
     getHealthCard.mockResolvedValue({ show: false, items: [] })
     getSuggestions.mockImplementation(() => Promise.resolve(EMPTY_SUGGESTIONS))
+    getPool.mockImplementation(() =>
+      Promise.resolve({
+        pool: { breakfast: [], lunch: [], dinner: [] },
+        household_id: 'h1',
+      })
+    )
+    getDepth.mockImplementation(() =>
+      Promise.resolve({
+        depth: { breakfast: 5, lunch: 5, dinner: 5 },
+        household_id: 'h1',
+      })
+    )
   })
 
   it('SHELF_ORDER_RENDERS_CORRECTLY', async () => {
@@ -315,6 +357,110 @@ describe('SuggestionScreen', () => {
     })
     expect(dismissSuggestion).toHaveBeenCalledWith('user-1', 'first', 'h1')
     expect(screen.getByText('Second Recipe')).toBeInTheDocument()
+  })
+
+  it('POOL_FALLS_BACK_TO_LIVE_SUGGESTIONS_WHEN_EMPTY', async () => {
+    const shelfPayload = {
+      use_soon_shelf: [],
+      cook_tonight: [recipeStub({ id: 'c1' })],
+      probably_have: [],
+      check_first: [],
+    }
+    getSuggestions.mockImplementation(() => Promise.resolve(shelfPayload))
+    render(<Recipes />)
+    await screen.findByText('Cook tonight')
+    expect(getPool).toHaveBeenCalled()
+    expect(getSuggestions).toHaveBeenCalled()
+  })
+
+  it('POOL_FIRST_LOAD_SHOWS_READY_TO_COOK_WITHOUT_LIVE_SUGGESTIONS', async () => {
+    getPool.mockResolvedValue({
+      pool: {
+        breakfast: [],
+        lunch: [],
+        dinner: [
+          {
+            id: 'sug-1',
+            recipe_id: '500',
+            recipe_name: 'Pool Pasta',
+            recipe_image: null,
+            recipe_data: { title: 'Pool Pasta' },
+            match_score: 0.9,
+          },
+        ],
+      },
+      household_id: 'h1',
+    })
+    render(<Recipes />)
+    await screen.findByText('Ready to cook')
+    await screen.findByText('Pool Pasta')
+    expect(getSuggestions).not.toHaveBeenCalled()
+  })
+
+  it('POOL_FIRST_LOAD_NO_SPINNER_AFTER_CONTENT', async () => {
+    getPool.mockResolvedValue({
+      pool: {
+        dinner: [
+          {
+            id: 'sug-1',
+            recipe_id: '500',
+            recipe_name: 'Quick Pool',
+            recipe_image: null,
+            recipe_data: {},
+            match_score: 0.9,
+          },
+        ],
+      },
+    })
+    render(<Recipes />)
+    await screen.findByText('Quick Pool')
+    expect(document.querySelector('.animate-spin')).toBeNull()
+  })
+
+  it('POOL_SWIPE_USES_POOL_ENDPOINT_AND_LOW_WATERMARK', async () => {
+    getPool.mockResolvedValue({
+      pool: {
+        breakfast: [],
+        lunch: [],
+        dinner: [
+          {
+            id: 'sug-1',
+            recipe_id: '500',
+            recipe_name: 'First',
+            recipe_image: null,
+            recipe_data: {},
+            match_score: 0.9,
+          },
+          {
+            id: 'sug-2',
+            recipe_id: '501',
+            recipe_name: 'Second',
+            recipe_image: null,
+            recipe_data: {},
+            match_score: 0.8,
+          },
+        ],
+      },
+    })
+    getDepth.mockResolvedValue({
+      depth: { breakfast: 1, lunch: 5, dinner: 5 },
+      household_id: 'h1',
+    })
+    render(<Recipes />)
+    await screen.findByText('First')
+    fireEvent.click(screen.getAllByTestId('simulate-swipe-dismiss')[0])
+    await waitFor(() => {
+      expect(swipeSuggestion).toHaveBeenCalledWith('user-1', 'sug-1', 'h1')
+    })
+    await waitFor(() => {
+      expect(getDepth).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(triggerGeneration).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({ triggerReason: 'low_watermark' })
+      )
+    })
   })
 })
 

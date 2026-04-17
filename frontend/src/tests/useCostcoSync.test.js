@@ -8,6 +8,7 @@ const mockHasStoredTokens = vi.fn()
 const mockClearStoredTokens = vi.fn()
 const mockSubmitToBackend = vi.fn()
 const mockConnectCostcoFromApp = vi.fn()
+const mockTriggerGeneration = vi.fn(() => Promise.resolve({ status: 'completed' }))
 
 vi.mock('@capacitor/core', () => ({
   Capacitor: {
@@ -42,6 +43,9 @@ vi.mock('../services/apiClient', () => ({
     ),
     getPantry: vi.fn(),
     getHousehold: vi.fn(),
+    suggestions: {
+      triggerGeneration: (...args) => mockTriggerGeneration(...args),
+    },
   },
 }))
 
@@ -53,6 +57,7 @@ describe('useCostcoSync', () => {
     mockHasStoredTokens.mockResolvedValue(false)
     mockClearStoredTokens.mockResolvedValue(undefined)
     mockConnectCostcoFromApp.mockResolvedValue({})
+    mockTriggerGeneration.mockResolvedValue({ status: 'completed' })
   })
 
   it('starts in IDLE status', () => {
@@ -124,5 +129,59 @@ describe('useCostcoSync', () => {
     })
 
     expect(result.current.hasStoredTokens).toBe(true)
+  })
+
+  it('triggers suggestion pool generation when items_added_to_pantry is greater than 3', async () => {
+    const receipts = [{ order_id: 'r1', total_amount: 50, items: [] }]
+    mockStartLogin.mockResolvedValue({
+      idToken: 'token',
+      receipts,
+      _fromWebView: true,
+    })
+    mockSubmitToBackend.mockResolvedValue({
+      receipts_stored: 1,
+      items_added_to_pantry: 4,
+      errors: [],
+    })
+
+    const { result } = renderHook(() => useCostcoSync(userId))
+
+    await act(async () => {
+      result.current.startSync()
+    })
+
+    await waitFor(() => {
+      expect(result.current.status).toBe(STATUS.SUCCESS)
+    })
+
+    expect(mockTriggerGeneration).toHaveBeenCalledWith(userId, {
+      triggerReason: 'receipt_scan',
+    })
+  })
+
+  it('does not trigger pool generation when exactly 3 items added to pantry', async () => {
+    const receipts = [{ order_id: 'r1', total_amount: 50, items: [] }]
+    mockStartLogin.mockResolvedValue({
+      idToken: 'token',
+      receipts,
+      _fromWebView: true,
+    })
+    mockSubmitToBackend.mockResolvedValue({
+      receipts_stored: 1,
+      items_added_to_pantry: 3,
+      errors: [],
+    })
+
+    const { result } = renderHook(() => useCostcoSync(userId))
+
+    await act(async () => {
+      result.current.startSync()
+    })
+
+    await waitFor(() => {
+      expect(result.current.status).toBe(STATUS.SUCCESS)
+    })
+
+    expect(mockTriggerGeneration).not.toHaveBeenCalled()
   })
 })

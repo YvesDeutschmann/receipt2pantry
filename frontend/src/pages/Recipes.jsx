@@ -14,6 +14,31 @@ const EMPTY_SUGGESTIONS = {
   check_first: [],
 }
 
+/** Map suggestion_pool row to recipe card shape. */
+function normalizePoolRow(row) {
+  const data = row.recipe_data || {}
+  const rid = row.recipe_id != null ? String(row.recipe_id) : ''
+  return {
+    id: row.id,
+    recipeIdForCook: rid,
+    title: row.recipe_name || data.title || 'Recipe',
+    image: row.recipe_image || data.image,
+    tier: 'cook_tonight',
+    servings: data.servings || 4,
+    ingredient_flags: [],
+    _fromPool: true,
+    match_score: row.match_score,
+  }
+}
+
+function flattenPoolToCookTonight(pool) {
+  const p = pool || {}
+  const rows = [...(p.breakfast || []), ...(p.lunch || []), ...(p.dinner || [])]
+  return rows
+    .map(normalizePoolRow)
+    .sort((a, b) => (b.match_score || 0) - (a.match_score || 0))
+}
+
 function orderedUseSoonNames(shelfRecipes) {
   const ordered = []
   const seen = new Set()
@@ -40,6 +65,36 @@ function useSoonShelfSubtitle(shelfRecipes) {
   return `Recipes using your ${names[0]} and ${names[1]}`
 }
 
+async function fetchSuggestionsPayload(userId, householdId) {
+  let poolPayload = null
+  try {
+    poolPayload = await api.suggestions?.getPool?.(userId, householdId)
+  } catch (e) {
+    console.warn('Suggestion pool unavailable:', e)
+  }
+  const pool = poolPayload?.pool
+  const cookFromPool = flattenPoolToCookTonight(pool)
+  if (cookFromPool.length > 0) {
+    return {
+      usingPool: true,
+      suggestions: {
+        ...EMPTY_SUGGESTIONS,
+        cook_tonight: cookFromPool,
+      },
+    }
+  }
+  const data = await api.getSuggestions(userId, householdId)
+  return {
+    usingPool: false,
+    suggestions: {
+      use_soon_shelf: data.use_soon_shelf || [],
+      cook_tonight: data.cook_tonight || [],
+      probably_have: data.probably_have || [],
+      check_first: data.check_first || [],
+    },
+  }
+}
+
 function Recipes() {
   const [suggestions, setSuggestions] = useState(EMPTY_SUGGESTIONS)
   const [loading, setLoading] = useState(true)
@@ -51,11 +106,13 @@ function Recipes() {
   const [selectedRecipe, setSelectedRecipe] = useState(null)
   const [detailModalOpen, setDetailModalOpen] = useState(false)
   const [pantryData, setPantryData] = useState(null)
+  const [usingPool, setUsingPool] = useState(false)
 
   const { user } = useAuth()
   const userId = user?.id
 
   const initialLoadDoneRef = useRef(false)
+  const lowWatermarkInFlightRef = useRef(false)
 
   const fetchPantry = useCallback(async () => {
     if (!userId) return
@@ -79,6 +136,29 @@ function Recipes() {
     }
   }, [userId])
 
+  const maybeTriggerLowWatermarkRefill = useCallback(async () => {
+    if (!userId || lowWatermarkInFlightRef.current) return
+    lowWatermarkInFlightRef.current = true
+    try {
+      const res = await api.suggestions.getDepth(userId, householdId)
+      const depth = res.depth || {}
+      const slots = ['breakfast', 'lunch', 'dinner']
+      const anyLow = slots.some((k) => (depth[k] ?? 0) < 2)
+      if (anyLow) {
+        void api.suggestions
+          .triggerGeneration(userId, {
+            triggerReason: 'low_watermark',
+            householdId,
+          })
+          .catch(() => {})
+      }
+    } catch (e) {
+      console.warn('Low-watermark check failed:', e)
+    } finally {
+      lowWatermarkInFlightRef.current = false
+    }
+  }, [userId, householdId])
+
   const loadSuggestions = useCallback(async () => {
     if (!userId) return
     if (!initialLoadDoneRef.current) {
@@ -86,18 +166,18 @@ function Recipes() {
     }
     setError(null)
     try {
-      const data = await api.getSuggestions(userId, householdId)
+      const { usingPool: fromPool, suggestions: next } = await fetchSuggestionsPayload(
+        userId,
+        householdId
+      )
       initialLoadDoneRef.current = true
-      setSuggestions({
-        use_soon_shelf: data.use_soon_shelf || [],
-        cook_tonight: data.cook_tonight || [],
-        probably_have: data.probably_have || [],
-        check_first: data.check_first || [],
-      })
+      setUsingPool(fromPool)
+      setSuggestions(next)
     } catch (err) {
       console.error('Failed to load suggestions:', err)
       setError(err.response?.data?.error || 'Failed to load recipe suggestions.')
       setSuggestions(EMPTY_SUGGESTIONS)
+      setUsingPool(false)
     } finally {
       setLoading(false)
     }
@@ -128,9 +208,10 @@ function Recipes() {
             unit: 'serving',
           }))
         : [{ name: recipe.title || 'meal', amount: 1, unit: 'serving' }]
+    const recipeId = recipe.recipeIdForCook || recipe.id
     try {
       await api.markCooked(userId, {
-        recipeId: recipe.id,
+        recipeId,
         recipeName: recipe.title,
         servings: recipe.servings || 4,
         ingredients,
@@ -138,13 +219,12 @@ function Recipes() {
       })
       setCookedConfirmation('Nice! Pantry updated.')
       setTimeout(() => setCookedConfirmation(null), 2500)
-      const updated = await api.getSuggestions(userId, householdId)
-      setSuggestions({
-        use_soon_shelf: updated.use_soon_shelf || [],
-        cook_tonight: updated.cook_tonight || [],
-        probably_have: updated.probably_have || [],
-        check_first: updated.check_first || [],
-      })
+      const { usingPool: fromPool, suggestions: updated } = await fetchSuggestionsPayload(
+        userId,
+        householdId
+      )
+      setUsingPool(fromPool)
+      setSuggestions(updated)
       void fetchPantry()
       try {
         const hc = await api.getHealthCard(userId, householdId)
@@ -170,7 +250,12 @@ function Recipes() {
     })
     if (!userId) return
     try {
-      await api.dismissSuggestion(userId, recipe.id, householdId)
+      if (recipe._fromPool) {
+        await api.suggestions.swipe(userId, recipe.id, householdId)
+        void maybeTriggerLowWatermarkRefill()
+      } else {
+        await api.dismissSuggestion(userId, recipe.id, householdId)
+      }
     } catch (err) {
       console.error('dismiss failed', err)
     }
@@ -269,20 +354,31 @@ function Recipes() {
             </div>
           ) : (
             <div className="w-full max-w-lg mx-auto">
-              {renderShelf(
-                'use_soon',
-                'Use before it\'s gone',
-                useSoonShelfSubtitle(suggestions.use_soon_shelf),
-                suggestions.use_soon_shelf
+              {usingPool ? (
+                renderShelf(
+                  'cook_tonight',
+                  'Ready to cook',
+                  'From your suggestion pool',
+                  suggestions.cook_tonight
+                )
+              ) : (
+                <>
+                  {renderShelf(
+                    'use_soon',
+                    'Use before it\'s gone',
+                    useSoonShelfSubtitle(suggestions.use_soon_shelf),
+                    suggestions.use_soon_shelf
+                  )}
+                  {renderShelf('cook_tonight', 'Cook tonight', null, suggestions.cook_tonight)}
+                  {renderShelf(
+                    'probably_have',
+                    'Probably have everything',
+                    null,
+                    suggestions.probably_have
+                  )}
+                  {renderShelf('check_first', 'Quick check needed', null, suggestions.check_first)}
+                </>
               )}
-              {renderShelf('cook_tonight', 'Cook tonight', null, suggestions.cook_tonight)}
-              {renderShelf(
-                'probably_have',
-                'Probably have everything',
-                null,
-                suggestions.probably_have
-              )}
-              {renderShelf('check_first', 'Quick check needed', null, suggestions.check_first)}
             </div>
           )}
         </div>
@@ -318,13 +414,12 @@ function Recipes() {
               setHealthCardItems([])
             }}
             onItemUpdated={async () => {
-              const updated = await api.getSuggestions(userId, householdId)
-              setSuggestions({
-                use_soon_shelf: updated.use_soon_shelf || [],
-                cook_tonight: updated.cook_tonight || [],
-                probably_have: updated.probably_have || [],
-                check_first: updated.check_first || [],
-              })
+              const { usingPool: fromPool, suggestions: updated } = await fetchSuggestionsPayload(
+                userId,
+                householdId
+              )
+              setUsingPool(fromPool)
+              setSuggestions(updated)
               await fetchPantry()
             }}
           />
