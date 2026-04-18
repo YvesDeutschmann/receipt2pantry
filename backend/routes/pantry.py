@@ -45,6 +45,39 @@ def get_normalization_service():
     return current_app.config.get("NORMALIZATION_SERVICE")
 
 
+def _optional_household_id_query() -> Optional[str]:
+    raw = request.args.get("household_id")
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    return s or None
+
+
+def _optional_household_id_body(data: Optional[Dict]) -> Optional[str]:
+    if not data:
+        return None
+    raw = data.get("household_id")
+    if raw is None:
+        return None
+    s = str(raw).strip()
+    return s or None
+
+
+def _reject_household_scope_mismatch(
+    supabase: Any, user_id: str, household_id: Optional[str]
+):
+    """
+    When the client sends an explicit household_id, it must match the user's household.
+    Returns (jsonify(...), status) on mismatch, or None when allowed.
+    """
+    if not household_id:
+        return None
+    hh = supabase.get_user_household(user_id)
+    if not hh or str(hh.get("id")) != str(household_id):
+        return jsonify({"error": "Forbidden"}), 403
+    return None
+
+
 def run_async(coro):
     """Run an async coroutine synchronously"""
     try:
@@ -307,6 +340,10 @@ def search_ingredients():
     Layer 2: autocomplete canonical ingredients (q required, min 2 chars).
     Query: q, limit (default 6), exclude (comma-separated base_ingredient values).
     """
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
     supabase = get_supabase_service()
     if not supabase:
         return jsonify({"error": "Database service not available"}), 503
@@ -345,8 +382,11 @@ def quick_add_pantry_item():
         return jsonify({"error": "Pantry service not available"}), 503
 
     data = request.get_json() or {}
-    base = data.get("base_ingredient")
-    if not base or not isinstance(base, str):
+    raw_base = data.get("base_ingredient")
+    if not isinstance(raw_base, str):
+        return jsonify({"error": "base_ingredient is required"}), 400
+    base = raw_base.strip()
+    if not base:
         return jsonify({"error": "base_ingredient is required"}), 400
 
     try:
@@ -606,11 +646,15 @@ def get_pantry():
     if not service:
         return jsonify({"error": "Pantry service not available"}), 503
     
-    household_id = request.args.get("household_id")
+    household_id = _optional_household_id_query()
 
     supabase = get_supabase_service()
     if not supabase:
         return jsonify({"error": "Database service not available"}), 503
+
+    mismatch = _reject_household_scope_mismatch(supabase, user_id, household_id)
+    if mismatch:
+        return mismatch
 
     try:
         summary = run_async(service.get_pantry_summary(user_id, household_id))
@@ -635,6 +679,12 @@ def pantry_cook():
         return jsonify({"error": "Database service not available"}), 503
 
     body = request.get_json() or {}
+    mismatch = _reject_household_scope_mismatch(
+        supabase, user_id, _optional_household_id_body(body)
+    )
+    if mismatch:
+        return mismatch
+
     if (
         "recipe_id" not in body
         or body["recipe_id"] is None
@@ -773,8 +823,12 @@ def pantry_health_card():
     if not supabase or not service:
         return jsonify({"error": "Service not available"}), 503
 
-    household_id = request.args.get("household_id")
+    household_id = _optional_household_id_query()
     today = date.today()
+
+    mismatch = _reject_household_scope_mismatch(supabase, user_id, household_id)
+    if mismatch:
+        return mismatch
 
     try:
         prefs_row = supabase.get_user_preferences(user_id)
@@ -937,8 +991,12 @@ def reset_pantry():
     if not supabase:
         return jsonify({"error": "Database service not available"}), 503
     
-    household_id = request.args.get("household_id")
-    
+    household_id = _optional_household_id_query()
+
+    mismatch = _reject_household_scope_mismatch(supabase, user_id, household_id)
+    if mismatch:
+        return mismatch
+
     try:
         supabase.reset_pantry(user_id, household_id)
         return jsonify({"message": "Pantry reset"}), 200
@@ -981,6 +1039,16 @@ def add_pantry_item():
     missing_fields = [f for f in required_fields if not data.get(f)]
     if missing_fields:
         return jsonify({"error": f"Missing required fields: {missing_fields}"}), 400
+
+    supabase = get_supabase_service()
+    if not supabase:
+        return jsonify({"error": "Database service not available"}), 503
+
+    mismatch = _reject_household_scope_mismatch(
+        supabase, user_id, _optional_household_id_body(data)
+    )
+    if mismatch:
+        return mismatch
     
     try:
         quantity = float(data["quantity"])
@@ -997,7 +1065,7 @@ def add_pantry_item():
         "tags": data.get("tags", [])
     }
     
-    household_id = data.get("household_id")
+    household_id = _optional_household_id_body(data)
     
     try:
         item_id = run_async(service.add_to_pantry(
@@ -1140,8 +1208,15 @@ def consume_ingredients():
             return jsonify({"error": f"Ingredient {i} must be an object"}), 400
         if "name" not in ing or "amount" not in ing:
             return jsonify({"error": f"Ingredient {i} missing name or amount"}), 400
-    
-    household_id = data.get("household_id")
+
+    supabase = get_supabase_service()
+    if not supabase:
+        return jsonify({"error": "Database service not available"}), 503
+
+    household_id = _optional_household_id_body(data)
+    mismatch = _reject_household_scope_mismatch(supabase, user_id, household_id)
+    if mismatch:
+        return mismatch
     
     try:
         result = run_async(service.consume_ingredients(
@@ -1196,8 +1271,15 @@ def check_recipe_availability():
             return jsonify({"error": f"Ingredient {i} must be an object"}), 400
         if "name" not in ing or "amount" not in ing:
             return jsonify({"error": f"Ingredient {i} missing name or amount"}), 400
-    
-    household_id = data.get("household_id")
+
+    supabase = get_supabase_service()
+    if not supabase:
+        return jsonify({"error": "Database service not available"}), 503
+
+    household_id = _optional_household_id_body(data)
+    mismatch = _reject_household_scope_mismatch(supabase, user_id, household_id)
+    if mismatch:
+        return mismatch
     
     try:
         result = run_async(service.check_ingredient_availability(

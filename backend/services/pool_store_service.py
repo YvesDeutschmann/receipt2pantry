@@ -21,15 +21,21 @@ class PoolStoreService:
     def _client(self):
         return self.supabase.admin_client if self.supabase.admin_client else self.supabase.client
 
-    def _fail_stale_in_progress(self, household_id: str) -> None:
+    def _fail_stale_in_progress(
+        self, household_id: str, now: Optional[datetime] = None
+    ) -> None:
         """Mark abandoned in_progress runs as failed."""
+        if now is None:
+            now = datetime.now(timezone.utc)
         client = self._client()
-        cutoff = (
-            datetime.now(timezone.utc) - timedelta(minutes=STALE_GENERATION_MINUTES)
-        ).isoformat()
+        cutoff = (now - timedelta(minutes=STALE_GENERATION_MINUTES)).isoformat()
         try:
             client.table("pool_generation").update(
-                {"status": "failed", "error_message": "Stale generation abandoned", "completed_at": datetime.now(timezone.utc).isoformat()}
+                {
+                    "status": "failed",
+                    "error_message": "Stale generation abandoned",
+                    "completed_at": now.isoformat(),
+                }
             ).eq("household_id", household_id).eq("status", "in_progress").lt("started_at", cutoff).execute()
         except Exception as e:
             logger.warning(f"Could not fail stale generations: {e}")

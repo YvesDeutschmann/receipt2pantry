@@ -12,9 +12,9 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from backend.config import Config
 from backend.services.confidence_engine import (
-    _find_pantry_match,
     _to_date,
     compute_confidence,
+    find_pantry_match,
     get_calibrated_days_supply,
     get_engagement_multiplier,
 )
@@ -60,7 +60,7 @@ def find_best_match(
     pantry_list: List[Dict], ingredient_name: str
 ) -> Optional[Dict]:
     """Exact + word-subset match (confidence_engine), then difflib ratio > 0.8."""
-    m = _find_pantry_match(pantry_list, ingredient_name)
+    m = find_pantry_match(pantry_list, ingredient_name)
     if m:
         return m
     n = (ingredient_name or "").lower().strip()

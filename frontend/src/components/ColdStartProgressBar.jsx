@@ -15,7 +15,7 @@ export default function ColdStartProgressBar({ highlightStep = 2, step3Unlocked 
   ]
 
   return (
-    <div className="w-full px-1 py-4">
+    <div className="w-full px-1 py-4" data-testid="cold-start-progress">
       <div className="flex items-start justify-between gap-2 max-w-lg mx-auto">
         {steps.map((step) => {
           const done = step.id < highlightStep || (step.id === 3 && step3Unlocked)

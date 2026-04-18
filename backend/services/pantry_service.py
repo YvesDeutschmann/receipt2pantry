@@ -3,6 +3,11 @@
 from typing import Any, Dict, List, Optional, Set, Tuple
 from datetime import date, datetime, timezone
 from backend.services.supabase_service import SupabaseService
+from backend.services.confidence_engine import (
+    _rpc_soft_delete_pantry_item,
+    _to_date,
+    process_put_back,
+)
 from backend.utils.exceptions import DatabaseException, ValidationException
 from backend.utils.logger import get_logger
 
@@ -21,21 +26,29 @@ class PantryService:
         """
         self.supabase = supabase
     
-    def _get_household_id_for_user(self, user_id: str) -> Optional[str]:
+    def _get_household_id_for_user(
+        self, user_id: str, *, today: Optional[date] = None
+    ) -> Optional[str]:
         """
         Get the household ID for a user
         
         Args:
             user_id: User ID
+            today: Optional anchor date (reserved for time-deterministic call sites / tests)
         
         Returns:
             Household ID or None if user has no household
         """
+        _ = today
         household = self.supabase.get_user_household(user_id)
         return household["id"] if household else None
     
     def _get_pantry_items(
-        self, user_id: str, household_id: Optional[str] = None
+        self,
+        user_id: str,
+        household_id: Optional[str] = None,
+        *,
+        today: Optional[date] = None,
     ) -> List[Dict]:
         """
         Get pantry items, preferring household scope if available
@@ -43,10 +56,12 @@ class PantryService:
         Args:
             user_id: User ID (for legacy fallback)
             household_id: Household ID (preferred)
+            today: Optional anchor date (reserved for time-deterministic call sites / tests)
         
         Returns:
             List of pantry items
         """
+        _ = today
         if household_id:
             return self.supabase.get_household_pantry(household_id)
         else:
@@ -60,7 +75,9 @@ class PantryService:
         quantity: float,
         unit: str,
         receipt_id: str,
-        household_id: Optional[str] = None
+        household_id: Optional[str] = None,
+        *,
+        reference_date: Optional[date] = None,
     ) -> str:
         """
         Add or update pantry item with variant awareness
@@ -99,7 +116,13 @@ class PantryService:
                 self.supabase.update_pantry_quantity(existing_item['id'], new_quantity)
                 
                 # Update last_receipt_id (only if provided)
-                update_data = {'added_at': datetime.utcnow().isoformat()}
+                if reference_date is not None:
+                    added_at = datetime.combine(
+                        reference_date, datetime.min.time(), tzinfo=timezone.utc
+                    ).isoformat()
+                else:
+                    added_at = datetime.utcnow().isoformat()
+                update_data = {"added_at": added_at}
                 if receipt_id:
                     update_data['last_receipt_id'] = receipt_id
                 client = self.supabase.admin_client if self.supabase.admin_client else self.supabase.client
@@ -569,10 +592,13 @@ class PantryService:
         user_id: str,
         selected_base_ingredients: List[str],
         normalizer: Optional[Any] = None,
+        *,
+        today: Optional[date] = None,
     ) -> Dict[str, Any]:
         """
         Confirm staples template selection: merge or insert rows, then receipt enrichment.
         """
+        _ = today
         household_id = self._get_household_id_for_user(user_id)
         template_rows = self.supabase.get_staples_template_rows(active_only=True)
         by_base = {self._normalize_base_key(r["base_ingredient"]): r for r in template_rows}
@@ -715,6 +741,87 @@ class PantryService:
         meta.pop("depleted_at", None)
         row["metadata"] = meta
         return self.supabase.insert_pantry_item_row(row)
+
+    def update_quantity(
+        self,
+        item_id: str,
+        quantity: float,
+        *,
+        today: Optional[date] = None,
+    ) -> None:
+        """Set pantry row quantity; `quantity` may be 0. `today` is reserved for tests / future audit fields."""
+        _ = today
+        if quantity < 0:
+            raise ValidationException("Quantity cannot be negative")
+        try:
+            self.supabase.update_pantry_quantity(item_id, quantity)
+        except DatabaseException:
+            raise
+        except Exception as e:
+            raise DatabaseException(f"Failed to update quantity: {e}") from e
+
+    def soft_delete(
+        self,
+        user_id: str,
+        item_id: str,
+        *,
+        today: Optional[date] = None,
+        reason: str = "USER_REMOVED",
+        was_cooked: bool = False,
+    ) -> None:
+        """Soft-delete a live pantry row via RPC; stamps depletion_history with `today`."""
+        effective = today if today is not None else date.today()
+        item = self.supabase.get_pantry_item_by_id(item_id)
+        if not item or item.get("deleted_at"):
+            raise ValidationException("Item not found")
+        if not self._user_can_access_pantry_item(user_id, item):
+            raise ValidationException("Forbidden")
+        purchase = _to_date(item.get("purchase_date"))
+        client = self.supabase.admin_client or self.supabase.client
+        try:
+            _rpc_soft_delete_pantry_item(
+                client,
+                user_id=user_id,
+                pantry_item_id=str(item_id),
+                item_name=item.get("base_ingredient") or item.get("normalized_name") or "",
+                depletion_class=item.get("depletion_class") or "STAPLE",
+                purchase_date=purchase,
+                today=effective,
+                reason=reason,
+                was_cooked=was_cooked,
+                put_back_count=int(item.get("put_back_count") or 0),
+            )
+        except DatabaseException:
+            raise
+        except Exception as e:
+            raise DatabaseException(f"Failed to soft-delete pantry item: {e}") from e
+
+    def restore_from_depletion_history(
+        self,
+        user_id: str,
+        depletion_history_id: str,
+        *,
+        today: Optional[date] = None,
+    ) -> Dict[str, Any]:
+        """
+        Graveyard put-back: clears soft-delete on the existing row (same id).
+        Returns the refreshed pantry row.
+        """
+        effective = today if today is not None else date.today()
+        client = self.supabase.admin_client or self.supabase.client
+        try:
+            item, err = process_put_back(
+                client, user_id, depletion_history_id, today=effective
+            )
+        except Exception as e:
+            raise DatabaseException(f"Failed to restore from depletion history: {e}") from e
+        if err == "MAX_PUT_BACK_REACHED":
+            raise ValidationException("MAX_PUT_BACK_REACHED")
+        if err:
+            raise ValidationException(err)
+        if not item:
+            raise ValidationException("NOT_FOUND")
+        return item
 
 
 def create_pantry_service(supabase: SupabaseService) -> PantryService:
