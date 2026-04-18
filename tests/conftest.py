@@ -2,11 +2,122 @@
 
 import pytest
 from unittest.mock import Mock, MagicMock
-from typing import Dict, List
-from backend.services.supabase_service import SupabaseService
+from dataclasses import dataclass
+from typing import Any, Dict, List, Optional
+
 from backend.services.pantry_service import PantryService
 from backend.services.normalization_service import NormalizationService
 from backend.services.receipt_processor import ReceiptProcessor
+from backend.services.supabase_service import SupabaseService
+
+
+@dataclass
+class FakeSupabaseResponse:
+    """Minimal PostgREST response with `.data` for SupabaseService."""
+
+    data: Any = None
+
+
+class PostgrestChain:
+    """Chainable recorder ending in `.execute()` (tables, RPC, etc.)."""
+
+    def __init__(self, stub: "PostgrestClientStub", ops: List[tuple]):
+        self._stub = stub
+        self._ops = ops
+
+    def execute(self) -> FakeSupabaseResponse:
+        self._stub.chains.append(list(self._ops))
+        return self._stub._next_response()
+
+    def __getattr__(self, name: str):
+        if name.startswith("_"):
+            raise AttributeError(name)
+
+        def method(*args: Any, **kwargs: Any) -> "PostgrestChain":
+            return PostgrestChain(self._stub, self._ops + [(name, args, kwargs)])
+
+        return method
+
+
+class PostgrestClientStub:
+    """
+    Records PostgREST-style call chains (`table` → `select` → `eq` → `execute`).
+    Use `queue_response` / `set_default_response_data` to control `execute()` payloads.
+    """
+
+    def __init__(self):
+        self.chains: List[List[tuple]] = []
+        self._response_queue: List[FakeSupabaseResponse] = []
+        self._default_response_data: Any = []
+
+    def clear_chains(self) -> None:
+        self.chains.clear()
+
+    def queue_response(self, data: Any) -> None:
+        self._response_queue.append(FakeSupabaseResponse(data))
+
+    def set_default_response_data(self, data: Any) -> None:
+        self._default_response_data = data
+
+    def _next_response(self) -> FakeSupabaseResponse:
+        if self._response_queue:
+            return self._response_queue.pop(0)
+        return FakeSupabaseResponse(self._default_response_data)
+
+    def table(self, name: str) -> PostgrestChain:
+        return PostgrestChain(self, [("table", (name,), {})])
+
+    def rpc(self, fn_name: str, params: Optional[Dict[str, Any]] = None) -> PostgrestChain:
+        args = (fn_name, params or {})
+        return PostgrestChain(self, [("rpc", args, {})])
+
+
+def install_supabase_service_with_clients(
+    mocker: Any,
+    anon: PostgrestClientStub,
+    admin: Optional[PostgrestClientStub],
+) -> SupabaseService:
+    """
+    Patch `create_client` so `SupabaseService` wires anon vs service-role clients
+    without touching the real Supabase network.
+    """
+    patch_path = "backend.services.supabase_service.create_client"
+    if admin is not None:
+        mocker.patch(patch_path, side_effect=[anon, admin])
+        return SupabaseService(
+            "https://test.supabase.co",
+            "anon-key",
+            "service-role-key",
+        )
+    mocker.patch(patch_path, return_value=anon)
+    return SupabaseService("https://test.supabase.co", "anon-key")
+
+
+def chain_calls_eq(
+    chains: List[List[tuple]], column: str, value: Any
+) -> bool:
+    """True if any recorded chain contains `.eq(column, value)`."""
+    for chain in chains:
+        for step in chain:
+            name, args, _kwargs = step[0], step[1], step[2]
+            if name != "eq" or len(args) < 2:
+                continue
+            if args[0] == column and args[1] == value:
+                return True
+    return False
+
+
+def latest_chain_using_table(
+    chains: List[List[tuple]], table: str
+) -> Optional[List[tuple]]:
+    """Return the last chain that started with `table(table_name)`."""
+    for chain in reversed(chains):
+        if not chain:
+            continue
+        first = chain[0]
+        if first[0] == "table" and first[1][0] == table:
+            return chain
+    return None
 
 
 @pytest.fixture

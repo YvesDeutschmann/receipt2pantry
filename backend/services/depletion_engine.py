@@ -60,7 +60,7 @@ class DepletionEngine:
                 unit = item_data.get("unit") or ""
                 quantity = float(item_data.get("quantity", 0))
 
-                if base_ingredient in ing_name or ing_name in base_ingredient:
+                if base_ingredient == ing_name:
                     if unit == ing_unit or (not unit and not ing_unit):
                         new_quantity = max(0.0, quantity - ing_amount)
                         pantry[item_id]["quantity"] = new_quantity

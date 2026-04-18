@@ -439,7 +439,7 @@ def process_cook_event(
         amount = _to_float(ing.get("amount"))
         is_primary = bool(ing.get("is_primary", False))
 
-        match = _find_pantry_match(pantry_list, name)
+        match = find_pantry_match(pantry_list, name)
         if not match:
             continue
 
@@ -521,6 +521,10 @@ def _find_pantry_match(pantry_list: List[Dict], recipe_ingredient_name: str) -> 
         if shorter <= longer:
             return p
     return None
+
+
+# Public alias (suggestion_service and tests import this name on purpose).
+find_pantry_match = _find_pantry_match
 
 
 def _soft_delete_cooked(client: Any, user_id: str, item: Dict, *, today: date) -> None:

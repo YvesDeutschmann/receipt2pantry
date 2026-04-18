@@ -1,20 +1,24 @@
 """Tests for backend.services.confidence_engine (Phase 2 depletion)."""
 
-from datetime import date, datetime, timezone
+import copy
+from datetime import date, datetime, time, timezone
 from unittest.mock import Mock
 
 import pytest
 
 from backend.services.confidence_engine import (
     PUT_BACK_CONFIDENCE_OVERRIDE,
+    USE_SOON_DAYS,
     _find_pantry_match,
     compute_confidence,
+    find_pantry_match,
     get_calibrated_days_supply,
     get_engagement_multiplier,
     process_cook_event,
     process_put_back,
     run_expiry_cleanup,
 )
+from backend.services.suggestion_service import get_tier
 from tests.services.conftest import (
     TEST_DATE,
     days_after,
@@ -1809,3 +1813,298 @@ def test_fixture_style_paprika_unknown(default_user_prefs):
         quantity_known=False,
     )
     assert compute_confidence(item, default_user_prefs, cls, today=TEST_DATE) == 0.40
+
+
+# --- T1-07 gap coverage: tier boundaries, overrides, put-back policy, purity, re-export ---
+
+def test_tier_exactly_at_0_75_is_cook_tonight():
+    assert get_tier(0.75) == "cook_tonight"
+
+def test_tier_exactly_at_0_50_is_probably_have():
+    assert get_tier(0.50) == "probably_have"
+
+def test_tier_exactly_at_0_20_is_check_first():
+    assert get_tier(0.20) == "check_first"
+
+def test_tier_below_0_20_is_suppressed():
+    assert get_tier(0.19) == "suppressed"
+
+def test_override_honored_when_today_equals_expires(default_user_prefs):
+    cls = make_classification(depletion_class="CONSUMABLE", default_days_supply=45)
+    item = make_pantry_item(
+        depletion_class="CONSUMABLE",
+        purchase_date=days_ago(TEST_DATE, 68),
+        confidence_override=0.77,
+        confidence_override_expires=TEST_DATE,
+    )
+    v = compute_confidence(
+        item, default_user_prefs, cls, today=TEST_DATE, calibrated_days=45
+    )
+    assert v == 0.77
+
+def test_override_ignored_when_today_equals_expires_plus_one(default_user_prefs):
+    cls = make_classification(depletion_class="CONSUMABLE", default_days_supply=45)
+    item = make_pantry_item(
+        depletion_class="CONSUMABLE",
+        purchase_date=days_ago(TEST_DATE, 68),
+        confidence_override=0.99,
+        confidence_override_expires=days_ago(TEST_DATE, 1),
+    )
+    assert (
+        compute_confidence(
+            item, default_user_prefs, cls, today=TEST_DATE, calibrated_days=45
+        )
+        != 0.99
+    )
+
+def test_override_none_when_expires_is_none(default_user_prefs):
+    cls = make_classification(depletion_class="CONSUMABLE", default_days_supply=45)
+    item = make_pantry_item(
+        depletion_class="CONSUMABLE",
+        purchase_date=days_ago(TEST_DATE, 68),
+        confidence_override=0.80,
+        confidence_override_expires=None,
+    )
+    assert (
+        compute_confidence(
+            item, default_user_prefs, cls, today=TEST_DATE, calibrated_days=45
+        )
+        != 0.80
+    )
+
+
+def test_put_back_allowed_for_raw_meat_within_subclass_cap():
+    hist_row = {
+        "id": "dh1",
+        "user_id": "u1",
+        "pantry_item_id": "p1",
+        "item_name": "chicken breast",
+        "put_back_count": 0,
+    }
+    pantry_row = {
+        "id": "p1",
+        "user_id": "u1",
+        "base_ingredient": "chicken breast",
+        "depletion_class": "PERISHABLE",
+        "deleted_at": "2026-04-09",
+    }
+    client = _plain_supabase_mock()
+    dh = Mock()
+    dh.select.return_value = dh
+    dh.eq.return_value = dh
+    dh.limit.return_value = dh
+    dh.execute.return_value = Mock(data=[hist_row])
+    ic = Mock()
+    ic.select.return_value = ic
+    ic.eq.return_value = ic
+    ic.limit.return_value = ic
+    ic.execute.return_value = Mock(data=[{"sub_class": "raw_meat"}])
+    pi_first = Mock()
+    pi_first.select.return_value = pi_first
+    pi_first.eq.return_value = pi_first
+    pi_first.limit.return_value = pi_first
+    pi_first.execute.return_value = Mock(data=[pantry_row])
+    pi_upd = Mock()
+    pi_upd.update.return_value = pi_upd
+    pi_upd.eq.return_value = pi_upd
+    pi_upd.execute.return_value = Mock(data=[])
+    pi_last = Mock()
+    pi_last.select.return_value = pi_last
+    pi_last.eq.return_value = pi_last
+    pi_last.limit.return_value = pi_last
+    pi_last.execute.return_value = Mock(
+        data=[{**pantry_row, "deleted_at": None, "put_back_count": 1, "use_soon": True}]
+    )
+    pantry_i = [0]
+
+    def tbl(name):
+        if name == "depletion_history":
+            return dh
+        if name == "item_classification":
+            return ic
+        if name == "pantry_items":
+            pantry_i[0] += 1
+            if pantry_i[0] == 1:
+                return pi_first
+            if pantry_i[0] == 2:
+                return pi_upd
+            return pi_last
+        return Mock()
+
+    client.table.side_effect = tbl
+    row, err = process_put_back(client, "u1", "dh1", today=TEST_DATE)
+    assert err is None
+    assert row is not None
+    assert row["put_back_count"] == 1
+
+
+def test_put_back_rejected_when_subclass_cap_exceeded():
+    hist_row = {
+        "id": "dh1",
+        "user_id": "u1",
+        "pantry_item_id": "p1",
+        "item_name": "chicken breast",
+        "put_back_count": 1,
+    }
+    client = _plain_supabase_mock()
+    dh = Mock()
+    dh.select.return_value = dh
+    dh.eq.return_value = dh
+    dh.limit.return_value = dh
+    dh.execute.return_value = Mock(data=[hist_row])
+    ic = Mock()
+    ic.select.return_value = ic
+    ic.eq.return_value = ic
+    ic.limit.return_value = ic
+    ic.execute.return_value = Mock(data=[{"sub_class": "raw_meat"}])
+
+    def tbl(name):
+        if name == "depletion_history":
+            return dh
+        if name == "item_classification":
+            return ic
+        return Mock()
+
+    client.table.side_effect = tbl
+    row, err = process_put_back(client, "u1", "dh1", today=TEST_DATE)
+    assert row is None
+    assert err == "MAX_PUT_BACK_REACHED"
+
+
+def test_put_back_sets_override_to_0_85_and_expires_in_use_soon_window():
+    hist_row = {
+        "id": "dh1",
+        "user_id": "u1",
+        "pantry_item_id": "p1",
+        "item_name": "spinach",
+        "put_back_count": 0,
+    }
+    pantry_row = {
+        "id": "p1",
+        "user_id": "u1",
+        "base_ingredient": "spinach",
+        "depletion_class": "PERISHABLE",
+        "deleted_at": "2026-04-09",
+    }
+    client = _plain_supabase_mock()
+    dh = Mock()
+    dh.select.return_value = dh
+    dh.eq.return_value = dh
+    dh.limit.return_value = dh
+    dh.execute.return_value = Mock(data=[hist_row])
+    ic = Mock()
+    ic.select.return_value = ic
+    ic.eq.return_value = ic
+    ic.limit.return_value = ic
+    ic.execute.return_value = Mock(data=[{"sub_class": "leafy_green"}])
+    pi_first = Mock()
+    pi_first.select.return_value = pi_first
+    pi_first.eq.return_value = pi_first
+    pi_first.limit.return_value = pi_first
+    pi_first.execute.return_value = Mock(data=[pantry_row])
+    pi_upd = Mock()
+    pi_upd.update.return_value = pi_upd
+    pi_upd.eq.return_value = pi_upd
+    pi_upd.execute.return_value = Mock(data=[])
+    pi_last = Mock()
+    pi_last.select.return_value = pi_last
+    pi_last.eq.return_value = pi_last
+    pi_last.limit.return_value = pi_last
+    pi_last.execute.return_value = Mock(data=[pantry_row])
+    pantry_i = [0]
+
+    def tbl(name):
+        if name == "depletion_history":
+            return dh
+        if name == "item_classification":
+            return ic
+        if name == "pantry_items":
+            pantry_i[0] += 1
+            if pantry_i[0] == 1:
+                return pi_first
+            if pantry_i[0] == 2:
+                return pi_upd
+            return pi_last
+        return Mock()
+
+    client.table.side_effect = tbl
+    process_put_back(client, "u1", "dh1", today=TEST_DATE)
+    payload = pi_upd.update.call_args[0][0]
+    use_until = days_after(TEST_DATE, USE_SOON_DAYS).isoformat()
+    assert payload["confidence_override"] == PUT_BACK_CONFIDENCE_OVERRIDE
+    assert payload["confidence_override_expires"] == use_until
+    assert payload["use_soon_expires"] == use_until
+
+
+def test_compute_confidence_is_pure_accepts_today_parameter(default_user_prefs):
+    cls = make_classification(depletion_class="CONSUMABLE", default_days_supply=45)
+    item = make_pantry_item(
+        depletion_class="CONSUMABLE",
+        purchase_date=days_ago(TEST_DATE, 10),
+    )
+    snapshot = copy.deepcopy(item)
+    compute_confidence(
+        item, default_user_prefs, cls, today=TEST_DATE, calibrated_days=45
+    )
+    assert item == snapshot
+    compute_confidence(
+        item,
+        default_user_prefs,
+        cls,
+        today=days_after(TEST_DATE, 400),
+        calibrated_days=45,
+    )
+    assert item == snapshot
+
+
+def test_run_expiry_cleanup_uses_provided_today_for_deleted_at_stamp():
+    custom_today = date(2026, 7, 4)
+    expected = datetime.combine(custom_today, time.min, tzinfo=timezone.utc).isoformat()
+    expired = [
+        {
+            "id": "i1",
+            "user_id": "u1",
+            "base_ingredient": "spinach",
+            "depletion_class": "PERISHABLE",
+            "purchase_date": "2026-03-30",
+            "put_back_count": 0,
+        }
+    ]
+    client = _plain_supabase_mock()
+    sel_chain = Mock()
+    sel_chain.eq.return_value = sel_chain
+    sel_chain.is_.return_value = sel_chain
+    sel_chain.lt.return_value = sel_chain
+    sel_chain.execute.return_value = Mock(data=expired)
+    pt = Mock()
+    pt.select.return_value = sel_chain
+    cook = Mock()
+    cook.select.return_value = cook
+    cook.eq.return_value = cook
+    cook.limit.return_value = cook
+    cook.execute.return_value = Mock(data=[])
+    rpc = Mock()
+    rpc.execute.return_value = Mock(data=[{"id": "h1"}])
+    client.rpc.return_value = rpc
+
+    def tbl(name):
+        if name == "pantry_items":
+            return pt
+        if name == "cooking_log":
+            return cook
+        return Mock()
+
+    client.table.side_effect = tbl
+    out = run_expiry_cleanup(client, "u1", today=custom_today)
+    kwargs = client.rpc.call_args[0][1]
+    assert kwargs["p_deleted_at"] == expected
+    assert len(out) == 1
+    assert out[0]["deleted_at"] == expected
+
+
+def test_public_reexport_of_find_pantry_match():
+    import backend.services.confidence_engine as ce
+
+    assert ce.find_pantry_match is ce._find_pantry_match
+    pantry = [{"base_ingredient": "salt", "id": "1"}]
+    assert find_pantry_match(pantry, "salt") == _find_pantry_match(pantry, "salt")
