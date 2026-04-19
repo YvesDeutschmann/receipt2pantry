@@ -99,7 +99,13 @@ class ReceiptProcessor:
                 products_to_normalize,
                 use_ai=use_ai
             )
-            
+
+            if len(normalized_results) != len(valid_items):
+                raise ValueError(
+                    f"Normalizer returned {len(normalized_results)} results for "
+                    f"{len(valid_items)} items — length parity contract violated"
+                )
+
             # 4. Add normalized items to pantry
             items_processed = 0
             items_added = 0

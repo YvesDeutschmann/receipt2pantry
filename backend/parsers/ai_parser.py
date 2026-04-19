@@ -1,6 +1,6 @@
 """AI-powered receipt parser implementing BaseParser interface"""
 
-from typing import Dict, List, Optional
+from typing import Any, Dict, Optional
 from datetime import datetime
 
 from backend.parsers.base_parser import BaseParser
@@ -10,6 +10,10 @@ from backend.utils.exceptions import ParserException, AIServiceException
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+_REQUIRED_OUTPUT_KEYS = frozenset(
+    {"order_id", "order_date", "total_amount", "num_items", "items", "metadata"}
+)
 
 
 @register_parser("ai")
@@ -37,6 +41,12 @@ class AIParser(BaseParser):
         Args:
             parser_name: Name of the fallback parser (e.g., 'safeway')
         """
+        if not ParserRegistry.is_registered(parser_name):
+            available = ", ".join(sorted(ParserRegistry.list_parsers()))
+            raise ParserException(
+                f"Fallback parser '{parser_name}' is not registered. "
+                f"Available parsers: {available}"
+            )
         self._fallback_parser_name = parser_name
     
     def parse(self, raw_data: str) -> Dict:
@@ -54,44 +64,47 @@ class AIParser(BaseParser):
         """
         try:
             logger.info("Parsing receipt with AI")
-            
+
             if not self.ai_service.is_available:
                 logger.warning("AI service not available, attempting fallback")
                 return self._try_fallback(raw_data)
-            
-            # Extract plain text content
+
             plain_text = self._extract_plain_text(raw_data)
-            
             if not plain_text:
                 logger.warning("Could not extract plain text, using raw data")
                 plain_text = raw_data
-            
-            # Parse with AI
+
             ai_result = self.ai_service.parse_receipt(plain_text)
-            
-            # Transform to standard format
+            self._ensure_valid_ai_result(ai_result)
             parsed_data = self._transform_ai_result(ai_result, raw_data)
-            
+            self._ensure_valid_parsed_output(parsed_data)
+
             logger.info(
                 f"AI parsed receipt {parsed_data.get('order_id')} "
                 f"with {len(parsed_data.get('items', []))} items"
             )
-            
             return parsed_data
-            
+
         except AIServiceException as e:
             logger.error(f"AI parsing failed: {e}")
-            return self._try_fallback(raw_data)
+            return self._try_fallback(raw_data, cause=e)
+        except ParserException as e:
+            logger.error(f"AI parsing failed: {e}")
+            return self._try_fallback(raw_data, cause=e)
         except Exception as e:
             logger.error(f"Unexpected error in AI parser: {e}")
             raise ParserException(f"Failed to parse receipt: {e}")
     
-    def _try_fallback(self, raw_data: str) -> Dict:
+    def _try_fallback(
+        self, raw_data: str, cause: Optional[Exception] = None
+    ) -> Dict:
         """Try to use fallback parser"""
         if not self._fallback_parser_name:
+            if isinstance(cause, ParserException):
+                raise cause
             raise ParserException(
                 "AI parsing failed and no fallback parser configured"
-            )
+            ) from cause
         
         try:
             logger.info(f"Trying fallback parser: {self._fallback_parser_name}")
@@ -99,7 +112,35 @@ class AIParser(BaseParser):
             return fallback.parse(raw_data)
         except Exception as e:
             raise ParserException(f"Fallback parser also failed: {e}")
-    
+
+    def _ensure_valid_ai_result(self, ai_result: Any) -> None:
+        """Reject incomplete AI JSON before any downstream normalization."""
+        if not isinstance(ai_result, dict):
+            raise ParserException("AI receipt output must be a JSON object")
+        order_id = ai_result.get("order_id")
+        if order_id is None or not str(order_id).strip():
+            raise ParserException(
+                "AI receipt output missing required field: order_id"
+            )
+        items = ai_result.get("items")
+        if not isinstance(items, list) or len(items) == 0:
+            raise ParserException(
+                "AI receipt output must include a non-empty items list"
+            )
+
+    def _ensure_valid_parsed_output(self, parsed_data: Dict) -> None:
+        """Ensure transformed output matches the shared parser contract."""
+        if not isinstance(parsed_data, dict):
+            raise ParserException("Parsed receipt data must be an object")
+        missing = _REQUIRED_OUTPUT_KEYS - parsed_data.keys()
+        if missing:
+            raise ParserException(
+                f"Parsed receipt missing required keys: {sorted(missing)}"
+            )
+        items = parsed_data.get("items")
+        if not isinstance(items, list) or len(items) == 0:
+            raise ParserException("Parsed receipt must contain at least one item")
+
     def _extract_plain_text(self, email_content: str) -> str:
         """Extract plain text content from email"""
         # Look for text/plain section
@@ -166,8 +207,7 @@ class AIParser(BaseParser):
             
             items.append(transformed_item)
         
-        # Build parsed data
-        order_id = ai_result.get("order_id") or self._generate_order_id()
+        order_id = str(ai_result["order_id"]).strip()
         order_date = ai_result.get("order_date") or datetime.now().strftime("%Y-%m-%d")
         
         total_amount = ai_result.get("total")
@@ -207,7 +247,10 @@ class AIParser(BaseParser):
         
         if not isinstance(parsed_data["items"], list):
             return False
-        
+
+        if len(parsed_data["items"]) == 0:
+            return False
+
         # Validate at least some items have required fields
         valid_items = 0
         for item in parsed_data["items"]:

@@ -3,7 +3,9 @@
 import re
 from typing import Any, Mapping
 
-_NON_GROCERY_NORMALIZED = frozenset({"gasstation", "carwash", "gasandcarwash"})
+_NON_GROCERY_NORMALIZED = frozenset(
+    {"gasstation", "carwash", "gasandcarwash", "membershiprenewal"}
+)
 
 
 def normalize_costco_receipt_type(rt: str) -> str:
@@ -12,7 +14,7 @@ def normalize_costco_receipt_type(rt: str) -> str:
 
 
 def is_non_grocery_costco_receipt_type(rt: str) -> bool:
-    """True if receiptType is gas station, car wash, or combined (any spacing/hyphen variant)."""
+    """True if receiptType is gas, car wash, combined gas/car wash, or membership renewal (spacing/hyphen variants)."""
     return normalize_costco_receipt_type(rt) in _NON_GROCERY_NORMALIZED
 
 

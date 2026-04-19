@@ -97,6 +97,9 @@ Here is your receipt from 08/18/2025.
 
 Order Details
 
+Reference Number
+1234567890123
+
 GROCERY
 
 Olipop Soda Prebiotic Ginger Ale 4-12fz
@@ -153,6 +156,9 @@ Content-Type: text/plain
 Thanks for shopping with Safeway!
 
 Here is your receipt from 08/18/2025.
+
+Reference Number
+1234567890123
 
 GROCERY
 

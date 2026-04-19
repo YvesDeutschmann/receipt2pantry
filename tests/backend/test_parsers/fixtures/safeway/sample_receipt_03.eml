@@ -1,0 +1,61 @@
+From: "Safeway" <safeway@p.safeway.com>
+To: "Shopper" <shopper@example.com>
+Subject: Your Receipt From Safeway
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="bnd=_safeway_fixture_03"
+
+--bnd=_safeway_fixture_03
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Thanks for shopping with Safeway!
+
+Here is your receipt from 10/03/2025.
+
+Order Details
+
+GROCERY
+
+Tillamook Block Cheese 8 Oz
+
+$4.99
+
+Quantity: 1
+
+Regular Price $6.49
+
+MEAT
+
+Bulk Salmon Fillet 2.10 lb @ 9.99/lb
+
+$20.98
+
+Quantity: 1
+
+PRODUCE
+
+Acme Sparkling Water 12 Oz
+
+$5.99
+
+Quantity: 2
+
+Total Items (4)
+
+$36.95
+
+Total
+
+$36.95
+
+Transaction Details
+
+Reference Number
+
+811529499003
+
+Authorization Date
+
+Oct 03, 2025
+
+--bnd=_safeway_fixture_03--

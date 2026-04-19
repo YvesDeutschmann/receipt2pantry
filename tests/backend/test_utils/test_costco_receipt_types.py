@@ -17,6 +17,7 @@ def test_non_grocery_blacklist():
     assert is_non_grocery_costco_receipt_type("Gas Station") is True
     assert is_non_grocery_costco_receipt_type("Car Wash") is True
     assert is_non_grocery_costco_receipt_type("Gas And Car Wash") is True
+    assert is_non_grocery_costco_receipt_type("Membership Renewal") is True
     assert is_non_grocery_costco_receipt_type("In-Warehouse") is False
     assert is_non_grocery_costco_receipt_type("warehouse") is False
 

@@ -1,5 +1,7 @@
 """Custom exception classes for Meald"""
 
+from typing import Any, Dict, Optional
+
 
 class GrocerySyncException(Exception):
     """Base exception for all Meald errors"""
@@ -17,8 +19,18 @@ class AuthenticationException(ProviderException):
 
 
 class MFARequiredException(AuthenticationException):
-    """Exception raised when MFA is required but not provided"""
-    pass
+    """Exception raised when MFA is required but not provided."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        session_id: Optional[str] = None,
+        options: Optional[Dict[str, Any]] = None,
+    ):
+        super().__init__(message)
+        self.session_id = session_id
+        self.options = options
 
 
 class ParserException(GrocerySyncException):
