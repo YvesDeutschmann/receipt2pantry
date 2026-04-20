@@ -24,32 +24,67 @@ class ConnectionCodeManager:
         self.expiry_minutes = expiry_minutes
         logger.info(f"ConnectionCodeManager initialized (expiry: {expiry_minutes} minutes)")
     
-    def generate_code(self, user_id: str) -> str:
+    def generate_code(
+        self, user_id: str, now: datetime | None = None
+    ) -> str:
         """
         Generate a new connection code for a user
         
         Args:
             user_id: User ID requesting the connection
+            now: Optional anchor time (UTC). Defaults to current time.
         
         Returns:
             Connection code (random string)
         """
         # Generate a secure random code (16 characters, URL-safe)
         code = secrets.token_urlsafe(12)
-        
-        expires_at = datetime.now(timezone.utc) + timedelta(minutes=self.expiry_minutes)
-        
+
+        effective_now = now if now is not None else datetime.now(timezone.utc)
+        expires_at = effective_now + timedelta(minutes=self.expiry_minutes)
+
         with self._lock:
             self._codes[code] = {
                 "user_id": user_id,
                 "status": "pending",  # pending, connected, expired
-                "created_at": datetime.now(timezone.utc),
+                "created_at": effective_now,
                 "expires_at": expires_at,
                 "connected_at": None,
             }
-        
+
         logger.info(f"Generated connection code for user {user_id}, expires at {expires_at}")
         return code
+
+    def _code_fingerprint(self, code: str) -> str:
+        return code[:4] if len(code) >= 4 else code
+
+    def validate_code(
+        self, code: str, now: datetime | None = None
+    ) -> Optional[Dict]:
+        """
+        Return code entry if it exists and is not expired; otherwise None.
+        """
+        effective_now = now if now is not None else datetime.now(timezone.utc)
+        with self._lock:
+            if code not in self._codes:
+                return None
+            info = self._codes[code].copy()
+        if effective_now > info["expires_at"]:
+            return None
+        return info
+
+    def consume_code(self, code: str) -> bool:
+        """
+        Remove a connection code from the store (one-shot consumption).
+        Returns True if a code was removed, False if it was unknown.
+        """
+        with self._lock:
+            if code not in self._codes:
+                return False
+            del self._codes[code]
+        fp = self._code_fingerprint(code)
+        logger.info(f"Consumed connection code {fp}...")
+        return True
     
     def get_code_info(self, code: str) -> Optional[Dict]:
         """
@@ -99,7 +134,9 @@ class ConnectionCodeManager:
             info["status"] = "connected"
             info["connected_at"] = datetime.now(timezone.utc)
             
-            logger.info(f"Connection code {code} marked as connected")
+            logger.info(
+                f"Connection code {self._code_fingerprint(code)}… marked as connected"
+            )
             return True
     
     def cleanup_expired(self) -> int:

@@ -127,26 +127,33 @@ class HouseholdService:
         Raises:
             ValidationException: If code invalid or user already in household
         """
-        # Check if user already has a household
+        # Validate join code format
+        if not join_code or len(join_code.strip()) != JOIN_CODE_LENGTH:
+            raise ValidationException(f"Join code must be {JOIN_CODE_LENGTH} characters")
+
+        join_code = join_code.strip().upper()
+        household = self.supabase.get_household_by_code(join_code)
+
         existing = self.supabase.get_user_household(user_id)
         if existing:
+            if household and existing["id"] == household["id"]:
+                return {
+                    "id": household["id"],
+                    "name": household["name"],
+                    "join_code": household["join_code"],
+                    "suggestion_meal_slots": household.get("suggestion_meal_slots")
+                    or {"breakfast": True, "lunch": True, "dinner": True},
+                    "role": existing["role"],
+                    "created_at": household["created_at"],
+                }
             raise ValidationException(
                 "You are already a member of a household. "
                 "Please leave your current household first."
             )
-        
-        # Validate join code format
-        if not join_code or len(join_code.strip()) != JOIN_CODE_LENGTH:
-            raise ValidationException(f"Join code must be {JOIN_CODE_LENGTH} characters")
-        
-        join_code = join_code.strip().upper()
-        
-        # Find household by code
-        household = self.supabase.get_household_by_code(join_code)
+
         if not household:
             raise ValidationException("Invalid join code. Please check and try again.")
-        
-        # Add user as member
+
         self.supabase.add_household_member(household["id"], user_id, "member")
         
         logger.info(f"User {user_id} joined household '{household['name']}'")

@@ -35,6 +35,8 @@ class ShoppingListService:
         Returns:
             Dictionary with shopping list summary
         """
+        if start_date > end_date:
+            raise ValidationException("start_date must be on or before end_date")
         try:
             # Get all meal plans in date range
             client = self.supabase.admin_client if self.supabase.admin_client else self.supabase.client

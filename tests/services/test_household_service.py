@@ -2,7 +2,12 @@
 
 import pytest
 from unittest.mock import Mock, MagicMock
-from backend.services.household_service import HouseholdService
+
+from backend.services.household_service import (
+    JOIN_CODE_CHARS,
+    JOIN_CODE_LENGTH,
+    HouseholdService,
+)
 from backend.utils.exceptions import ValidationException, AuthorizationException, DatabaseException
 
 
@@ -149,7 +154,8 @@ class TestHouseholdService:
         """Test joining when user already in a household"""
         # Setup
         mock_supabase.get_user_household.return_value = sample_household
-        
+        mock_supabase.get_household_by_code.return_value = None
+
         # Execute & Verify
         with pytest.raises(ValidationException) as exc_info:
             household_service.join_household('user-456', 'XYZ789')
@@ -401,3 +407,138 @@ class TestHouseholdService:
             household_service.update_household_name('user-789', 'New Name')
         
         assert 'owner' in str(exc_info.value)
+
+    # =========================================================================
+    # T4-05 — join code generation, admin guards, lifecycle, validation
+    # =========================================================================
+
+    def test_join_code_never_contains_0_O_1_or_I(self, household_service, mock_supabase):
+        forbidden = set("0O1I")
+        mock_supabase.is_join_code_unique.return_value = True
+        for _ in range(1000):
+            code = household_service._generate_join_code()
+            assert len(code) == JOIN_CODE_LENGTH
+            assert not (set(code) & forbidden)
+            assert all(c in JOIN_CODE_CHARS for c in code)
+
+    def test_join_code_is_six_characters(self, household_service, mock_supabase):
+        mock_supabase.is_join_code_unique.return_value = True
+        code = household_service._generate_join_code()
+        assert len(code) == JOIN_CODE_LENGTH
+
+    def test_generate_retries_on_collision_up_to_ten_times(self, household_service, mock_supabase):
+        mock_supabase.is_join_code_unique.side_effect = [False] * 9 + [True]
+        code = household_service._generate_join_code()
+        assert len(code) == JOIN_CODE_LENGTH
+        assert mock_supabase.is_join_code_unique.call_count == 10
+
+    def test_generate_raises_database_exception_after_ten_collisions(
+        self, household_service, mock_supabase
+    ):
+        mock_supabase.is_join_code_unique.side_effect = [False] * 10
+        with pytest.raises(DatabaseException, match="Failed to generate unique join code"):
+            household_service._generate_join_code()
+        assert mock_supabase.is_join_code_unique.call_count == 10
+
+    def test_remove_member_requires_admin_raises_authorization_exception_otherwise(
+        self, household_service, mock_supabase
+    ):
+        mock_supabase.get_user_household.return_value = {
+            "id": "household-123",
+            "name": "Test Family",
+            "role": "member",
+        }
+        with pytest.raises(AuthorizationException) as exc_info:
+            household_service.remove_member("user-789", "user-999")
+        assert "owner" in str(exc_info.value).lower()
+
+    def test_update_household_name_admin_only(self, household_service, mock_supabase):
+        mock_supabase.get_user_household.return_value = {
+            "id": "household-123",
+            "name": "Test Family",
+            "role": "member",
+        }
+        with pytest.raises(AuthorizationException) as exc_info:
+            household_service.update_household_name("user-789", "New Name")
+        assert "owner" in str(exc_info.value).lower()
+
+    def test_regenerate_join_code_admin_only(self, household_service, mock_supabase):
+        mock_supabase.get_user_household.return_value = {
+            "id": "household-123",
+            "name": "Test Family",
+            "role": "member",
+        }
+        with pytest.raises(AuthorizationException) as exc_info:
+            household_service.regenerate_join_code("user-789")
+        assert "owner" in str(exc_info.value).lower()
+
+    def test_join_household_is_idempotent_for_same_user_and_code(
+        self, household_service, mock_supabase
+    ):
+        hh = {
+            "id": "household-123",
+            "name": "Other Family",
+            "join_code": "ABC123",
+            "created_at": "2025-01-01T00:00:00Z",
+        }
+
+        mock_supabase.get_user_household.side_effect = [
+            None,
+            {"id": "household-123", "name": "Other Family", "role": "member"},
+        ]
+        mock_supabase.get_household_by_code.return_value = hh
+
+        first = household_service.join_household("user-789", "ABC123")
+        assert first["id"] == "household-123"
+        assert first["role"] == "member"
+        mock_supabase.add_household_member.assert_called_once_with(
+            "household-123", "user-789", "member"
+        )
+
+        second = household_service.join_household("user-789", "ABC123")
+        assert second["id"] == first["id"]
+        assert second["role"] == "member"
+        mock_supabase.add_household_member.assert_called_once_with(
+            "household-123", "user-789", "member"
+        )
+
+    def test_leave_household_last_admin_policy_pinned(self, household_service, mock_supabase):
+        """Owner cannot leave while other members exist (no auto-promotion); sole owner deletes household."""
+        mock_supabase.get_user_household.return_value = {
+            "id": "household-123",
+            "name": "Test Family",
+            "role": "owner",
+        }
+        mock_supabase.get_household_members.return_value = [
+            {"user_id": "user-456", "role": "owner"},
+            {"user_id": "user-789", "role": "member"},
+        ]
+        with pytest.raises(AuthorizationException) as exc_info:
+            household_service.leave_household("user-456")
+        assert "Cannot leave as owner" in str(exc_info.value)
+        mock_supabase.delete_household.assert_not_called()
+        mock_supabase.remove_household_member.assert_not_called()
+
+    def test_remove_member_cannot_remove_self_via_that_endpoint(
+        self, household_service, mock_supabase, sample_household
+    ):
+        mock_supabase.get_user_household.return_value = sample_household
+        with pytest.raises(ValidationException) as exc_info:
+            household_service.remove_member("user-456", "user-456")
+        assert "Cannot remove yourself" in str(exc_info.value)
+
+    def test_create_household_rejects_empty_name(self, household_service, mock_supabase):
+        mock_supabase.get_user_household.return_value = None
+        with pytest.raises(ValidationException) as exc_info:
+            household_service.create_household("user-123", "")
+        assert "name is required" in str(exc_info.value).lower()
+
+    def test_update_profile_rejects_negative_size(self, household_service, mock_supabase):
+        mock_supabase.get_user_household.return_value = {
+            "id": "household-123",
+            "name": "Test Family",
+            "role": "member",
+        }
+        with pytest.raises(ValidationException) as exc_info:
+            household_service.update_household_profile("user-789", size=-1)
+        assert "between 1 and 99" in str(exc_info.value)
