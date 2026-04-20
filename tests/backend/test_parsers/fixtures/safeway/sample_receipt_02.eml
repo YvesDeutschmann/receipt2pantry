@@ -1,0 +1,43 @@
+From: "Safeway" <safeway@p.safeway.com>
+To: "Shopper" <shopper@example.com>
+Subject: Your Receipt From Safeway
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="bnd=_safeway_fixture_02"
+
+--bnd=_safeway_fixture_02
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: quoted-printable
+
+Thanks=20for=20shopping=20with=20Safeway!
+
+Here=20is=20your=20receipt=20from=2010/02/2025.
+
+Order=20Details
+
+GROCERY
+
+Quoted=20Printable=20Crackers=2012=20Oz
+
+$3.49
+
+Quantity:=201
+
+Total=20Items=20(1)
+
+$3.49
+
+Total
+
+$3.49
+
+Transaction=20Details
+
+Reference=20Number
+
+811529499002
+
+Authorization=20Date
+
+Oct=2002,=202025
+
+--bnd=_safeway_fixture_02--

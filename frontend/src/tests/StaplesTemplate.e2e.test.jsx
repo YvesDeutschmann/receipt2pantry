@@ -39,11 +39,13 @@ vi.mock('../contexts/AuthContext', () => ({
   }),
 }))
 
+const coldStart = vi.hoisted(() => ({
+  setReceiptSyncStatus: vi.fn(),
+  setReceiptMatchCount: vi.fn(),
+}))
+
 vi.mock('../contexts/ColdStartContext', () => ({
-  useColdStart: () => ({
-    setReceiptSyncStatus: vi.fn(),
-    setReceiptMatchCount: vi.fn(),
-  }),
+  useColdStart: () => coldStart,
 }))
 
 vi.mock('../components/PantrySearchOverlay', () => ({
@@ -190,28 +192,28 @@ describe('StaplesTemplate cold-start E2E', () => {
       .mockResolvedValue({ matches: ['olive oil', 'garlic'] })
     mockApi.confirmStaples.mockResolvedValue({ receipt_matched: 2, added: 6 })
 
-    renderStaples()
-    await screen.findByText('Olive oil')
-
-    vi.useFakeTimers()
+    vi.useFakeTimers({ shouldAdvanceTime: true })
     try {
+      renderStaples()
+      await screen.findByText('Olive oil')
+
       await act(async () => {
         await vi.advanceTimersByTimeAsync(8000)
       })
+
+      for (const label of ['Olive oil', 'Garlic']) {
+        const row = screen.getByText(label).closest('button')
+        await waitFor(() => {
+          expect(within(row).getByTitle('Matched a recent receipt')).toBeInTheDocument()
+        })
+      }
+
+      fireEvent.click(screen.getByRole('button', { name: /Done/i }))
+      expect(mockApi.confirmStaples).toHaveBeenCalledTimes(1)
+      await screen.findByText(/We matched 2 of your staples to your recent receipts/)
     } finally {
       vi.useRealTimers()
     }
-
-    for (const label of ['Olive oil', 'Garlic']) {
-      const row = screen.getByText(label).closest('button')
-      await waitFor(() => {
-        expect(within(row).getByTitle('Matched a recent receipt')).toBeInTheDocument()
-      })
-    }
-
-    fireEvent.click(screen.getByRole('button', { name: /Done/i }))
-    expect(mockApi.confirmStaples).toHaveBeenCalledTimes(1)
-    await screen.findByText(/We matched 2 of your staples to your recent receipts/)
   })
 
   it('1.2 / S1-05 Skip: six defaults only, skip flag', async () => {

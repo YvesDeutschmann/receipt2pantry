@@ -48,6 +48,9 @@ class NormalizationService:
             - category: Food category
             - tags: List of relevant tags
         """
+        if not raw_name:
+            return None
+
         # Check in-memory cache first
         if raw_name in self.cache:
             return self.cache[raw_name]
@@ -55,6 +58,7 @@ class NormalizationService:
         # Check product_mappings table
         cached = self.supabase.get_product_mapping(raw_name)
         if cached:
+            cached = {**cached, 'source': 'mapping'}
             self.cache[raw_name] = cached
             return cached
         
@@ -315,7 +319,12 @@ class NormalizationService:
         for i, product in enumerate(products):
             raw_name = product.get('raw_name', '')
             category = product.get('category', '')
-            
+
+            # Non-normalizable: empty raw_name → None
+            if not raw_name:
+                results[i] = None
+                continue
+
             # Check in-memory cache
             if raw_name in self.cache:
                 results[i] = self.cache[raw_name]
@@ -324,6 +333,7 @@ class NormalizationService:
             # Check database cache
             cached = self.supabase.get_product_mapping(raw_name)
             if cached:
+                cached = {**cached, 'source': 'mapping'}
                 self.cache[raw_name] = cached
                 results[i] = cached
                 continue

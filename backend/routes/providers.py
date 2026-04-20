@@ -250,9 +250,17 @@ def fetch_receipts_with_stored_credentials(provider_name):
                 return jsonify({"error": "Stored credentials missing required token"}), 500
             
             logger.info(f"Fetching {provider_name} receipts with stored credentials (days={days})")
-            
+
+            token_updates: dict = {}
             try:
-                receipts = provider.fetch_receipts_via_api(id_token, days=days, client_identifier=client_identifier)
+                receipts = provider.fetch_receipts_via_api(
+                    id_token,
+                    days=days,
+                    client_identifier=client_identifier,
+                    refresh_token=credentials.get("refreshToken"),
+                    refresh_token_client_id=credentials.get("refreshTokenClientId"),
+                    token_refresh_sink=token_updates,
+                )
             except (AuthenticationException, ProviderException) as e:
                 error_str = str(e).lower()
                 is_auth_error = "403" in str(e) or "401" in str(e) or "expired" in error_str or "invalid" in error_str
@@ -292,11 +300,18 @@ def fetch_receipts_with_stored_credentials(provider_name):
                             credentials["refreshTokenClientId"] = refresh_token_client_id
                         secrets_service.store_user_credentials(user_id, provider_name, credentials)
                         logger.info(f"Successfully refreshed and stored new tokens for user {user_id}")
+                        route_token_updates: dict = {}
                         receipts = provider.fetch_receipts_via_api(
                             new_tokens["idToken"],
                             days=days,
-                            client_identifier=client_identifier
+                            client_identifier=client_identifier,
+                            refresh_token=credentials.get("refreshToken"),
+                            refresh_token_client_id=credentials.get("refreshTokenClientId"),
+                            token_refresh_sink=route_token_updates,
                         )
+                        if route_token_updates:
+                            credentials.update(route_token_updates)
+                            secrets_service.store_user_credentials(user_id, provider_name, credentials)
                     except AuthenticationException as refresh_error:
                         logger.error(f"Token refresh failed for user {user_id}: {refresh_error}")
                         return jsonify({
@@ -305,7 +320,11 @@ def fetch_receipts_with_stored_credentials(provider_name):
                         }), 401
                 else:
                     raise
-            
+
+            if token_updates:
+                credentials.update(token_updates)
+                secrets_service.store_user_credentials(user_id, provider_name, credentials)
+
             store_result = _store_and_process_fetched_receipts(user_id, provider_name, receipts)
             return jsonify({
                 "status": "success",

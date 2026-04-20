@@ -256,14 +256,14 @@ export default function StaplesTemplate() {
     return () => clearInterval(t)
   }, [pollReceiptMatches])
 
-  const toggle = async (base) => {
-    await selectionHaptic()
+  const toggle = (base) => {
     setSelected((prev) => {
       const next = new Set(prev)
       if (next.has(base)) next.delete(base)
       else next.add(base)
       return next
     })
+    void selectionHaptic()
   }
 
   const completeOnboardingMeta = async (extra = {}) => {

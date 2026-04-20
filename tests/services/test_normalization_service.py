@@ -358,3 +358,227 @@ class TestBatchNormalization:
         for i, result in enumerate(results):
             assert result["raw_name"] == f"Product {i}"
             assert result["base_ingredient"] == f"ingredient_Product {i}"
+
+
+class TestNormalizationServiceContracts:
+    """Regression / contract tests for normalization_service (T2-03)."""
+
+    @pytest.fixture
+    def mock_ai_service(self):
+        service = Mock(spec=AIService)
+        service.is_available = True
+        service.config = Mock()
+        service.config.OPENAI_BATCH_SIZE = 20
+        return service
+
+    # ── Group A: cache hit path ──────────────────────────────────────────────
+
+    def test_in_memory_cache_hit_short_circuits_db_and_ai(
+        self, mock_supabase, mock_ai_service
+    ):
+        service = NormalizationService(mock_supabase, mock_ai_service)
+        cached_result = {"base_ingredient": "butter", "source": "openai"}
+        service.cache["butter 1lb"] = cached_result
+
+        results = service.normalize_products_batch(
+            [{"raw_name": "butter 1lb", "category": "DAIRY"}]
+        )
+
+        assert results[0] is cached_result
+        mock_supabase.get_product_mapping.assert_not_called()
+        mock_ai_service.normalize_products_batch.assert_not_called()
+
+    def test_cache_miss_falls_through_to_db_mapping(self, mock_supabase):
+        mock_supabase.get_product_mapping.return_value = {
+            "base_ingredient": "milk",
+            "source": "openai",
+        }
+
+        service = NormalizationService(mock_supabase)
+        results = service.normalize_products_batch(
+            [{"raw_name": "whole milk", "category": "DAIRY"}]
+        )
+
+        assert results[0]["base_ingredient"] == "milk"
+        assert results[0]["source"] == "mapping"
+        mock_supabase.get_product_mapping.assert_called_once_with("whole milk")
+
+    def test_db_hit_populates_in_memory_cache(self, mock_supabase):
+        mock_supabase.get_product_mapping.return_value = {
+            "base_ingredient": "milk",
+            "source": "openai",
+        }
+
+        service = NormalizationService(mock_supabase)
+        service.normalize_products_batch(
+            [{"raw_name": "whole milk", "category": "DAIRY"}]
+        )
+
+        # Second call must not touch the DB
+        mock_supabase.get_product_mapping.reset_mock()
+        service.normalize_products_batch(
+            [{"raw_name": "whole milk", "category": "DAIRY"}]
+        )
+
+        mock_supabase.get_product_mapping.assert_not_called()
+
+    # ── Group B: batch parity ────────────────────────────────────────────────
+
+    def test_batch_returns_list_of_same_length_as_input(self, mock_supabase):
+        mock_supabase.get_product_mapping.return_value = None
+        mock_supabase.store_product_mapping.return_value = None
+
+        products = [
+            {"raw_name": "butter", "category": "DAIRY"},
+            {"raw_name": "milk", "category": "DAIRY"},
+            {"raw_name": "eggs", "category": "DAIRY"},
+        ]
+        service = NormalizationService(mock_supabase)
+        results = service.normalize_products_batch(products)
+
+        assert len(results) == len(products)
+
+    def test_batch_returns_none_for_non_normalizable_item(self, mock_supabase):
+        mock_supabase.get_product_mapping.return_value = None
+        mock_supabase.store_product_mapping.return_value = None
+
+        products = [
+            {"raw_name": "butter", "category": "DAIRY"},
+            {"raw_name": "", "category": "DAIRY"},  # empty → None
+        ]
+        service = NormalizationService(mock_supabase)
+        results = service.normalize_products_batch(products)
+
+        assert len(results) == 2
+        assert results[0] is not None
+        assert results[1] is None
+
+    def test_batch_preserves_input_order(self, mock_supabase):
+        db = {
+            "apple": {"base_ingredient": "apple", "source": "openai"},
+            "banana": {"base_ingredient": "banana", "source": "openai"},
+            "carrot": {"base_ingredient": "carrot", "source": "openai"},
+        }
+        mock_supabase.get_product_mapping.side_effect = lambda name: db.get(name)
+
+        products = [
+            {"raw_name": "carrot", "category": "PRODUCE"},
+            {"raw_name": "apple", "category": "PRODUCE"},
+            {"raw_name": "banana", "category": "PRODUCE"},
+        ]
+        service = NormalizationService(mock_supabase)
+        results = service.normalize_products_batch(products)
+
+        assert results[0]["base_ingredient"] == "carrot"
+        assert results[1]["base_ingredient"] == "apple"
+        assert results[2]["base_ingredient"] == "banana"
+
+    # ── Group C: AI fallback ─────────────────────────────────────────────────
+
+    def test_batch_calls_ai_only_when_db_misses(
+        self, mock_supabase, mock_ai_service
+    ):
+        db = {"butter 1lb": {"base_ingredient": "butter", "source": "openai"}}
+        mock_supabase.get_product_mapping.side_effect = lambda name: db.get(name)
+        mock_supabase.store_product_mapping.return_value = None
+        mock_ai_service.normalize_products_batch.return_value = [
+            {"base_ingredient": "milk", "source": "openai"}
+        ]
+
+        products = [
+            {"raw_name": "butter 1lb", "category": "DAIRY"},  # DB hit
+            {"raw_name": "whole milk", "category": "DAIRY"},   # DB miss → AI
+        ]
+        service = NormalizationService(mock_supabase, mock_ai_service)
+        service.normalize_products_batch(products)
+
+        call_args = mock_ai_service.normalize_products_batch.call_args[0][0]
+        assert len(call_args) == 1
+        assert call_args[0]["raw_name"] == "whole milk"
+
+    def test_batch_does_not_cache_ai_error_results(
+        self, mock_supabase, mock_ai_service
+    ):
+        mock_supabase.get_product_mapping.return_value = None
+        mock_supabase.store_product_mapping.return_value = None
+        mock_ai_service.normalize_products_batch.side_effect = RuntimeError(
+            "AI API unavailable"
+        )
+
+        raw_name = "fresh whole milk"
+        service = NormalizationService(mock_supabase, mock_ai_service)
+        service.normalize_products_batch(
+            [{"raw_name": raw_name, "category": "DAIRY"}]
+        )
+
+        cached = service.cache.get(raw_name)
+        assert not isinstance(cached, Exception)
+        if cached is not None:
+            assert isinstance(cached, dict)
+            assert "base_ingredient" in cached
+
+    def test_batch_marks_openai_results_with_source_openai(
+        self, mock_supabase, mock_ai_service
+    ):
+        mock_supabase.get_product_mapping.return_value = None
+        mock_supabase.store_product_mapping.return_value = None
+        mock_ai_service.normalize_products_batch.return_value = [
+            {
+                "base_ingredient": "chicken",
+                "normalized_name": "chicken",
+                "source": "openai",
+            }
+        ]
+
+        service = NormalizationService(mock_supabase, mock_ai_service)
+        results = service.normalize_products_batch(
+            [{"raw_name": "chicken breast", "category": "MEAT"}]
+        )
+
+        assert results[0]["source"] == "openai"
+
+    def test_batch_marks_mapping_results_with_source_mapping(self, mock_supabase):
+        mock_supabase.get_product_mapping.return_value = {
+            "base_ingredient": "butter",
+            "normalized_name": "butter (salted)",
+            "source": "openai",  # originally created by AI
+        }
+
+        service = NormalizationService(mock_supabase)
+        results = service.normalize_products_batch(
+            [{"raw_name": "butter 1lb", "category": "DAIRY"}]
+        )
+
+        assert results[0]["source"] == "mapping"
+
+    # ── Group D: robustness ──────────────────────────────────────────────────
+
+    def test_normalize_rejects_empty_raw_name_gracefully(self, mock_supabase):
+        service = NormalizationService(mock_supabase)
+
+        result = service.normalize_product("", "DAIRY")
+
+        assert result is None
+        mock_supabase.get_product_mapping.assert_not_called()
+
+    def test_lookup_uses_exact_match_not_substring(self, mock_supabase):
+        """Searching for 'rice' must not return the 'rice vinegar' mapping."""
+        service = NormalizationService(mock_supabase)
+        # Populate cache with 'rice vinegar' only — 'rice' is absent
+        rice_vinegar_mapping = {
+            "base_ingredient": "rice vinegar",
+            "source": "openai",
+        }
+        service.cache["rice vinegar"] = rice_vinegar_mapping
+
+        mock_supabase.get_product_mapping.return_value = None
+        mock_supabase.store_product_mapping.return_value = None
+
+        results = service.normalize_products_batch(
+            [{"raw_name": "rice", "category": "PANTRY"}]
+        )
+
+        assert results[0] is not rice_vinegar_mapping
+        assert results[0].get("base_ingredient") != "rice vinegar"
+        # Lookup must use exact key 'rice', not any substring variation
+        mock_supabase.get_product_mapping.assert_called_once_with("rice")

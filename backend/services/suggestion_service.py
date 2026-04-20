@@ -5,6 +5,7 @@ Phase 3: recipe suggestion ranking — tiered, scored results for UI (no UI here
 from __future__ import annotations
 
 import hashlib
+import json
 import time
 from datetime import date
 from difflib import SequenceMatcher
@@ -12,9 +13,9 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from backend.config import Config
 from backend.services.confidence_engine import (
+    _find_pantry_match,
     _to_date,
     compute_confidence,
-    find_pantry_match,
     get_calibrated_days_supply,
     get_engagement_multiplier,
 )
@@ -60,7 +61,7 @@ def find_best_match(
     pantry_list: List[Dict], ingredient_name: str
 ) -> Optional[Dict]:
     """Exact + word-subset match (confidence_engine), then difflib ratio > 0.8."""
-    m = find_pantry_match(pantry_list, ingredient_name)
+    m = _find_pantry_match(pantry_list, ingredient_name)
     if m:
         return m
     n = (ingredient_name or "").lower().strip()
@@ -153,12 +154,14 @@ class SuggestionService:
         household_id: Optional[str],
         pantry: List[Dict],
         ingredient_list: List[str],
+        user_prefs: Dict[str, Any],
     ) -> str:
         h = hashlib.sha256()
         h.update(f"{user_id}:{household_id or ''}".encode())
         for pid in sorted({str(p.get("id")) for p in pantry if p.get("id")}):
             h.update(pid.encode())
         h.update(",".join(sorted(ingredient_list)).encode())
+        h.update(json.dumps(user_prefs, sort_keys=True, default=str).encode())
         return h.hexdigest()
 
     def get_recipe_suggestions(
@@ -167,6 +170,7 @@ class SuggestionService:
         household_id: Optional[str] = None,
         *,
         today: Optional[date] = None,
+        now: Optional[Callable[[], float]] = None,
     ) -> Dict[str, Any]:
         """
         Returns SuggestionResult-shaped dict:
@@ -177,6 +181,8 @@ class SuggestionService:
 
         if today is None:
             today = date.today()
+
+        clock = now or time.time
 
         if household_id is None:
             household_id = self._get_household_id(user_id)
@@ -259,13 +265,13 @@ class SuggestionService:
             }
 
         cache_key_full = self._build_suggestion_cache_key(
-            user_id, household_id, pantry, ingredient_list
+            user_id, household_id, pantry, ingredient_list, user_prefs
         )
         ck = f"{user_id}:{household_id or ''}:{cache_key_full}"
         ent = self._result_cache.get(ck)
         if ent:
             payload, ts = ent
-            if time.time() - ts < SUGGESTION_CACHE_TTL_SECONDS:
+            if clock() - ts < SUGGESTION_CACHE_TTL_SECONDS:
                 return payload
 
         candidates = self.fetch_candidate_recipes(
@@ -316,7 +322,7 @@ class SuggestionService:
         for key in results:
             results[key].sort(key=lambda r: float(r.get("score") or 0.0), reverse=True)
 
-        self._result_cache[ck] = (results, time.time())
+        self._result_cache[ck] = (results, clock())
         return results
 
     def score_recipe(

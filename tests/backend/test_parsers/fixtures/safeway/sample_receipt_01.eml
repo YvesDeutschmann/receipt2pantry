@@ -1,0 +1,125 @@
+From: "Safeway" <safeway@p.safeway.com>
+To: "Shopper" <shopper@example.com>
+Subject: Your Receipt From Safeway
+MIME-Version: 1.0
+Content-Type: multipart/alternative; boundary="bnd=_safeway_fixture_01"
+
+This is a multi-part message in MIME format.
+
+--bnd=_safeway_fixture_01
+Content-Type: text/plain; charset="utf-8"
+Content-Transfer-Encoding: 8bit
+
+Thanks for shopping with Safeway!
+
+Here is your receipt from 10/01/2025.
+
+Order Details
+
+GROCERY
+
+Pantry Line Alpha
+
+$1.00
+
+Quantity: 1
+
+Pantry Line Bravo
+
+$1.00
+
+Quantity: 1
+
+Pantry Line Charlie
+
+$1.00
+
+Quantity: 1
+
+Pantry Line Delta
+
+$1.00
+
+Quantity: 1
+
+Pantry Line Echo
+
+$1.00
+
+Quantity: 1
+
+Pantry Line Foxtrot
+
+$1.00
+
+Quantity: 1
+
+Pantry Line Golf
+
+$1.00
+
+Quantity: 1
+
+Pantry Line Hotel
+
+$1.00
+
+Quantity: 1
+
+Pantry Line India
+
+$1.00
+
+Quantity: 1
+
+Pantry Line Juliet
+
+$1.00
+
+Quantity: 1
+
+Pantry Line Kilo
+
+$1.00
+
+Quantity: 1
+
+Pantry Line Lima
+
+$1.00
+
+Quantity: 1
+
+Total Items (12)
+
+$12.00
+
+Subtotal
+
+$12.00
+
+Taxes and Fees
+
+$0.50
+
+Total
+
+$12.50
+
+Transaction Details
+
+Card ending in 0000
+
+Amount
+
+$12.50
+
+Reference Number
+
+811529499001
+
+Authorization Date
+
+Oct 01, 2025
+
+--bnd=_safeway_fixture_01--

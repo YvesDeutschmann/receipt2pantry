@@ -8,7 +8,7 @@ import re
 import time
 import requests
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 
 from backend.providers.playwright_provider import PlaywrightProvider
 from backend.providers.provider_registry import register_provider
@@ -72,6 +72,25 @@ def verify_costco_client_identifier() -> dict:
         return {"valid": False, "current": None, "expected": COSTCO_CLIENT_IDENTIFIER, "error": "site_context config not found"}
     except Exception as e:
         return {"valid": False, "current": None, "expected": COSTCO_CLIENT_IDENTIFIER, "error": str(e)}
+
+
+def _mfa_payload_from_graphql_errors(errors: List[Any]) -> Optional[Dict[str, Any]]:
+    """If GraphQL errors indicate device verification / MFA, return session id and options."""
+    for err in errors:
+        if not isinstance(err, dict):
+            continue
+        msg = (err.get("message") or "").lower()
+        ext = err.get("extensions") or {}
+        code = str(ext.get("code") or "").upper()
+        if code in ("DEVICE_VERIFICATION_REQUIRED", "DEVICE_VERIFICATION") or (
+            "device" in msg and "verif" in msg
+        ):
+            return {
+                "message": err.get("message") or "Device verification required",
+                "session_id": ext.get("sessionId") or ext.get("session_id"),
+                "options": ext.get("verificationOptions") or ext.get("options") or ext,
+            }
+    return None
 
 
 # Azure AD B2C Configuration for Costco
@@ -266,36 +285,65 @@ class CostcoProvider(PlaywrightProvider):
             logger.error(f"Unexpected error during token refresh: {e}")
             raise AuthenticationException(f"Token refresh failed: {str(e)}")
     
-    def fetch_receipts_via_api(self, id_token: str, days: int = 90, client_identifier: Optional[str] = None) -> List[Dict]:
-        """Fetch receipts directly via Costco's GraphQL API"""
+    def fetch_receipts_via_api(
+        self,
+        id_token: str,
+        days: int = 90,
+        client_identifier: Optional[str] = None,
+        refresh_token: Optional[str] = None,
+        refresh_token_client_id: Optional[str] = None,
+        token_refresh_sink: Optional[Dict[str, Any]] = None,
+    ) -> List[Dict]:
+        """Fetch receipts directly via Costco's GraphQL API.
+
+        On HTTP 401, attempts at most one token refresh (when ``refresh_token`` is provided)
+        and retries the GraphQL request once. Surplus 401 responses raise AuthenticationException.
+        """
         logger.info(f"Fetching Costco receipts via API for last {days} days")
-        
+
         if self._is_token_expired(id_token):
             raise AuthenticationException("The provided idToken has expired. Please provide a fresh token.")
-        
+
         end_date = datetime.now()
         start_date = end_date - timedelta(days=days)
         start_str = start_date.strftime("%m/%d/%Y")
         end_str = end_date.strftime("%m/%d/%Y")
-        
+
         payload = {
             "query": RECEIPTS_QUERY,
             "variables": {
                 "startDate": start_str,
                 "endDate": end_str,
                 "documentType": "all",
-                "documentSubType": "all"
-            }
+                "documentSubType": "all",
+            },
         }
-        headers = self._get_api_headers(id_token, client_identifier)
-        
-        try:
-            response = requests.post(
+
+        current_id_token = id_token
+        current_refresh_token = refresh_token
+
+        def _post_graphql(tok: str) -> requests.Response:
+            return requests.post(
                 COSTCO_GRAPHQL_ENDPOINT,
                 data=json.dumps(payload),
-                headers=headers,
-                timeout=30
+                headers=self._get_api_headers(tok, client_identifier),
+                timeout=30,
             )
+
+        try:
+            response = _post_graphql(current_id_token)
+            if response.status_code == 401 and current_refresh_token:
+                new_tokens = self._refresh_id_token(
+                    current_refresh_token,
+                    id_token=current_id_token,
+                    client_id=refresh_token_client_id,
+                )
+                current_id_token = new_tokens["idToken"]
+                current_refresh_token = new_tokens.get("refreshToken") or current_refresh_token
+                if token_refresh_sink is not None:
+                    token_refresh_sink.update(new_tokens)
+                response = _post_graphql(current_id_token)
+
             if response.status_code == 401:
                 error_text = response.text[:500] if response.text else "No error details"
                 logger.error(f"Costco API returned 401 Unauthorized. Response: {error_text}")
@@ -304,25 +352,34 @@ class CostcoProvider(PlaywrightProvider):
                 error_text = response.text[:500] if response.text else "No error details"
                 logger.error(f"Costco API returned status {response.status_code}. Response: {error_text}")
                 raise ProviderException(f"Costco API returned status {response.status_code}: {error_text[:200]}")
-            
+
             data = response.json()
-            if 'errors' in data:
-                logger.error(f"GraphQL errors: {data['errors']}")
-                raise ProviderException(f"GraphQL error: {data['errors']}")
-            
-            receipts_data = data.get('data', {}).get('receiptsWithCounts', {})
-            raw_receipts = receipts_data.get('receipts', [])
+            graphql_errors = data.get("errors") or []
+            if graphql_errors:
+                mfa = _mfa_payload_from_graphql_errors(graphql_errors)
+                if mfa is not None:
+                    raise MFARequiredException(
+                        mfa["message"],
+                        session_id=mfa.get("session_id"),
+                        options=mfa.get("options"),
+                    )
+                logger.error(f"GraphQL errors: {graphql_errors}")
+                raise ProviderException(f"GraphQL error: {graphql_errors}")
+
+            receipts_data = data.get("data", {}).get("receiptsWithCounts", {})
+            raw_receipts = receipts_data.get("receipts", [])
             all_count = len(raw_receipts)
             raw_receipts = [
-                r for r in raw_receipts
-                if not is_non_grocery_costco_receipt_type(str(r.get('receiptType') or ''))
+                r
+                for r in raw_receipts
+                if not is_non_grocery_costco_receipt_type(str(r.get("receiptType") or ""))
             ]
             logger.info(
                 "Found %s total receipts via API, %s grocery after filtering out gas/carwash",
                 all_count,
                 len(raw_receipts),
             )
-            
+
             receipts = []
             for raw in raw_receipts:
                 receipt = self._parse_api_receipt(raw)

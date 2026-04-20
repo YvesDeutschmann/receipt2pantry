@@ -37,7 +37,12 @@ class MealPlanService:
         self.household_service = household_service
     
     async def start_wizard(
-        self, user_id: str, household_id: str, meal_slots: Dict, start_date: date
+        self,
+        user_id: str,
+        household_id: str,
+        meal_slots: Dict,
+        start_date: date,
+        now: Optional[datetime] = None,
     ) -> Dict:
         """
         Start meal planning wizard session
@@ -47,10 +52,20 @@ class MealPlanService:
             household_id: Household ID
             meal_slots: Dictionary with breakfast, lunch, dinner booleans
             start_date: Start date for meal plan
+            now: Reference datetime for deterministic testing (defaults to utcnow)
         
         Returns:
             Dictionary with session_id, household_member_count, session_pantry
         """
+        if now is None:
+            now = datetime.utcnow()
+
+        # Validate meal_slots — at least one slot must be True
+        if not any(meal_slots.get(slot) for slot in ("breakfast", "lunch", "dinner")):
+            raise ValidationException(
+                "At least one meal slot (breakfast, lunch, or dinner) must be enabled"
+            )
+
         try:
             # Check for existing active session
             client = self.supabase.admin_client if self.supabase.admin_client else self.supabase.client
@@ -58,7 +73,7 @@ class MealPlanService:
                 client.table("meal_plan_wizard_session")
                 .select("*")
                 .eq("household_id", household_id)
-                .gt("expires_at", datetime.utcnow().isoformat())
+                .gt("expires_at", now.isoformat())
                 .execute()
             )
             
@@ -90,7 +105,7 @@ class MealPlanService:
                     }
             
             # Create wizard session
-            expires_at = datetime.utcnow() + timedelta(hours=2)
+            expires_at = now + timedelta(hours=2)
             session_data = {
                 "household_id": household_id,
                 "user_id": user_id,
@@ -136,7 +151,7 @@ class MealPlanService:
             raise DatabaseException(f"Failed to start wizard: {error_msg}")
     
     async def get_recipe_suggestions(
-        self, session_id: str, meal_type: str, threshold: float = 0.9
+        self, session_id: str, meal_type: str, threshold: float = 0.9, now: Optional[datetime] = None
     ) -> List[Dict]:
         """
         Get recipe suggestions for current session pantry
@@ -149,6 +164,9 @@ class MealPlanService:
         Returns:
             List of recipe dictionaries
         """
+        if now is None:
+            now = datetime.utcnow()
+
         try:
             # Get session
             client = self.supabase.admin_client if self.supabase.admin_client else self.supabase.client
@@ -164,9 +182,10 @@ class MealPlanService:
             
             session = session_response.data[0]
             
-            # Check expiration
+            # Check expiration using injected now
             expires_at = datetime.fromisoformat(session["expires_at"].replace("Z", "+00:00"))
-            if expires_at < datetime.utcnow().replace(tzinfo=expires_at.tzinfo):
+            now_aware = now.replace(tzinfo=expires_at.tzinfo) if expires_at.tzinfo else now
+            if expires_at < now_aware:
                 raise ValidationException("Wizard session expired")
             
             session_pantry = session.get("session_pantry", {})
@@ -179,7 +198,7 @@ class MealPlanService:
                 client.table("recipe_bans")
                 .select("recipe_id")
                 .eq("user_id", user_id)
-                .gt("expires_at", datetime.utcnow().isoformat())
+                .gt("expires_at", now.isoformat())
                 .execute()
             )
             banned_recipe_ids = [str(b["recipe_id"]) for b in (banned_response.data or [])]
@@ -244,7 +263,7 @@ class MealPlanService:
             
             # If no matches at threshold, try lower thresholds
             if not filtered_recipes and threshold > 0.7:
-                return await self.get_recipe_suggestions(session_id, meal_type, threshold - 0.1)
+                return await self.get_recipe_suggestions(session_id, meal_type, threshold - 0.1, now=now)
             
             # If still no matches and breakfast/lunch, suggest staples
             if not filtered_recipes and meal_type in ["breakfast", "lunch"]:
@@ -414,7 +433,14 @@ class MealPlanService:
             logger.error(f"Failed to reject recipe: {e}")
             raise DatabaseException(f"Failed to reject recipe: {e}")
     
-    async def ban_recipe(self, session_id: str, recipe_id: str, recipe_name: str, user_id: str) -> None:
+    async def ban_recipe(
+        self,
+        session_id: str,
+        recipe_id: str,
+        recipe_name: str,
+        user_id: str,
+        now: Optional[datetime] = None,
+    ) -> None:
         """
         Ban a recipe for 6 months (hard reject)
         
@@ -423,7 +449,11 @@ class MealPlanService:
             recipe_id: Recipe ID (Spoonacular ID or staple meal ID)
             recipe_name: Recipe name for display
             user_id: User ID
+            now: Reference datetime for deterministic testing (defaults to utcnow)
         """
+        if now is None:
+            now = datetime.utcnow()
+
         try:
             # Normalize recipe_id to string
             recipe_id = str(recipe_id)
@@ -449,21 +479,20 @@ class MealPlanService:
                 .execute()
             )
             
+            expires_at = now + timedelta(days=180)  # 6 months
             if ban_response.data:
                 # Already banned, update expires_at to extend ban
-                expires_at = datetime.utcnow() + timedelta(days=180)  # 6 months
                 client.table("recipe_bans").update({
                     "expires_at": expires_at.isoformat(),
-                    "banned_at": datetime.utcnow().isoformat()
+                    "banned_at": now.isoformat()
                 }).eq("user_id", user_id).eq("recipe_id", recipe_id).execute()
             else:
                 # Create new ban
-                expires_at = datetime.utcnow() + timedelta(days=180)  # 6 months
                 ban_data = {
                     "user_id": user_id,
                     "recipe_id": recipe_id,
                     "recipe_name": recipe_name,
-                    "banned_at": datetime.utcnow().isoformat(),
+                    "banned_at": now.isoformat(),
                     "expires_at": expires_at.isoformat()
                 }
                 client.table("recipe_bans").insert(ban_data).execute()
@@ -773,7 +802,7 @@ class MealPlanService:
             logger.error(f"Failed to mark leftover: {e}")
             raise DatabaseException(f"Failed to mark leftover: {e}")
     
-    async def complete_wizard(self, session_id: str) -> Dict:
+    async def complete_wizard(self, session_id: str, now: Optional[datetime] = None) -> Dict:
         """
         Complete wizard and generate shopping list
         
@@ -783,6 +812,9 @@ class MealPlanService:
         Returns:
             Dictionary with summary and shopping list
         """
+        if now is None:
+            now = datetime.utcnow()
+
         try:
             from backend.services.shopping_list_service import ShoppingListService
             
@@ -802,7 +834,7 @@ class MealPlanService:
             household_id = session["household_id"]
             
             # Get meal plans created in this session (last 2 hours)
-            two_hours_ago = (datetime.utcnow() - timedelta(hours=2)).isoformat()
+            two_hours_ago = (now - timedelta(hours=2)).isoformat()
             meals_response = (
                 client.table("meal_plan")
                 .select("*")
