@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { render, screen, within, waitFor, act, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { expectNotBlocked } from './helpers/invariants'
+import { OnboardingProvider } from '../contexts/OnboardingContext'
 import StaplesTemplate from '../pages/onboarding/StaplesTemplate'
 
 const { hapticImpact } = vi.hoisted(() => ({
@@ -15,6 +16,14 @@ vi.mock('@capacitor/haptics', () => ({
 }))
 
 const mockApi = vi.hoisted(() => ({
+  getHousehold: vi.fn().mockResolvedValue({
+    household: {
+      id: 'household-test',
+      size: 2,
+      dietary_restrictions: [],
+    },
+  }),
+  createHousehold: vi.fn(),
   getStaplesTemplate: vi.fn(),
   getStaplesReceiptMatches: vi.fn(),
   confirmStaples: vi.fn(),
@@ -99,7 +108,14 @@ function renderStaples() {
   return render(
     <MemoryRouter initialEntries={['/onboarding/pantry-setup']}>
       <Routes>
-        <Route path="/onboarding/pantry-setup" element={<StaplesTemplate />} />
+        <Route
+          path="/onboarding/pantry-setup"
+          element={
+            <OnboardingProvider>
+              <StaplesTemplate />
+            </OnboardingProvider>
+          }
+        />
         <Route path="/" element={<div data-testid="home-dest">Home</div>} />
         <Route path="/onboarding/bridge" element={<div data-testid="bridge-dest">Bridge</div>} />
       </Routes>

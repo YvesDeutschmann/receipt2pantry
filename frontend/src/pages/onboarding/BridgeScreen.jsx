@@ -1,40 +1,19 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useAuth } from '../../contexts/AuthContext'
 import { useOnboarding } from '../../contexts/OnboardingContext'
-import { api } from '../../services/apiClient'
-import { supabase } from '../../services/supabaseClient'
 
 function BridgeScreen() {
   const navigate = useNavigate()
-  const { user, session } = useAuth()
-  const { householdSize, dietaryRestrictions } = useOnboarding()
+  const { completeBridge } = useOnboarding()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
-
-  const getSignupMethod = () => {
-    const provider = session?.provider ?? user?.app_metadata?.provider ?? user?.identities?.[0]?.provider
-    if (provider === 'apple') return 'apple'
-    if (provider === 'google') return 'google'
-    return 'email'
-  }
 
   const proceedFromBridge = async (navigateTo, coldStartMeta) => {
     setError(null)
     setLoading(true)
     try {
-      await api.updateHouseholdProfile(user.id, {
-        size: householdSize,
-        dietaryRestrictions,
-      })
-
-      await supabase.auth.updateUser({
-        data: {
-          cold_start_step: 1,
-          signup_method: getSignupMethod(),
-          ...coldStartMeta,
-        },
-      })
+      const ok = await completeBridge(coldStartMeta)
+      if (!ok) return
 
       navigate(navigateTo, { replace: true })
     } catch (err) {
