@@ -16,8 +16,8 @@ import {
 import { motion, AnimatePresence } from 'framer-motion'
 import { useAuth } from '../../contexts/AuthContext'
 import { useColdStart } from '../../contexts/ColdStartContext'
+import { useOnboarding } from '../../contexts/OnboardingContext'
 import { api } from '../../services/apiClient'
-import { supabase } from '../../services/supabaseClient'
 import ColdStartProgressBar from '../../components/ColdStartProgressBar'
 import PantrySearchOverlay from '../../components/PantrySearchOverlay'
 import VoiceInputSheet from '../../components/voice/VoiceInputSheet'
@@ -138,7 +138,8 @@ function CategorySection({ name, items, selectedSet, preSelectedSet, receiptMatc
 
 export default function StaplesTemplate() {
   const navigate = useNavigate()
-  const { user, session } = useAuth()
+  const { user } = useAuth()
+  const { complete } = useOnboarding()
   const { setReceiptSyncStatus, setReceiptMatchCount } = useColdStart()
   const userId = user?.id
 
@@ -157,14 +158,6 @@ export default function StaplesTemplate() {
   const [pantryBases, setPantryBases] = useState([])
 
   const initialSelectedRef = useRef(null)
-
-  const getSignupMethod = () => {
-    const provider =
-      session?.provider ?? user?.app_metadata?.provider ?? user?.identities?.[0]?.provider
-    if (provider === 'apple') return 'apple'
-    if (provider === 'google') return 'google'
-    return 'email'
-  }
 
   const isDirty = useMemo(() => {
     if (!initialSelectedRef.current) return false
@@ -266,19 +259,6 @@ export default function StaplesTemplate() {
     void selectionHaptic()
   }
 
-  const completeOnboardingMeta = async (extra = {}) => {
-    await supabase.auth.updateUser({
-      data: {
-        onboarding_completed_at: new Date().toISOString(),
-        signup_method: getSignupMethod(),
-        cold_start_step: 2,
-        cold_start_pantry_template_completed_at: new Date().toISOString(),
-        whats_for_dinner_unlocked: true,
-        ...extra,
-      },
-    })
-  }
-
   const fireSuggestionPoolWarmup = () => {
     if (!userId) return
     void api.suggestions
@@ -295,7 +275,7 @@ export default function StaplesTemplate() {
         ? Array.from(preSelectedDefaults)
         : Array.from(selected)
       const result = await api.confirmStaples(userId, list, opts.skip)
-      await completeOnboardingMeta()
+      await complete()
       setJustUnlocked(true)
       const n = result.receipt_matched ?? 0
       if (n > 0) {
@@ -325,7 +305,7 @@ export default function StaplesTemplate() {
     setSubmitting(true)
     try {
       await api.confirmStaples(userId, Array.from(selected), false)
-      await completeOnboardingMeta()
+      await complete()
       fireSuggestionPoolWarmup()
       navigate('/', { replace: true })
     } catch (e) {
@@ -514,7 +494,7 @@ export default function StaplesTemplate() {
           if (!userId) return
           const list = Array.from(selected)
           const result = await api.confirmStaples(userId, list, false)
-          await completeOnboardingMeta()
+          await complete()
           fireSuggestionPoolWarmup()
           setJustUnlocked(true)
           const n = result.receipt_matched ?? 0

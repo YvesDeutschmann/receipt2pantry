@@ -1,13 +1,45 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react'
 import { useAuth } from './AuthContext'
 import { api } from '../services/apiClient'
+import { supabase } from '../services/supabaseClient'
 
 const OnboardingContext = createContext(null)
 
 const DEFAULT_HOUSEHOLD_NAME = 'My Household'
 
-export function OnboardingProvider({ children }) {
-  const { user } = useAuth()
+/** Ordered onboarding sub-flow steps (cold-start arc). */
+export const ONBOARDING_STEP_NAMES = [
+  'household_size',
+  'dietary_restrictions',
+  'bridge',
+  'staples',
+]
+
+/**
+ * @param {object} props
+ * @param {import('react').ReactNode} props.children
+ * @param {{ current: (() => void) | null } | undefined} props.renderProbeRef — optional; assigns a no-arg fn that triggers an internal re-render (tests only).
+ */
+export function OnboardingProvider({ children, renderProbeRef }) {
+  const { user, session, loading: authLoading } = useAuth()
+
+  const getSignupMethod = useCallback(() => {
+    const provider =
+      session?.provider ??
+      user?.app_metadata?.provider ??
+      user?.identities?.[0]?.provider
+    if (provider === 'apple') return 'apple'
+    if (provider === 'google') return 'google'
+    return 'email'
+  }, [user, session])
   const [householdId, setHouseholdId] = useState(null)
   const [householdSize, setHouseholdSize] = useState(2)
   const [dietaryRestrictions, setDietaryRestrictions] = useState([])
@@ -16,6 +48,21 @@ export function OnboardingProvider({ children }) {
   const [householdReady, setHouseholdReady] = useState(false)
   const [householdLoading, setHouseholdLoading] = useState(true)
   const [householdError, setHouseholdError] = useState(null)
+
+  const [completedUpTo, setCompletedUpTo] = useState(-1)
+  const completionSentRef = useRef(false)
+  const [, setRenderProbe] = useState(0)
+
+  useEffect(() => {
+    if (renderProbeRef && typeof renderProbeRef === 'object') {
+      renderProbeRef.current = () => setRenderProbe((n) => n + 1)
+    }
+    return () => {
+      if (renderProbeRef && typeof renderProbeRef === 'object') {
+        renderProbeRef.current = null
+      }
+    }
+  }, [renderProbeRef])
 
   useEffect(() => {
     if (!user?.id) {
@@ -60,38 +107,51 @@ export function OnboardingProvider({ children }) {
     return () => { cancelled = true }
   }, [user?.id])
 
-  const setSize = (n) => {
-    setHouseholdSize(Math.max(1, Math.min(99, n)))
-  }
+  const setSize = useCallback(
+    (n) => {
+      if (authLoading) return
+      setHouseholdSize(Math.max(1, Math.min(99, n)))
+    },
+    [authLoading]
+  )
 
-  const toggleRestriction = (code) => {
-    if (code === 'other') return
-    setNoRestrictions(false)
-    setDietaryRestrictions((prev) =>
-      prev.includes(code) ? prev.filter((r) => r !== code) : [...prev, code]
-    )
-  }
+  const toggleRestriction = useCallback(
+    (code) => {
+      if (authLoading) return
+      if (code === 'other') return
+      setNoRestrictions(false)
+      setDietaryRestrictions((prev) =>
+        prev.includes(code) ? prev.filter((r) => r !== code) : [...prev, code]
+      )
+    },
+    [authLoading]
+  )
 
-  const setRestrictionsAffirmativeNone = () => {
+  const setRestrictionsAffirmativeNone = useCallback(() => {
+    if (authLoading) return
     setDietaryRestrictions([])
     setOtherRestriction('')
     setNoRestrictions(true)
-  }
+  }, [authLoading])
 
-  const addOtherRestriction = (text) => {
-    setOtherRestriction(text)
-    setNoRestrictions(false)
-    if (text.trim()) {
-      setDietaryRestrictions((prev) => {
-        const withoutOther = prev.filter((r) => r !== 'other')
-        return [...withoutOther, 'other']
-      })
-    } else {
-      setDietaryRestrictions((prev) => prev.filter((r) => r !== 'other'))
-    }
-  }
+  const addOtherRestriction = useCallback(
+    (text) => {
+      if (authLoading) return
+      setOtherRestriction(text)
+      setNoRestrictions(false)
+      if (text.trim()) {
+        setDietaryRestrictions((prev) => {
+          const withoutOther = prev.filter((r) => r !== 'other')
+          return [...withoutOther, 'other']
+        })
+      } else {
+        setDietaryRestrictions((prev) => prev.filter((r) => r !== 'other'))
+      }
+    },
+    [authLoading]
+  )
 
-  const getEffectiveRestrictions = () => {
+  const dietaryRestrictionsEffective = useMemo(() => {
     if (noRestrictions) return []
     const base = [...dietaryRestrictions]
     if (otherRestriction.trim()) {
@@ -99,23 +159,132 @@ export function OnboardingProvider({ children }) {
       if (!hasOther) base.push('other')
     }
     return base
-  }
+  }, [noRestrictions, dietaryRestrictions, otherRestriction])
 
-  const value = {
-    householdId,
-    householdSize,
-    setHouseholdSize: setSize,
-    dietaryRestrictions: getEffectiveRestrictions(),
-    rawDietaryRestrictions: dietaryRestrictions,
-    noRestrictions,
-    toggleRestriction,
-    setRestrictionsAffirmativeNone,
-    otherRestriction,
-    setOtherRestriction: addOtherRestriction,
-    householdReady,
-    householdLoading,
-    householdError,
-  }
+  const stepsComplete = useMemo(
+    () =>
+      Object.fromEntries(
+        ONBOARDING_STEP_NAMES.map((name, i) => [name, i <= completedUpTo])
+      ),
+    [completedUpTo]
+  )
+
+  const advanceStep = useCallback(() => {
+    if (authLoading) return
+    setCompletedUpTo((u) =>
+      Math.min(u + 1, ONBOARDING_STEP_NAMES.length - 1)
+    )
+  }, [authLoading])
+
+  const completeStep = useCallback(
+    (stepName) => {
+      if (authLoading) return false
+      const idx = ONBOARDING_STEP_NAMES.indexOf(stepName)
+      if (idx === -1) return false
+      if (idx !== completedUpTo + 1) return false
+      setCompletedUpTo(idx)
+      return true
+    },
+    [authLoading, completedUpTo]
+  )
+
+  const resetOnboarding = useCallback(() => {
+    if (authLoading) return
+    setCompletedUpTo(-1)
+  }, [authLoading])
+
+  const complete = useCallback(
+    async (extra = {}) => {
+      if (authLoading) return
+      if (completionSentRef.current) return
+      completionSentRef.current = true
+      const now = new Date().toISOString()
+      await supabase.auth.updateUser({
+        data: {
+          onboarding_completed_at: now,
+          cold_start_pantry_template_completed_at: now,
+          cold_start_step: 2,
+          signup_method: getSignupMethod(),
+          whats_for_dinner_unlocked: true,
+          ...extra,
+        },
+      })
+    },
+    [authLoading, getSignupMethod]
+  )
+
+  const completeBridge = useCallback(
+    async (extra = {}) => {
+      if (authLoading) return false
+      if (!user?.id) {
+        throw new Error('Not signed in')
+      }
+      await api.updateHouseholdProfile(user.id, {
+        size: householdSize,
+        dietaryRestrictions: dietaryRestrictionsEffective,
+      })
+      await supabase.auth.updateUser({
+        data: {
+          cold_start_step: 1,
+          signup_method: getSignupMethod(),
+          ...extra,
+        },
+      })
+      return true
+    },
+    [
+      authLoading,
+      user?.id,
+      householdSize,
+      dietaryRestrictionsEffective,
+      getSignupMethod,
+    ]
+  )
+
+  const value = useMemo(
+    () => ({
+      householdId,
+      householdSize,
+      setHouseholdSize: setSize,
+      dietaryRestrictions: dietaryRestrictionsEffective,
+      rawDietaryRestrictions: dietaryRestrictions,
+      noRestrictions,
+      toggleRestriction,
+      setRestrictionsAffirmativeNone,
+      otherRestriction,
+      setOtherRestriction: addOtherRestriction,
+      householdReady,
+      householdLoading,
+      householdError,
+      stepsComplete,
+      advanceStep,
+      completeStep,
+      resetOnboarding,
+      complete,
+      completeBridge,
+    }),
+    [
+      householdId,
+      householdSize,
+      setSize,
+      dietaryRestrictionsEffective,
+      dietaryRestrictions,
+      noRestrictions,
+      toggleRestriction,
+      setRestrictionsAffirmativeNone,
+      otherRestriction,
+      addOtherRestriction,
+      householdReady,
+      householdLoading,
+      householdError,
+      stepsComplete,
+      advanceStep,
+      completeStep,
+      resetOnboarding,
+      complete,
+      completeBridge,
+    ]
+  )
 
   return (
     <OnboardingContext.Provider value={value}>
