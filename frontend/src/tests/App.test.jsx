@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
-import App from '../App'
+
+const { getHousehold, getPantry } = vi.hoisted(() => ({
+  getHousehold: vi.fn(),
+  getPantry: vi.fn(),
+}))
 
 // Mock AuthContext to provide authenticated user for tests
 vi.mock('../contexts/AuthContext', () => ({
@@ -22,7 +26,26 @@ vi.mock('../contexts/AuthContext', () => ({
   }),
 }))
 
+vi.mock('../services/apiClient', () => ({
+  api: {
+    getHousehold,
+    getPantry,
+  },
+}))
+
+vi.mock('../services/supabaseClient', () => ({
+  supabase: { auth: { updateUser: vi.fn() } },
+}))
+
+import App from '../App'
+
 describe('App', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getHousehold.mockResolvedValue({ household: null })
+    getPantry.mockResolvedValue({ grouped: [] })
+  })
+
   it('renders without crashing', () => {
     render(<App />)
     // Check for header navigation (or dashboard content)
@@ -38,4 +61,3 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: /settings/i })).toBeInTheDocument()
   })
 })
-
