@@ -302,6 +302,16 @@ export const api = {
     return response.data
   },
 
+  /** Dev only: load data/fixtures into DB via the real ingest + pantry pipeline */
+  devLoadMockReceipts: async (provider = 'all', options = {}) => {
+    const { reset = false } = options
+    const response = await apiClient.post('/dev/load-mock-receipts', {
+      provider,
+      reset,
+    })
+    return response.data
+  },
+
   // Pantry Management
   getPantry: async (userId, householdId = null) => {
     const params = householdId ? { household_id: householdId } : {}

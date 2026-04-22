@@ -114,9 +114,9 @@ const MfaDialog = ({
         </div>
 
         {/* Timer */}
-        <div className="mb-4 flex items-center justify-between bg-blue-50 border border-blue-200 rounded-lg px-4 py-2">
-          <span className="text-sm text-blue-800">Time remaining:</span>
-          <span className="font-mono text-lg font-semibold text-blue-900">
+        <div className="mb-4 alert alert-info flex items-center justify-between gap-3">
+          <span className="text-sm">Time remaining</span>
+          <span className="font-mono text-lg font-semibold">
             {formatTime(timeRemaining)}
           </span>
         </div>
@@ -147,7 +147,7 @@ const MfaDialog = ({
               aria-invalid={error ? 'true' : 'false'}
               aria-describedby={error ? 'mfa-error' : undefined}
             />
-            <p className="mt-2 text-xs text-gray-500 text-center">
+            <p className="mt-2 text-xs text-sage-light text-center">
               Enter the 6-digit code
             </p>
           </div>
@@ -156,10 +156,10 @@ const MfaDialog = ({
           {error && (
             <div
               id="mfa-error"
-              className="mb-4 p-3 bg-[var(--color-error)]/10 border border-[var(--color-error)] rounded-mise-md"
+              className="mb-4 alert alert-error"
               role="alert"
             >
-              <p className="text-sm text-red-800">{error}</p>
+              <p className="text-sm">{error}</p>
             </div>
           )}
 
@@ -180,7 +180,7 @@ const MfaDialog = ({
             >
               {loading ? (
                 <span className="flex items-center justify-center">
-                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                  <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-cream" fill="none" viewBox="0 0 24 24">
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>

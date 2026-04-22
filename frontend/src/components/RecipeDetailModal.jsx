@@ -132,9 +132,9 @@ function RecipeDetailModal({
 
               {recipe.summary && (
                 <div>
-                  <h4 className="text-lg font-semibold text-gray-900 mb-2">About</h4>
+                  <h4 className="text-lg font-display font-semibold text-cream mb-2">About</h4>
                   <div
-                    className="text-gray-700 prose prose-sm max-w-none"
+                    className="text-sage-light prose prose-sm max-w-none prose-invert prose-p:leading-relaxed"
                     dangerouslySetInnerHTML={{ __html: recipe.summary }}
                   />
                 </div>
@@ -185,7 +185,7 @@ function RecipeDetailModal({
                                   {step.number}
                                 </div>
                                 <div className="flex-1">
-                                  <p className="text-gray-700">{step.step}</p>
+                                  <p className="text-sage-light">{step.step}</p>
                                   {step.equipment && step.equipment.length > 0 && (
                                     <div className="mt-2 flex flex-wrap gap-2">
                                       {step.equipment.map((eq, eqIndex) => (
@@ -222,7 +222,7 @@ function RecipeDetailModal({
                         href={recipe.sourceUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-primary-600 hover:text-primary-700 text-sm underline"
+                        className="text-terra hover:text-terra-light text-sm underline"
                       >
                         Original Recipe
                       </a>
@@ -232,7 +232,7 @@ function RecipeDetailModal({
                         href={recipe.spoonacularSourceUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="text-primary-600 hover:text-primary-700 text-sm underline"
+                        className="text-terra hover:text-terra-light text-sm underline"
                       >
                         View on Spoonacular
                       </a>
