@@ -1,0 +1,86 @@
+[
+  {
+    "order_id": "dev-mock-SW-001",
+    "order_date": "2026-01-10",
+    "total_amount": 12.34,
+    "num_items": 2,
+    "date": "2026-01-10T11:00:00.000Z",
+    "store": "Safeway - Mock Village",
+    "source": "safeway_instore_api",
+    "items": [
+      {
+        "name": "Organic Bananas",
+        "price": 1.19,
+        "quantity": 2.1,
+        "unit": "lb",
+        "category": "Produce",
+        "regular_price": 1.39,
+        "savings": 0.42
+      },
+      {
+        "name": "Greek Yogurt 32oz",
+        "price": 4.99,
+        "quantity": 1,
+        "unit": "count",
+        "category": "Dairy",
+        "regular_price": 6.49,
+        "savings": 1.5
+      }
+    ]
+  },
+  {
+    "order_id": "dev-mock-SW-002",
+    "order_date": "2025-11-22",
+    "total_amount": 8.5,
+    "num_items": 1,
+    "date": "2025-11-22T19:15:00.000Z",
+    "store": "Safeway - Mockville",
+    "source": "safeway_instore_api",
+    "items": [
+      {
+        "name": "Canned Black Beans 15.5oz",
+        "price": 1.0,
+        "quantity": 5,
+        "unit": "count",
+        "category": "Grocery",
+        "regular_price": 1.29,
+        "savings": 1.45
+      }
+    ]
+  },
+  {
+    "order_id": "dev-mock-SW-003",
+    "order_date": "2026-04-01",
+    "total_amount": 67.12,
+    "num_items": 6,
+    "date": "2026-04-01T15:32:00.000Z",
+    "store": "Safeway - Mock Center",
+    "source": "safeway_instore_api",
+    "items": [
+      { "name": "Ground Beef 80/20", "price": 8.99, "quantity": 1, "unit": "count", "category": "Meat" },
+      { "name": "Whole Milk 1 gal", "price": 3.99, "quantity": 1, "unit": "count", "category": "Dairy" },
+      { "name": "White Bread 24oz", "price": 2.5, "quantity": 2, "unit": "count", "category": "Bakery" },
+      { "name": "Romaine Hearts 3ct", "price": 4.99, "quantity": 1, "unit": "count", "category": "Produce" },
+      { "name": "Pasta 16oz", "price": 1.0, "quantity": 4, "unit": "count", "category": "Grocery", "regular_price": 1.5, "savings": 2.0 },
+      { "name": "Olive Oil 17oz", "price": 6.99, "quantity": 1, "unit": "count", "category": "Grocery" }
+    ]
+  },
+  {
+    "order_id": "dev-mock-SW-004",
+    "order_date": "2024-12-15",
+    "total_amount": 3.5,
+    "num_items": 1,
+    "date": "2024-12-15T10:00:00.000Z",
+    "store": "Safeway - Holiday Mock",
+    "source": "safeway_instore_api",
+    "items": [
+      {
+        "name": "Clementines 3lb",
+        "price": 3.5,
+        "quantity": 1,
+        "unit": "count",
+        "category": "Produce"
+      }
+    ]
+  }
+]
