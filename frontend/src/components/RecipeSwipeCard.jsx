@@ -59,7 +59,7 @@ const RecipeSwipeCard = ({
     >
       {/* Recipe Image */}
       {recipe.image && (
-        <div className="w-full h-64 bg-gray-200 overflow-hidden">
+        <div className="w-full h-64 bg-forest-mid overflow-hidden">
           <img
             src={recipe.image}
             alt={recipe.title}
@@ -77,7 +77,7 @@ const RecipeSwipeCard = ({
         
         {/* Match Percentage Badge */}
         <div className="mb-4">
-          <span className="inline-block px-3 py-1 bg-green-100 text-green-800 rounded-full text-sm font-semibold">
+          <span className="inline-block px-3 py-1 bg-sage/20 text-sage-light rounded-full text-sm font-semibold border border-sage/30">
             {Math.round(matchPercentage * 100)}% Match
           </span>
         </div>
@@ -91,7 +91,7 @@ const RecipeSwipeCard = ({
             {recipe.missedIngredientCount > 0 && (
               <>
                 {' • '}
-                <span className="text-orange-600">
+                <span className="text-terra-light">
                   {recipe.missedIngredientCount} missing
                 </span>
               </>
@@ -137,9 +137,10 @@ const RecipeSwipeCard = ({
 
           {/* Skip Button - Subtle but accessible */}
           {onSkip && (
-            <div className="pt-2 border-t border-gray-200">
+            <div className="pt-2 border-t border-forest-light">
               <button
-                className="w-full text-sm text-gray-500 hover:text-gray-700 py-2 transition-colors"
+                type="button"
+                className="w-full text-sm text-sage-light hover:text-cream py-2 transition-colors"
                 onClick={onSkip}
               >
                 Skip this meal
