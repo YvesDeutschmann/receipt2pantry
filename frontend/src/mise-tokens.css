@@ -14,6 +14,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300;0,9..144,600;0,9..144,700;1,9..144,300;1,9..144,400;1,9..144,600&family=DM+Sans:ital,wght@0,300;0,400;0,500;1,300&display=swap');
 
 :root {
+  color-scheme: dark;
 
   /* ── COLOUR PALETTE ──────────────────────────────────────────
      Forest green is the dominant background colour (60-70% visual weight).
@@ -28,8 +29,9 @@
   --color-forest-light: #2E5C48;   /* Hover states, icon circles */
 
   /* Sage — secondary text and supporting UI */
-  --color-sage:         #5C8A72;   /* Secondary text, icons */
-  --color-sage-light:   #8AB5A0;   /* Muted labels, captions */
+  /* --color-sage: strong forest tint — use for icons, bullets, and accents, NOT for body text on dark (contrast) */
+  --color-sage:         #5C8A72;
+  --color-sage-light:   #A6C7B4;   /* Muted labels, captions — AA+ on dark surfaces */
 
   /* Terracotta — single accent colour for all actions */
   --color-terra:        #C07A52;   /* Primary CTA, active states, alerts */
@@ -42,7 +44,17 @@
   /* Text scale */
   --color-text-primary: #F4EFE6;   /* Headings on dark backgrounds */
   --color-text-mid:     #4A6358;   /* Body text on light backgrounds */
-  --color-text-muted:   #7A9688;   /* Captions, placeholders, meta */
+  --color-text-muted:   #97B3A5;   /* Captions, placeholders, meta — AA on forest-mid */
+
+  /* On cream / “paper” sections — opt-in with .surface-light */
+  --surface-light:          var(--color-cream);
+  --surface-light-elev:     var(--color-cream-dark);
+  --on-surface-light:       #2B3B32;
+  --on-surface-light-mid:   var(--color-text-mid);
+  --on-surface-light-muted: #6B8578;
+
+  /* Desaturated “info” — use instead of default browser blues in dark UI */
+  --color-info:         #7FA6B8;
 
   /* Status colours (use sparingly — terra handles most alerts) */
   --color-success:      #5C8A72;   /* Same as sage — positive states */
@@ -235,8 +247,25 @@ body {
 .text-display   { font-family: var(--font-display); font-size: var(--text-display); font-weight: 600; letter-spacing: var(--tracking-tight); }
 .text-hero      { font-family: var(--font-display); font-size: var(--text-4xl);    font-weight: 600; letter-spacing: var(--tracking-tight); }
 .text-heading   { font-family: var(--font-display); font-size: var(--text-3xl);    font-weight: 600; }
-.text-subhead   { font-family: var(--font-display); font-size: var(--text-2xl);    font-weight: 300; font-style: italic; color: var(--color-terra-light); }
+.text-subhead         { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 300; font-style: italic; color: var(--color-cream); }
+.text-subhead-accent  { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 300; font-style: italic; color: var(--color-terra-light); }
 .text-eyebrow   { font-family: var(--font-body);    font-size: var(--text-xs);     font-weight: 500; letter-spacing: var(--tracking-widest); text-transform: uppercase; color: var(--eyebrow-color); }
+
+/* Light “paper” panel — resets inherited cream text so children use readable dark-on-cream */
+.surface-light {
+  background: var(--surface-light);
+  color: var(--on-surface-light);
+  border-radius: var(--radius-lg);
+}
+.surface-light a {
+  color: var(--color-terra);
+}
+.surface-light a:hover {
+  color: var(--color-terra-light);
+}
+.surface-light .text-muted {
+  color: var(--on-surface-light-muted);
+}
 
 
 /* ── COMPONENT BASE STYLES ────────────────────────────────────────────── */
@@ -329,6 +358,94 @@ body {
 
 .input:focus {
   border-color: var(--input-border-focus);
+}
+
+/* Inputs inside a light “paper” panel */
+.surface-light .input,
+textarea.input-surface,
+input.input-surface {
+  background: var(--surface-light-elev);
+  color: var(--on-surface-light);
+  border: var(--border-default);
+}
+.surface-light .input::placeholder,
+.input-surface::placeholder {
+  color: var(--on-surface-light-muted);
+}
+.surface-light .input:focus,
+.input-surface:focus {
+  border-color: var(--color-terra);
+}
+
+/* Native checkbox — visible on dark and on .surface-light */
+input[type="checkbox"].checkbox {
+  width: 1.125rem;
+  height: 1.125rem;
+  flex-shrink: 0;
+  vertical-align: middle;
+  cursor: pointer;
+  accent-color: var(--color-terra);
+  border: 1.5px solid var(--color-sage-light);
+  border-radius: 0.25rem;
+  background-color: var(--color-forest-light);
+}
+
+.surface-light input[type="checkbox"].checkbox {
+  background-color: var(--surface-light-elev);
+  border-color: var(--on-surface-light-muted);
+}
+
+/* Inline alerts — prefer these over raw Tailwind blues / reds */
+.alert {
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  border: 1px solid;
+  font-size: var(--text-sm);
+  line-height: var(--leading-normal);
+}
+.alert-info {
+  background: color-mix(in srgb, var(--color-info) 18%, transparent);
+  border-color: color-mix(in srgb, var(--color-info) 45%, transparent);
+  color: var(--color-cream);
+}
+.alert-success {
+  background: color-mix(in srgb, var(--color-success) 18%, transparent);
+  border-color: color-mix(in srgb, var(--color-success) 45%, transparent);
+  color: var(--color-cream);
+}
+.alert-warning {
+  background: color-mix(in srgb, var(--color-warning) 18%, transparent);
+  border-color: color-mix(in srgb, var(--color-warning) 45%, transparent);
+  color: var(--color-cream);
+}
+.alert-error {
+  background: color-mix(in srgb, var(--color-error) 18%, transparent);
+  border-color: color-mix(in srgb, var(--color-error) 45%, transparent);
+  color: var(--color-cream);
+}
+
+/* Same alert shapes on .surface-light — use dark text for contrast on cream */
+.surface-light .alert-info,
+.surface-light .alert-success,
+.surface-light .alert-warning,
+.surface-light .alert-error {
+  color: var(--on-surface-light);
+}
+.surface-light .alert-info {
+  background: color-mix(in srgb, var(--color-info) 22%, var(--surface-light));
+  border-color: color-mix(in srgb, var(--color-info) 50%, var(--on-surface-light-muted));
+}
+.surface-light .alert-success {
+  background: color-mix(in srgb, var(--color-success) 22%, var(--surface-light));
+  border-color: color-mix(in srgb, var(--color-success) 50%, var(--on-surface-light-muted));
+}
+.surface-light .alert-warning {
+  background: color-mix(in srgb, var(--color-warning) 22%, var(--surface-light));
+  border-color: color-mix(in srgb, var(--color-warning) 50%, var(--on-surface-light-muted));
+}
+.surface-light .alert-error {
+  background: color-mix(in srgb, var(--color-error) 18%, var(--surface-light));
+  border-color: color-mix(in srgb, var(--color-error) 50%, var(--on-surface-light-muted));
 }
 
 /* Chip / tag */

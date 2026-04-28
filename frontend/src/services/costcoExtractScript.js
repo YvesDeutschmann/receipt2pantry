@@ -49,7 +49,11 @@ export function getExtractScript(graphqlUrl) {
   function findIdToken(st){try{for(var i=0;i<st.length;i++){var k=st.key(i);try{var val=JSON.parse(st.getItem(k));if(val&&val.credentialType==='IdToken'&&val.environment==='signin.costco.com')return val.secret;}catch(e){}}}catch(_){}return null;}
   function findAccessToken(st){try{for(var i=0;i<st.length;i++){var k=st.key(i);try{var val=JSON.parse(st.getItem(k));if(val&&val.credentialType==='AccessToken'&&val.environment==='signin.costco.com')return val.secret;}catch(e){}}}catch(_){}return null;}
 
-  function postDebug(msg,data){try{if(window.mobileApp&&typeof window.mobileApp.postMessage==='function'){window.mobileApp.postMessage(JSON.stringify({detail:{type:'costco-webview-fetch-debug',message:msg,data:data||{}}}));}}catch(_){}}
+  // IMPORTANT (iOS): pass an OBJECT, not a JSON string. The iOS @capgo/inappbrowser plugin casts
+  // \`message.body as? [String: Any]\` — if it's a String the cast fails and the event arrives as
+  // { rawMessage: '...' }, hiding type/payload from the bridge listener. The Android wrapper
+  // stringifies objects for us (\`typeof===string?message:JSON.stringify(message)\`).
+  function postDebug(msg,data){try{if(window.mobileApp&&typeof window.mobileApp.postMessage==='function'){window.mobileApp.postMessage({detail:{type:'costco-webview-fetch-debug',message:msg,data:data||{}}});}}catch(_){}}
 
   if(!window.__costcoOpenWrapped){window.__costcoOpenWrapped=true;(function(){var origOpen=window.open;window.open=function(url,target,features){try{postDebug('window-open-intercepted',{url:String(url||'').slice(0,500),target:target||'',features:String(features||'').slice(0,200)});}catch(_){}return origOpen?origOpen.apply(this,arguments):null;};})();}
 
@@ -77,8 +81,7 @@ export function getExtractScript(graphqlUrl) {
     try{if(window.mobileApp&&typeof window.mobileApp.postMessage==='function'){
       window.__costcoReceiptsPosted=true;
       var token=accT||idT;
-      var payload=JSON.stringify({detail:{type:'costco-receipts',receipts:receipts||[],idToken:token||idT,accessToken:accT||null,clientID:c,wcsClientId:wcsCid,refreshToken:rt,refreshTokenClientId:rtCid,userAgent:userAgent||(navigator.userAgent||'')}});
-      window.mobileApp.postMessage(payload);
+      window.mobileApp.postMessage({detail:{type:'costco-receipts',receipts:receipts||[],idToken:token||idT,accessToken:accT||null,clientID:c,wcsClientId:wcsCid,refreshToken:rt,refreshTokenClientId:rtCid,userAgent:userAgent||(navigator.userAgent||'')}});
       return true;
     }}catch(_){}
     return false;
@@ -91,8 +94,7 @@ export function getExtractScript(graphqlUrl) {
       var cid=c;
       var wcs=wcsCid||'${WCS_CLIENT_ID}';
       if(!token||token.length<50)return false;
-      var payload=JSON.stringify({detail:{type:'costco-tokens',idToken:token||idT,accessToken:accT||null,clientID:cid,wcsClientId:wcs,capturedFromGraphQL:false,refreshToken:rt,refreshTokenClientId:rtCid,userAgent:userAgent||(navigator.userAgent||''),cookies:(document.cookie||'')}});
-      window.mobileApp.postMessage(payload);
+      window.mobileApp.postMessage({detail:{type:'costco-tokens',idToken:token||idT,accessToken:accT||null,clientID:cid,wcsClientId:wcs,capturedFromGraphQL:false,refreshToken:rt,refreshTokenClientId:rtCid,userAgent:userAgent||(navigator.userAgent||''),cookies:(document.cookie||'')}});
       return true;
     }}catch(_){}
     return false;

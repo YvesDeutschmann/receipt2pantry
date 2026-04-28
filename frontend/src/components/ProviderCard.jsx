@@ -19,8 +19,8 @@ function ProviderCard({ provider, status, onTest, onConfigure }) {
     <div className="card">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <div className="w-12 h-12 bg-primary-100 rounded-lg flex items-center justify-center">
-            <span className="text-2xl font-bold text-primary-600">
+          <div className="w-12 h-12 bg-forest-light rounded-mise-md flex items-center justify-center">
+            <span className="text-2xl font-bold text-terra">
               {provider.charAt(0).toUpperCase()}
             </span>
           </div>
@@ -55,7 +55,7 @@ function ProviderCard({ provider, status, onTest, onConfigure }) {
               <span className="font-medium capitalize">{provider}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gray-600">Status:</span>
+              <span className="text-sage-light">Status:</span>
               <span className="font-medium">{statusText[status]}</span>
             </div>
             {status === 'active' && (

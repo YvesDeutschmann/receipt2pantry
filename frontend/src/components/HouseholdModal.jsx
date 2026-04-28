@@ -141,7 +141,7 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
           ) : (
             <>
               {error && (
-                <div className="mb-4 p-3 bg-[var(--color-error)]/10 border border-[var(--color-error)] text-[var(--color-error)] rounded-mise-md text-sm">
+                <div className="alert alert-error mb-4 text-sm" role="alert">
                   {error}
                 </div>
               )}
@@ -176,11 +176,11 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
               {household && activeTab === 'view' && (
                 <div className="space-y-4">
                   {/* Household Info */}
-                  <div className="bg-gray-50 rounded-lg p-4">
+                  <div className="bg-forest-light rounded-mise-md p-4">
                     <div className="flex items-center justify-between">
                       <div>
-                        <h3 className="font-medium text-gray-900">{household.name}</h3>
-                        <p className="text-sm text-gray-500">
+                        <h3 className="font-medium text-cream">{household.name}</h3>
+                        <p className="text-sm text-sage-light">
                           {household.role === 'owner' ? 'Owner' : 'Member'}
                         </p>
                       </div>
@@ -208,9 +208,10 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
                         </button>
                       </div>
                       <button
+                        type="button"
                         onClick={handleRegenerateCode}
                         disabled={submitting}
-                        className="mt-2 text-sm text-blue-600 hover:text-blue-800"
+                        className="mt-2 text-sm text-terra-light hover:text-cream underline-offset-2 hover:underline"
                       >
                         Regenerate code
                       </button>
@@ -229,8 +230,8 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
                           className="flex items-center justify-between p-3 bg-forest-light rounded-mise-md"
                         >
                           <div className="flex items-center space-x-3">
-                            <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
-                              <svg className="w-4 h-4 text-gray-600" fill="currentColor" viewBox="0 0 20 20">
+                            <div className="w-8 h-8 bg-forest-mid rounded-full flex items-center justify-center border border-forest-light">
+                              <svg className="w-4 h-4 text-sage-light" fill="currentColor" viewBox="0 0 20 20">
                                 <path fillRule="evenodd" d="M10 9a3 3 0 100-6 3 3 0 000 6zm-7 9a7 7 0 1114 0H3z" clipRule="evenodd" />
                               </svg>
                             </div>
@@ -243,8 +244,9 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
                           </div>
                           {household.role === 'owner' && member.user_id !== userId && (
                             <button
+                              type="button"
                               onClick={() => handleRemoveMember(member.user_id)}
-                              className="text-red-600 hover:text-red-800 text-sm"
+                              className="text-sm text-[var(--color-error)] hover:opacity-90"
                             >
                               Remove
                             </button>
@@ -270,7 +272,7 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
               {/* Create Household Form */}
               {!household && activeTab === 'create' && (
                 <form onSubmit={handleCreateHousehold} className="space-y-4">
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-sage-light">
                     Create a household to share your pantry and receipts with family members.
                   </p>
                   <div>
@@ -289,7 +291,7 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
                   <button
                     type="submit"
                     disabled={submitting || !householdName.trim()}
-                    className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="w-full btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {submitting ? 'Creating...' : 'Create Household'}
                   </button>
@@ -299,7 +301,7 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
               {/* Join Household Form */}
               {!household && activeTab === 'join' && (
                 <form onSubmit={handleJoinHousehold} className="space-y-4">
-                  <p className="text-sm text-gray-600">
+                  <p className="text-sm text-sage-light">
                     Enter the 6-character code shared by the household owner.
                   </p>
                   <div>
@@ -318,7 +320,7 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
                   <button
                     type="submit"
                     disabled={submitting || joinCode.length !== 6}
-                    className="w-full px-4 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="w-full btn btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {submitting ? 'Joining...' : 'Join Household'}
                   </button>

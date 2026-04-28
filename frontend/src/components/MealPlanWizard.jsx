@@ -369,10 +369,10 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
         />
 
         {/* Modal */}
-        <div className="relative bg-white rounded-lg text-left overflow-hidden shadow-xl transform transition-all sm:my-8 sm:max-w-2xl sm:w-full max-h-[90vh] flex flex-col">
+        <div className="relative bg-forest-mid rounded-mise-lg text-left text-cream overflow-hidden shadow-mise-lg transform transition-all sm:my-8 sm:max-w-2xl sm:w-full max-h-[90vh] flex flex-col border border-forest-light/50">
           {/* Header */}
-          <div className="bg-forest-mid px-4 pt-5 pb-4 sm:p-6 border-b border-forest-light">
-            <div className="flex items-center justify-between mb-4">
+          <div className="px-4 pt-5 pb-4 sm:p-6 border-b border-forest-light">
+            <div className="flex items-center justify-between">
               <h3 className="text-xl font-display font-semibold text-cream">
                 Meal Planning Wizard
               </h3>
@@ -389,10 +389,10 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
           </div>
 
           {/* Content */}
-          <div className="overflow-y-auto flex-1 px-4 pt-4 pb-4 sm:p-6">
+          <div className="overflow-y-auto flex-1 px-4 pt-4 pb-4 sm:p-6 text-cream">
             {error && (
-              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-                <p className="text-red-800">{error}</p>
+              <div className="alert alert-error mb-4" role="alert">
+                <p>{error}</p>
               </div>
             )}
 
@@ -422,7 +422,7 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
                         onChange={(e) =>
                           setMealSlots({ ...mealSlots, breakfast: e.target.checked })
                         }
-                        className="mr-2"
+                        className="checkbox mr-2"
                       />
                       <span>Breakfast</span>
                     </label>
@@ -433,7 +433,7 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
                         onChange={(e) =>
                           setMealSlots({ ...mealSlots, lunch: e.target.checked })
                         }
-                        className="mr-2"
+                        className="checkbox mr-2"
                       />
                       <span>Lunch</span>
                     </label>
@@ -444,7 +444,7 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
                         onChange={(e) =>
                           setMealSlots({ ...mealSlots, dinner: e.target.checked })
                         }
-                        className="mr-2"
+                        className="checkbox mr-2"
                       />
                       <span>Dinner</span>
                     </label>
@@ -473,7 +473,7 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
               <div className="space-y-6">
                 {/* Progress */}
                 <div>
-                  <div className="flex justify-between text-sm text-gray-600 mb-2">
+                  <div className="flex justify-between text-sm text-sage-light mb-2">
                     <span>
                       Meal {currentSlot + 1} of {mealSlotsList.length}
                     </span>
@@ -495,17 +495,17 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terra"></div>
                   </div>
                 ) : recipes.length === 0 ? (
-                  <div className="bg-white border border-gray-200 rounded-lg shadow-sm p-6 mb-6">
+                  <div className="bg-forest-light border border-forest-light rounded-mise-md shadow-mise-sm p-6 mb-6">
                     <div className="text-center mb-6">
                       <div className="mb-4">
                         <svg className="mx-auto h-12 w-12 text-sage-light" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                         </svg>
                       </div>
-                      <h3 className="text-lg font-medium text-gray-900 mb-2">
+                      <h3 className="text-lg font-medium text-cream mb-2">
                         No recipes found
                       </h3>
-                      <p className="text-sm text-gray-600 mb-6">
+                      <p className="text-sm text-sage-light mb-6">
                         We couldn't find recipes matching your pantry at the current threshold ({Math.round(threshold * 100)}% match required).
                       </p>
                     </div>
@@ -531,7 +531,7 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
                             onMouseUp={() => handleThresholdChange(threshold)}
                             onTouchEnd={() => handleThresholdChange(threshold)}
                             disabled={isAdjustingThreshold}
-                            className="flex-1 h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+                            className="flex-1 h-2 bg-forest rounded-lg appearance-none cursor-pointer disabled:opacity-50"
                           />
                           <span className="text-xs text-sage-light">90%</span>
                         </div>
@@ -547,10 +547,11 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
                       </div>
 
                       {/* Action Buttons */}
-                      <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-gray-200">
+                      <div className="flex flex-col sm:flex-row gap-3 pt-4 border-t border-forest-light">
                         <button
+                          type="button"
                           onClick={handleSkipMeal}
-                          className="flex-1 px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                          className="flex-1 btn btn-ghost"
                         >
                           Skip this meal
                         </button>
@@ -598,7 +599,7 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
                 <h4 className="text-lg font-display font-semibold text-cream">Meal Plan Summary</h4>
                 <div className="space-y-2">
                   {plannedMeals.map((meal, index) => (
-                    <div key={index} className="p-3 bg-gray-50 rounded-lg">
+                    <div key={index} className="p-3 bg-forest-light rounded-mise-md">
                       <div className="flex justify-between">
                         <span className="font-medium text-cream">{meal.recipe_name}</span>
                         <span className="text-sm text-sage-light">

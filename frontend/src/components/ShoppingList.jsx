@@ -96,8 +96,8 @@ const ShoppingList = ({ userId, householdId }) => {
 
       {items.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-gray-600 text-lg mb-2">All ingredients available!</p>
-          <p className="text-gray-500 text-sm">
+          <p className="text-sage-light text-lg mb-2">All ingredients available!</p>
+          <p className="text-sage-light/90 text-sm">
             Your pantry has everything needed for your meal plan.
           </p>
         </div>
@@ -111,7 +111,7 @@ const ShoppingList = ({ userId, householdId }) => {
                 {unpurchasedItems.map((item) => (
                   <li
                     key={item.id}
-                    className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+                    className="flex items-center justify-between p-3 bg-forest-light rounded-mise-md hover:bg-forest-light/80 transition-colors"
                   >
                     <div className="flex-1">
                       <div className="flex items-center gap-2">
@@ -119,7 +119,7 @@ const ShoppingList = ({ userId, householdId }) => {
                           type="checkbox"
                           checked={false}
                           onChange={() => handleMarkPurchased(item.id)}
-                          className="w-5 h-5"
+                          className="checkbox w-5 h-5"
                         />
                         <span className="font-medium text-cream">{item.ingredient_name}</span>
                         {item.quantity && (
@@ -143,7 +143,7 @@ const ShoppingList = ({ userId, householdId }) => {
           {/* Purchased Items */}
           {includePurchased && purchasedItems.length > 0 && (
             <div>
-              <h3 className="text-lg font-semibold mb-2 text-gray-500">Purchased</h3>
+              <h3 className="text-lg font-semibold mb-2 text-sage-light">Purchased</h3>
               <ul className="space-y-2">
                 {purchasedItems.map((item) => (
                   <li
@@ -156,9 +156,9 @@ const ShoppingList = ({ userId, householdId }) => {
                           type="checkbox"
                           checked={true}
                           onChange={() => handleMarkPurchased(item.id)}
-                          className="w-5 h-5"
+                          className="checkbox w-5 h-5"
                         />
-                        <span className="font-medium line-through text-gray-500">
+                        <span className="font-medium line-through text-sage-light">
                           {item.ingredient_name}
                         </span>
                         {item.quantity && (

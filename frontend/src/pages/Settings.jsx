@@ -13,6 +13,8 @@ function Settings() {
   const [householdModalOpen, setHouseholdModalOpen] = useState(false)
   const [refreshingSuggestions, setRefreshingSuggestions] = useState(false)
   const [refreshSuggestionsMessage, setRefreshSuggestionsMessage] = useState(null)
+  const [devMockMessage, setDevMockMessage] = useState(null)
+  const [devMockLoading, setDevMockLoading] = useState(false)
   
   const { user } = useAuth()
   const userId = user?.id
@@ -99,11 +101,11 @@ function Settings() {
               </div>
               
               {household.role === 'owner' && (
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <p className="text-sm text-blue-700 mb-2">
+                <div className="alert alert-info">
+                  <p className="text-sm mb-2">
                     Invite others with your join code:
                   </p>
-                  <code className="px-3 py-1 bg-white border border-blue-200 rounded font-mono text-lg tracking-widest">
+                  <code className="inline-block px-3 py-1 bg-forest-mid border border-forest-light rounded-mise-sm font-mono text-lg tracking-widest text-cream">
                     {household.join_code}
                   </code>
                 </div>
@@ -245,6 +247,7 @@ function Settings() {
         {import.meta.env.DEV && (
           <div className="card border-dashed border-[var(--color-error)]/50">
             <h2 className="text-sm font-medium text-[var(--color-error)] mb-2">Dev Tools</h2>
+            <div className="flex flex-col gap-2 items-start">
             <button
               type="button"
               onClick={async () => {
@@ -267,6 +270,59 @@ function Settings() {
             >
               Reset onboarding state
             </button>
+            <div className="flex flex-col gap-1.5 w-full sm:flex-row sm:flex-wrap sm:items-center">
+              <button
+                type="button"
+                disabled={devMockLoading || !userId}
+                onClick={async () => {
+                  if (!userId) return
+                  setDevMockMessage(null)
+                  setDevMockLoading(true)
+                  try {
+                    const r = await api.devLoadMockReceipts('all', { reset: false })
+                    setDevMockMessage(
+                      `Mock receipts: stored ${r.receipts_stored ?? 0}, pantry +${r.items_added_to_pantry ?? 0}. ` +
+                        (r.errors?.length ? `Errors: ${r.errors.join('; ')}` : '')
+                    )
+                  } catch (e) {
+                    setDevMockMessage(e?.message || String(e))
+                  } finally {
+                    setDevMockLoading(false)
+                  }
+                }}
+                className="text-sm text-[var(--color-forest)] underline disabled:opacity-50"
+              >
+                Load mock receipts (Safeway + Costco)
+              </button>
+              <span className="text-sage-light text-xs hidden sm:inline">·</span>
+              <button
+                type="button"
+                disabled={devMockLoading || !userId}
+                onClick={async () => {
+                  if (!userId) return
+                  setDevMockMessage(null)
+                  setDevMockLoading(true)
+                  try {
+                    const r = await api.devLoadMockReceipts('all', { reset: true })
+                    setDevMockMessage(
+                      `Reset + mock: stored ${r.receipts_stored ?? 0}, pantry +${r.items_added_to_pantry ?? 0}. ` +
+                        (r.errors?.length ? `Errors: ${r.errors.join('; ')}` : '')
+                    )
+                  } catch (e) {
+                    setDevMockMessage(e?.message || String(e))
+                  } finally {
+                    setDevMockLoading(false)
+                  }
+                }}
+                className="text-sm text-[var(--color-error)] underline disabled:opacity-50"
+              >
+                Reset pantry & receipts, then load mock receipts
+              </button>
+            </div>
+            {devMockMessage && (
+              <p className="text-xs text-sage-light mt-2 max-w-prose wrap-break-word">{devMockMessage}</p>
+            )}
+            </div>
           </div>
         )}
       </div>

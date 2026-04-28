@@ -4,10 +4,80 @@
  * Replaces credential modal + MFA flow with native WebView login.
  */
 
-import { useEffect } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useSafewaySync, STATUS } from '../hooks/useSafewaySync';
+import { api } from '../services/apiClient';
+import SyncSuccessAlert from './SyncSuccessAlert';
+
+function DevMockSafewayBlock({ userId, className = '' }) {
+  const [mockStatus, setMockStatus] = useState('idle');
+  const [mockError, setMockError] = useState(null);
+  const [mockResult, setMockResult] = useState(null);
+
+  const isBusy = mockStatus === 'submitting';
+
+  const runMockSync = useCallback(async () => {
+    if (!userId) {
+      setMockError('Sign in to load mock receipts.');
+      setMockResult(null);
+      return;
+    }
+    setMockError(null);
+    setMockResult(null);
+    setMockStatus('submitting');
+    try {
+      const { safewayFixtures } = await import('../devFixtures');
+      const finalBackend = await api.ingestReceipts('safeway', safewayFixtures, userId);
+      const itemsAdded = finalBackend.items_added_to_pantry ?? 0;
+      if (itemsAdded > 3) {
+        void api.suggestions
+          .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
+          .catch(() => {});
+      }
+      setMockResult({
+        count: safewayFixtures.length,
+        receipts_stored: finalBackend.receipts_stored,
+        items_added_to_pantry: itemsAdded,
+        errors: finalBackend.errors ?? [],
+      });
+      setMockStatus('success');
+    } catch (err) {
+      setMockError(err?.message || String(err));
+      setMockStatus('error');
+    }
+  }, [userId]);
+
+  return (
+    <div
+      className={`p-3 border border-dashed border-terra/40 rounded-mise-md bg-terra/5 space-y-2 ${className}`}
+    >
+      <p className="text-xs text-terra font-medium">Dev: mock sync (no Safeway / WebView)</p>
+      <button
+        type="button"
+        onClick={runMockSync}
+        disabled={isBusy}
+        className="btn btn-primary text-sm py-1.5 px-3 disabled:opacity-50"
+      >
+        {isBusy ? 'Saving to pantry…' : 'Mock sync (DEV)'}
+      </button>
+      {mockStatus === 'success' && mockResult && (
+        <SyncSuccessAlert
+          isMock
+          className="text-sm"
+          count={mockResult.count}
+          itemsAddedToPantry={mockResult.items_added_to_pantry}
+          errors={mockResult.errors}
+        />
+      )}
+      {mockStatus === 'error' && mockError && (
+        <p className="text-sm text-[var(--color-error)]">{mockError}</p>
+      )}
+    </div>
+  );
+}
 
 export default function SafewayConnectCard({ userId, className = '' }) {
+  const isDev = import.meta.env.DEV;
   const {
     status,
     error,
@@ -30,11 +100,25 @@ export default function SafewayConnectCard({ userId, className = '' }) {
     status === STATUS.SUBMITTING;
 
   if (!isNative) {
+    if (!isDev) {
+      return (
+        <div className={`alert alert-warning ${className}`}>
+          <p className="text-sm">
+            Connect Safeway runs only on native iOS/Android. Build and run the app on a device or
+            emulator.
+          </p>
+        </div>
+      );
+    }
     return (
-      <div className={`p-4 bg-amber-50 border border-amber-200 rounded-lg ${className}`}>
-        <p className="text-amber-800 text-sm">
-          Connect Safeway runs only on native iOS/Android. Build and run the app on a device or emulator.
-        </p>
+      <div className={`space-y-4 ${className}`}>
+        <div className="alert alert-warning">
+          <p className="text-sm">
+            Connect Safeway runs only on native iOS/Android. In dev you can still load mock receipts
+            below.
+          </p>
+        </div>
+        <DevMockSafewayBlock userId={userId} />
       </div>
     );
   }
@@ -43,9 +127,10 @@ export default function SafewayConnectCard({ userId, className = '' }) {
     <div className={`space-y-4 ${className}`}>
       <div className="flex flex-wrap gap-3 items-center">
         <button
+          type="button"
           onClick={startSync}
           disabled={isBusy}
-          className="px-4 py-2 rounded-lg font-medium bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="btn btn-primary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {status === STATUS.AUTHENTICATING && 'Sign in to Safeway…'}
           {status === STATUS.FETCHING && 'Fetching receipts…'}
@@ -54,9 +139,10 @@ export default function SafewayConnectCard({ userId, className = '' }) {
         </button>
         {hasStoredTokens && (
           <button
+            type="button"
             onClick={startSilent}
             disabled={isBusy}
-            className="px-4 py-2 rounded-lg font-medium bg-gray-100 text-gray-700 hover:bg-gray-200 disabled:opacity-50"
+            className="btn btn-ghost px-4 py-2 disabled:opacity-50"
           >
             Silent Sync
           </button>
@@ -64,16 +150,17 @@ export default function SafewayConnectCard({ userId, className = '' }) {
       </div>
 
       {status === STATUS.AUTHENTICATING && (
-        <p className="text-gray-600 text-sm">
-          A browser will open to Safeway. Sign in with your Safeway account (including MFA if prompted). Your receipts will sync automatically once you are logged in.
+        <p className="text-sage-light text-sm">
+          A browser will open to Safeway. Sign in with your Safeway account (including MFA if
+          prompted). Your receipts will sync automatically once you are logged in.
         </p>
       )}
 
       {(status === STATUS.AUTHENTICATING || status === STATUS.FETCHING) && progress && (
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
+        <div className="alert alert-info space-y-3">
           <div className="flex items-center gap-3">
-            <div className="animate-spin rounded-full h-5 w-5 border-2 border-blue-200 border-t-blue-600" />
-            <span className="text-blue-800 text-sm font-medium">
+            <div className="animate-spin rounded-full h-5 w-5 border-2 border-forest-mid border-t-terra" />
+            <span className="text-sm font-medium">
               {progress?.total > 0 && progress.current > 0
                 ? `Loading receipt ${progress.current} of ${progress.total}…`
                 : progress?.step === 'token_found'
@@ -84,9 +171,9 @@ export default function SafewayConnectCard({ userId, className = '' }) {
             </span>
           </div>
           {progress?.total > 0 && (
-            <div className="mt-2 h-1.5 bg-blue-100 rounded-full overflow-hidden">
+            <div className="mt-2 h-1.5 bg-forest rounded-full overflow-hidden">
               <div
-                className="h-full bg-blue-600 transition-all duration-300"
+                className="h-full bg-terra transition-all duration-300"
                 style={{ width: `${Math.min(100, (progress.current / progress.total) * 100)}%` }}
               />
             </div>
@@ -95,33 +182,27 @@ export default function SafewayConnectCard({ userId, className = '' }) {
       )}
 
       {status === STATUS.SUCCESS && result && (
-        <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-          <p className="text-green-800 font-semibold">Synced — {result.items_added_to_pantry ?? 0} items added</p>
-          <p className="text-green-700 text-sm mt-1">
-            {result.count} receipt{result.count !== 1 ? 's' : ''} synced
-            {result.receipts_stored != null && (
-              <> · {result.receipts_stored} stored</>
-            )}
-          </p>
-          {result.errors?.length > 0 && (
-            <p className="text-amber-700 text-sm mt-1">
-              Some issues: {result.errors.join('; ')}
-            </p>
-          )}
-        </div>
+        <SyncSuccessAlert
+          count={result.count}
+          itemsAddedToPantry={result.items_added_to_pantry}
+          errors={result.errors}
+        />
       )}
 
       {status === STATUS.ERROR && error && (
-        <div className="p-4 bg-red-50 border border-red-200 rounded-lg flex flex-col gap-2">
-          <p className="text-red-800">{error}</p>
+        <div className="alert alert-error flex flex-col gap-2">
+          <p>{error}</p>
           <button
+            type="button"
             onClick={startSync}
-            className="self-start px-3 py-1.5 text-sm rounded bg-red-100 text-red-700 hover:bg-red-200"
+            className="self-start btn btn-ghost text-sm py-1.5 px-3"
           >
             Retry
           </button>
         </div>
       )}
+
+      {isDev && <DevMockSafewayBlock userId={userId} />}
     </div>
   );
 }

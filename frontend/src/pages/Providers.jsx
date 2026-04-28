@@ -539,12 +539,10 @@ function Providers() {
 
       {/* Polling Status Indicator */}
       {pollingActive && (
-        <div className="fixed bottom-4 right-4 bg-blue-100 border border-blue-300 rounded-lg p-3 shadow-lg">
-          <div className="flex items-center space-x-2">
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-blue-600"></div>
-            <span className="text-blue-800 text-sm font-medium">
-              Waiting for device verification...
-            </span>
+        <div className="fixed bottom-4 right-4 alert alert-info shadow-mise-lg p-3 z-[100] max-w-sm">
+          <div className="flex items-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-2 border-forest-mid border-t-terra" />
+            <span className="text-sm font-medium">Waiting for device verification...</span>
           </div>
         </div>
       )}

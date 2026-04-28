@@ -10,6 +10,29 @@ const DEFAULT_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_SILENT_TIMEOUT_MS = 45_000;
 const DEFAULT_EXTRACT_INTERVAL_MS = 3000;
 
+const DEV_LOG_URL = 'http://localhost:5000/api/dev/log';
+const BRIDGE_LOG_MSG_MAX = 2000;
+
+/**
+ * POST debug lines to the dev backend from the main Capacitor WebView (no retailer CSP).
+ * Body format matches /api/dev/log: TAG|message (text/plain).
+ */
+function bridgeDevLog(tag, msg) {
+  try {
+    const safeTag = String(tag || 'WebViewBridge').replace(/\s+/g, '_').slice(0, 64);
+    let safeMsg = String(msg ?? '');
+    if (safeMsg.length > BRIDGE_LOG_MSG_MAX) safeMsg = safeMsg.slice(0, BRIDGE_LOG_MSG_MAX) + '…';
+    fetch(DEV_LOG_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: `${safeTag}|${safeMsg}`,
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    /* ignore */
+  }
+}
+
 /**
  * Close the WebView. Retries up to 3 times with 300ms delay.
  */
@@ -135,6 +158,9 @@ export function createWebViewBridge(config) {
 
       let extractionAttempts = 0;
       let httpOnlyTokenInjected = false;
+      /** Last URL from urlChangeEvent (diagnostics / bridge logging only). */
+      let lastBrowserUrl = '';
+      const loginLogTag = `${provider}Login`;
 
       const runHttpOnlyCookiePoll = async () => {
         if (!httpOnlyCookies || tokensReceived || httpOnlyTokenInjected) return;
@@ -167,8 +193,10 @@ export function createWebViewBridge(config) {
             await InAppBrowser.executeScript({ code: preExtractVars() }).catch(() => {});
           }
           InAppBrowser.executeScript({ code: EXTRACT_SCRIPT }).catch((err) => {
+            const em = err?.message || String(err);
             if (extractionAttempts <= 3 || extractionAttempts % 10 === 0) {
-              console.warn(`${LOG_PREFIX} executeScript failed (attempt ${extractionAttempts}):`, err?.message || err);
+              console.warn(`${LOG_PREFIX} executeScript failed (attempt ${extractionAttempts}):`, em);
+              bridgeDevLog(loginLogTag, `executeScript failed attempt=${extractionAttempts} lastUrl=${(lastBrowserUrl || '').slice(0, 160)} err=${em.slice(0, 200)}`);
             }
           });
         });
@@ -198,6 +226,12 @@ export function createWebViewBridge(config) {
             const d = event?.detail;
             if (d?.type === messageTypes.debug) {
               console.log(`${LOG_PREFIX} [WebView] ${d.message || ''}`, d.data ?? '');
+              try {
+                const payload = `${d.message || ''} ${JSON.stringify(d.data ?? {})}`;
+                bridgeDevLog(loginLogTag, `webview debug: ${payload}`);
+              } catch {
+                bridgeDevLog(loginLogTag, `webview debug: ${d.message || ''}`);
+              }
               return;
             }
             if (messageTypes.progress && d?.type === messageTypes.progress) {
@@ -242,15 +276,18 @@ export function createWebViewBridge(config) {
         closeListener = await InAppBrowser.addListener('closeEvent', () => {
           if (tokensReceived) return;
           if (progressReceived) {
+            bridgeDevLog(loginLogTag, `closeEvent: progress seen; grace 3s lastUrl=${(lastBrowserUrl || '').slice(0, 160)}`);
             // Fetch in progress — could be a foreign WebView closing; wait for receipts
             pendingGraceTimer = setTimeout(() => {
               if (tokensReceived) return;
+              bridgeDevLog(loginLogTag, 'closeEvent: grace timeout → reject sync incomplete');
               cleanup();
               finish.reject?.(new Error('WebView closed before sync completed'));
             }, 3000);
             return;
           }
           // No progress seen — user closed early
+          bridgeDevLog(loginLogTag, `closeEvent: user closed before tokens lastUrl=${(lastBrowserUrl || '').slice(0, 160)}`);
           console.warn(`${LOG_PREFIX} closeEvent - WebView closed before tokens extracted`);
           cleanup();
           finish.reject?.(new Error('WebView closed before tokens were extracted'));
@@ -258,6 +295,8 @@ export function createWebViewBridge(config) {
 
         urlListener = await InAppBrowser.addListener('urlChangeEvent', (ev) => {
           const u = ev?.url || '';
+          lastBrowserUrl = u;
+          bridgeDevLog(loginLogTag, `urlChange: ${u.slice(0, 200)} isExtract=${isExtractUrl(u)} tokensReceived=${tokensReceived}`);
           console.log(`${LOG_PREFIX} urlChange: ${u.slice(0, 120)}, tokensReceived=${tokensReceived}, isExtract=${isExtractUrl(u)}`);
           if (httpOnlyCookies) httpOnlyTokenInjected = false;
           if (tokensReceived) return;
@@ -279,20 +318,30 @@ export function createWebViewBridge(config) {
 
         timeoutHandle = setTimeout(() => {
           if (tokensReceived) return;
+          bridgeDevLog(
+            loginLogTag,
+            `login timeout ${loginTimeoutMs / 1000}s lastUrl=${(lastBrowserUrl || '').slice(0, 160)}`
+          );
           console.warn(`${LOG_PREFIX} Login timeout (${loginTimeoutMs / 1000}s)`);
           cleanup();
           InAppBrowser.close().catch(() => {});
           finish.reject?.(new Error(`${provider} login timed out. Please try again and complete sign-in within 5 minutes.`));
         }, loginTimeoutMs);
 
+        bridgeDevLog(loginLogTag, `startLogin opening url=${loginUrl.slice(0, 200)}`);
         InAppBrowser.openWebView({
           url: loginUrl,
           title: loginTitle,
           toolbarType: ToolBarType.NAVIGATION,
           isPresentAfterPageLoad: false, // true causes blank screen on Android 13+ when URL redirects (safeway.com)
+          isInspectable: true,
         })
-          .then(() => console.log(`${LOG_PREFIX} WebView opened`))
+          .then(() => {
+            bridgeDevLog(loginLogTag, 'startLogin WebView opened');
+            console.log(`${LOG_PREFIX} WebView opened`);
+          })
           .catch((err) => {
+            bridgeDevLog(loginLogTag, `openWebView failed: ${(err?.message || err || '').toString().slice(0, 300)}`);
             console.error(`${LOG_PREFIX} openWebView failed`, err);
             cleanup();
             reject(err);
@@ -314,6 +363,9 @@ export function createWebViewBridge(config) {
         let urlListener;
         let silentExtractInterval;
         let silentHttpOnlyInjected = false;
+        /** Last URL from urlChangeEvent (diagnostics / bridge logging only). */
+        let silentLastUrl = '';
+        const silentLogTag = `${provider}Silent`;
 
         const runSilentHttpOnlyPoll = async () => {
           if (!httpOnlyCookies || received || silentHttpOnlyInjected) return;
@@ -338,18 +390,32 @@ export function createWebViewBridge(config) {
           }
         };
 
+        let silentExtractionAttempts = 0;
         const runSilentExtraction = () => {
           if (received) return;
+          silentExtractionAttempts++;
           runSilentHttpOnlyPoll().then(async () => {
             if (preExtractVars) {
               await InAppBrowser.executeScript({ code: preExtractVars() }).catch(() => {});
             }
-            InAppBrowser.executeScript({ code: EXTRACT_SCRIPT }).catch(() => {});
+            InAppBrowser.executeScript({ code: EXTRACT_SCRIPT }).catch((err) => {
+              const em = err?.message || String(err);
+              if (silentExtractionAttempts <= 3 || silentExtractionAttempts % 10 === 0) {
+                bridgeDevLog(
+                  silentLogTag,
+                  `executeScript failed attempt=${silentExtractionAttempts} lastUrl=${(silentLastUrl || '').slice(0, 160)} err=${em.slice(0, 200)}`
+                );
+              }
+            });
           });
         };
 
         const timeout = setTimeout(() => {
           if (received) return;
+          bridgeDevLog(
+            silentLogTag,
+            `silent timeout ${silentTimeoutMs / 1000}s lastUrl=${(silentLastUrl || '').slice(0, 160)}`
+          );
           console.log(`${LOG_PREFIX} startSilentSync: ${silentTimeoutMs / 1000}s timeout`);
           if (silentExtractInterval) clearInterval(silentExtractInterval);
           messageListener?.remove?.();
@@ -375,6 +441,12 @@ export function createWebViewBridge(config) {
               const d = event?.detail;
               if (d?.type === messageTypes.debug) {
                 console.log(`${LOG_PREFIX} [silent] ${d.message || ''}`, d.data ?? '');
+                try {
+                  const payload = `${d.message || ''} ${JSON.stringify(d.data ?? {})}`;
+                  bridgeDevLog(silentLogTag, `webview debug: ${payload}`);
+                } catch {
+                  bridgeDevLog(silentLogTag, `webview debug: ${d.message || ''}`);
+                }
                 return;
               }
               if (messageTypes.progress && d?.type === messageTypes.progress) {
@@ -419,14 +491,18 @@ export function createWebViewBridge(config) {
               }
             });
 
-            urlListener = await InAppBrowser.addListener('urlChangeEvent', () => {
+            urlListener = await InAppBrowser.addListener('urlChangeEvent', (ev) => {
               if (received) return;
+              const u = ev?.url || '';
+              silentLastUrl = u;
+              bridgeDevLog(silentLogTag, `urlChange: ${u.slice(0, 200)} isExtract=${isExtractUrl(u)}`);
               silentHttpOnlyInjected = false;
               runSilentExtraction();
               setTimeout(runSilentExtraction, 800);
               setTimeout(runSilentExtraction, 2500);
             });
 
+            bridgeDevLog(silentLogTag, `startSilentSync opening url=${homeUrl.slice(0, 200)}`);
             await InAppBrowser.openWebView({
               url: homeUrl,
               isPresentAfterPageLoad: true, // delay until load so hidden sync can close before user sees WebView
@@ -434,12 +510,16 @@ export function createWebViewBridge(config) {
               height: 1,
               x: -9999,
               y: -9999,
+              isInspectable: true,
             });
+            silentLastUrl = homeUrl;
+            bridgeDevLog(silentLogTag, 'startSilentSync WebView opened');
             // Always start interval — script injection was previously done by preShowScript;
             // now done exclusively via executeScript
             runSilentExtraction();
             silentExtractInterval = setInterval(runSilentExtraction, extractIntervalMs);
           } catch (err) {
+            bridgeDevLog(silentLogTag, `startSilentSync failed: ${(err?.message || err || '').toString().slice(0, 300)}`);
             console.error(`${LOG_PREFIX} startSilentSync failed`, err);
             clearTimeout(timeout);
             messageListener?.remove?.();
