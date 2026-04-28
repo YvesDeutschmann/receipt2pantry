@@ -85,7 +85,7 @@ function AdaptiveModal({ isOpen, onClose, title, children, hideHeader }) {
       >
         <div className="flex items-center justify-center min-h-screen px-4 pt-4 pb-4">
           <motion.div
-            className="fixed inset-0 bg-gray-500/75"
+            className="fixed inset-0 bg-forest/75"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

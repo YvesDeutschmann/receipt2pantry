@@ -116,30 +116,30 @@ function CostcoConnectPage({ userId, onSuccess, onCancel }) {
 
   return (
     <div className="max-w-4xl mx-auto p-6">
-      <div className="card">
+      <div className="surface-light shadow-mise-md p-6 sm:p-8">
         <div className="mb-6">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Connect Your Costco Account</h2>
-          <p className="text-gray-600">
-            Extract two values from your browser's Network tab to connect.
+          <h2 className="text-2xl font-display font-bold text-[var(--on-surface-light)] mb-2">Connect Your Costco Account</h2>
+          <p className="text-sm text-[var(--on-surface-light-muted)]">
+            Extract two values from your browser&apos;s Network tab to connect.
           </p>
         </div>
 
         {error && (
-          <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-            <p className="text-red-600">{error}</p>
+          <div className="alert alert-error mb-4" role="alert">
+            <p>{error}</p>
           </div>
         )}
 
         {status === 'connected' && (
-          <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg">
-            <p className="text-green-600 font-semibold">✓ Costco account connected successfully!</p>
+          <div className="alert alert-success mb-4">
+            <p className="font-semibold">Costco account connected successfully.</p>
           </div>
         )}
 
         {status === 'expired' && (
-          <div className="mb-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-yellow-600 mb-2">Connection expired. Please generate a new one.</p>
-            <button onClick={generateConnectionCode} className="btn btn-primary">
+          <div className="alert alert-warning mb-4">
+            <p className="mb-2">Connection expired. Please generate a new one.</p>
+            <button type="button" onClick={generateConnectionCode} className="btn btn-primary">
               Generate New Code
             </button>
           </div>
@@ -149,48 +149,48 @@ function CostcoConnectPage({ userId, onSuccess, onCancel }) {
           <div className="space-y-6">
             
             {/* Timer */}
-            <div className="flex items-center justify-between p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-              <span className="text-gray-700">Session expires in:</span>
-              <span className="text-xl font-bold text-yellow-600">{formatTime(timeRemaining)}</span>
+            <div className="alert alert-warning flex items-center justify-between flex-wrap gap-2">
+              <span className="text-sm font-medium">Session expires in:</span>
+              <span className="text-xl font-mono font-bold text-[var(--on-surface-light)]">{formatTime(timeRemaining)}</span>
             </div>
 
             {/* Step 1: Open Costco */}
-            <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">Step 1: Open Costco Orders Page</h3>
-              <p className="text-gray-600 mb-3 text-sm">
+            <div className="alert alert-info">
+              <h3 className="text-lg font-display font-semibold text-[var(--on-surface-light)] mb-2">Step 1: Open Costco Orders Page</h3>
+              <p className="text-sm text-[var(--on-surface-light-muted)] mb-3">
                 Open DevTools (F12) BEFORE clicking, then go to the <strong>Network</strong> tab.
               </p>
-              <button onClick={openCostco} className="btn btn-primary">
+              <button type="button" onClick={openCostco} className="btn btn-primary">
                 Open Costco Orders Page
               </button>
             </div>
 
             {/* Step 2: Find the values */}
-            <div className="p-4 bg-gray-50 border border-gray-200 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">Step 2: Find These Headers</h3>
+            <div className="rounded-mise-md border border-[var(--border-default)] bg-[var(--surface-light-elev)] p-4">
+              <h3 className="text-lg font-display font-semibold text-[var(--on-surface-light)] mb-3">Step 2: Find These Headers</h3>
               
-              <div className="bg-white border rounded-lg p-4 mb-4">
-                <p className="text-sm text-gray-600 mb-3">
-                  In the <strong>Network</strong> tab, look for any request to <code className="bg-gray-100 px-1 rounded">ecom-api.costco.com</code>
+              <div className="border border-[var(--border-default)] rounded-mise-md p-4 mb-4 bg-[var(--surface-light)]">
+                <p className="text-sm text-[var(--on-surface-light-muted)] mb-3">
+                  In the <strong>Network</strong> tab, look for any request to <code className="px-1 py-0.5 rounded bg-[var(--surface-light-elev)] text-[13px]">ecom-api.costco.com</code>
                 </p>
-                <p className="text-sm text-gray-600 mb-3">
+                <p className="text-sm text-[var(--on-surface-light-muted)] mb-3">
                   Click on it → go to <strong>Headers</strong> tab → scroll to <strong>Request Headers</strong>
                 </p>
                 
                 <div className="space-y-3 mt-4">
-                  <div className="flex items-start space-x-3 p-3 bg-blue-50 rounded">
-                    <span className="text-blue-600 font-bold">1.</span>
+                  <div className="flex items-start gap-3 p-3 rounded-mise-sm border-l-4 border-terra bg-[var(--surface-light-elev)]">
+                    <span className="font-bold text-terra shrink-0">1.</span>
                     <div>
-                      <code className="font-mono text-sm bg-blue-100 px-2 py-1 rounded">costco-x-authorization</code>
-                      <p className="text-xs text-gray-500 mt-1">Starts with "Bearer eyJ..." - copy the ENTIRE value</p>
+                      <code className="font-mono text-sm px-2 py-1 rounded-mise-sm bg-forest/10 text-[var(--on-surface-light)]">costco-x-authorization</code>
+                      <p className="text-xs text-[var(--on-surface-light-muted)] mt-1">Starts with &quot;Bearer eyJ...&quot; — copy the ENTIRE value</p>
                     </div>
                   </div>
                   
-                  <div className="flex items-start space-x-3 p-3 bg-green-50 rounded">
-                    <span className="text-green-600 font-bold">2.</span>
+                  <div className="flex items-start gap-3 p-3 rounded-mise-sm border-l-4 border-sage bg-[var(--surface-light-elev)]">
+                    <span className="font-bold text-sage shrink-0">2.</span>
                     <div>
-                      <code className="font-mono text-sm bg-green-100 px-2 py-1 rounded">client-identifier</code>
-                      <p className="text-xs text-gray-500 mt-1">Looks like: 481b1aec-aa3b-454b-b81b-48187e28f205</p>
+                      <code className="font-mono text-sm px-2 py-1 rounded-mise-sm bg-forest/10 text-[var(--on-surface-light)]">client-identifier</code>
+                      <p className="text-xs text-[var(--on-surface-light-muted)] mt-1">Looks like: 481b1aec-aa3b-454b-b81b-48187e28f205</p>
                     </div>
                   </div>
                 </div>
@@ -198,25 +198,25 @@ function CostcoConnectPage({ userId, onSuccess, onCancel }) {
             </div>
 
             {/* Step 3: Paste the values */}
-            <div className="p-4 bg-green-50 border border-green-200 rounded-lg">
-              <h3 className="text-lg font-semibold text-gray-900 mb-3">Step 3: Paste the Values</h3>
+            <div className="alert alert-success">
+              <h3 className="text-lg font-display font-semibold text-[var(--on-surface-light)] mb-3">Step 3: Paste the Values</h3>
               
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-[var(--on-surface-light-mid)] mb-1">
                     costco-x-authorization (Bearer token)
                   </label>
                   <textarea
                     value={idToken}
                     onChange={(e) => setIdToken(e.target.value)}
                     placeholder="Bearer eyJhbGciOiJSUzI1NiIs..."
-                    className="w-full h-20 p-3 border border-gray-300 rounded-lg font-mono text-xs focus:ring-2 focus:ring-green-500"
+                    className="input-surface w-full h-20 p-3 rounded-mise-md font-mono text-xs"
                     disabled={submitting}
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                  <label className="block text-sm font-medium text-[var(--on-surface-light-mid)] mb-1">
                     client-identifier
                   </label>
                   <input
@@ -224,12 +224,13 @@ function CostcoConnectPage({ userId, onSuccess, onCancel }) {
                     value={clientIdentifier}
                     onChange={(e) => setClientIdentifier(e.target.value)}
                     placeholder="481b1aec-aa3b-454b-b81b-48187e28f205"
-                    className="w-full p-3 border border-gray-300 rounded-lg font-mono text-sm focus:ring-2 focus:ring-green-500"
+                    className="input-surface w-full p-3 rounded-mise-md font-mono text-sm"
                     disabled={submitting}
                   />
                 </div>
 
                 <button
+                  type="button"
                   onClick={submitTokens}
                   disabled={submitting || !idToken.trim() || !clientIdentifier.trim()}
                   className="btn btn-primary w-full"
@@ -244,7 +245,7 @@ function CostcoConnectPage({ userId, onSuccess, onCancel }) {
         {/* Actions */}
         <div className="flex justify-end space-x-3 mt-6">
           {onCancel && (
-            <button onClick={onCancel} className="btn btn-secondary">
+            <button type="button" onClick={onCancel} className="btn btn-secondary">
               Cancel
             </button>
           )}

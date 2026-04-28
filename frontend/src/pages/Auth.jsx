@@ -109,7 +109,7 @@ function Auth() {
       <div className="w-full max-w-sm card">
         <div className="text-center mb-8">
           <h1 className="text-hero font-display font-bold text-cream">Meald</h1>
-          <p className="text-subhead mt-2 text-sage-light">
+          <p className="text-subhead mt-2">
             Sign in to get started
           </p>
         </div>
@@ -121,7 +121,7 @@ function Auth() {
                 type="button"
                 onClick={() => handleSSO('apple')}
                 disabled={loading}
-                className="w-full btn btn-primary min-h-[48px] bg-black text-white hover:bg-gray-800 hover:opacity-90"
+                className="w-full btn min-h-[48px] bg-cream text-forest border border-forest-light hover:bg-cream-dark"
               >
                 Sign in with Apple
               </button>
@@ -129,7 +129,7 @@ function Auth() {
                 type="button"
                 onClick={() => handleSSO('google')}
                 disabled={loading}
-                className="w-full btn min-h-[48px] bg-white text-gray-800 border border-gray-300 hover:bg-gray-50"
+                className="w-full btn btn-ghost min-h-[48px]"
               >
                 Sign in with Google
               </button>

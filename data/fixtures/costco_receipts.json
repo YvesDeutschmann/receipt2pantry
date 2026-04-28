@@ -1,0 +1,142 @@
+[
+  {
+    "store_name": "Costco Mock Warehouse 001",
+    "store_location": "Mockville, OR",
+    "order_id": "dev-mock-CC-001",
+    "order_date": "2026-04-18",
+    "total_amount": 87.64,
+    "date": "2026-04-18",
+    "time": "14:20:00",
+    "total": 87.64,
+    "transaction_id": "dev-mock-CC-001",
+    "receipt_type": "In-Warehouse",
+    "document_type": "SALES_RECEIPT",
+    "items": [
+      {
+        "name": "Rotisserie Chicken  3.5 lb avg",
+        "quantity": 1,
+        "unit_price": 0,
+        "price": 4.99,
+        "item_number": "12345",
+        "category": "GROCERY"
+      },
+      {
+        "name": "Kirkland Signature Eggs 5 dozen",
+        "quantity": 1,
+        "unit_price": 0,
+        "price": 12.99,
+        "item_number": "67890",
+        "category": "GROCERY"
+      },
+      {
+        "name": "Cheddar Cheese 5 lb",
+        "quantity": 1,
+        "unit_price": 0,
+        "price": 16.99,
+        "item_number": "11111",
+        "category": "GROCERY"
+      }
+    ]
+  },
+  {
+    "store_name": "Costco Mock Warehouse 001",
+    "store_location": "Mockville, OR",
+    "order_id": "dev-mock-CC-002",
+    "order_date": "2026-03-20",
+    "total_amount": 32.0,
+    "date": "2026-03-20",
+    "time": "11:45:00",
+    "total": 32.0,
+    "transaction_id": "dev-mock-CC-002",
+    "receipt_type": "In-Warehouse",
+    "document_type": "SALES_RECEIPT",
+    "items": [
+      {
+        "name": "Kirkland Bottled Water  40/16.9oz",
+        "quantity": 1,
+        "unit_price": 0,
+        "price": 4.5,
+        "item_number": "22222",
+        "category": "GROCERY"
+      },
+      {
+        "name": "Mixed Veggies  5lb bag",
+        "quantity": 2,
+        "unit_price": 0,
+        "price": 5.0,
+        "item_number": "33333",
+        "category": "GROCERY"
+      }
+    ]
+  },
+  {
+    "store_name": "Costco Mock Warehouse 002",
+    "store_location": "Other Town, WA",
+    "order_id": "dev-mock-CC-003",
+    "order_date": "2025-08-10",
+    "total_amount": 199.0,
+    "date": "2025-08-10",
+    "time": "16:10:00",
+    "total": 199.0,
+    "transaction_id": "dev-mock-CC-003",
+    "receipt_type": "In-Warehouse",
+    "document_type": "SALES_RECEIPT",
+    "items": [
+      {
+        "name": "Kirkland Paper Towels  12/160ct",
+        "quantity": 1,
+        "unit_price": 0,
+        "price": 19.99,
+        "item_number": "44444",
+        "category": "HOUSEHOLD"
+      },
+      {
+        "name": "Ground Turkey 5 lb  93/7",
+        "quantity": 1,
+        "unit_price": 0,
+        "price": 18.0,
+        "item_number": "55555",
+        "category": "GROCERY"
+      },
+      {
+        "name": "Quinoa  4.5lb",
+        "quantity": 1,
+        "unit_price": 0,
+        "price": 9.5,
+        "item_number": "66666",
+        "category": "GROCERY"
+      }
+    ]
+  },
+  {
+    "store_name": "Costco Mock Warehouse 001",
+    "store_location": "Mockville, OR",
+    "order_id": "dev-mock-CC-004",
+    "order_date": "2026-01-02",
+    "total_amount": 10.0,
+    "date": "2026-01-02",
+    "time": "09:00:00",
+    "total": 10.0,
+    "transaction_id": "dev-mock-CC-004",
+    "receipt_type": "In-Warehouse",
+    "document_type": "SALES_RECEIPT",
+    "items": [
+      {
+        "name": "Pizza Slice Food Court  Cheese",
+        "quantity": 2,
+        "unit_price": 0,
+        "price": 2.0,
+        "item_number": "FC01",
+        "category": "GROCERY"
+      },
+      {
+        "name": "Kirkland Sparkling Water  24pk",
+        "quantity": 1,
+        "unit_price": 0,
+        "price": 8.0,
+        "item_number": "77777",
+        "category": "GROCERY"
+      }
+    ]
+  }
+]
