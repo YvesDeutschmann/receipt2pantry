@@ -1,16 +1,26 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { supabase } from '../services/supabaseClient'
+import { SignInWithApple } from '../native/signInWithApple'
 
 const AuthContext = createContext(null)
 
-/** Must match Android/iOS URL scheme and Supabase Auth → Redirect URLs. */
-const OAUTH_NATIVE_REDIRECT = 'com.meald.app://auth-callback'
+/** iOS app bundle (Sign in with Apple `clientId`); matches `appId` in `capacitor.config.ts`. */
+const IOS_APP_BUNDLE_ID = 'com.meald.app'
+const APPLE_OAUTH_REDIRECT = `${IOS_APP_BUNDLE_ID}://auth-callback`
+
+/**
+ * @param {string} message
+ * @returns {Promise<string>} lowercase hex SHA-256
+ */
+async function sha256Hex(message) {
+  const data = new TextEncoder().encode(message)
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+  const bytes = new Uint8Array(hashBuffer)
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('')
+}
 
 function getOAuthRedirectUrl() {
-  if (Capacitor.isNativePlatform()) {
-    return OAUTH_NATIVE_REDIRECT
-  }
   return `${window.location.origin}/auth`
 }
 
@@ -54,11 +64,39 @@ export function AuthProvider({ children }) {
   }
 
   const signInWithApple = async () => {
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: 'apple',
-      options: { redirectTo: getOAuthRedirectUrl() },
+    if (Capacitor.getPlatform() !== 'ios') {
+      throw new Error('Sign in with Apple is only available on iOS.')
+    }
+
+    const rawNonce = crypto.randomUUID()
+    const hashedNonce = await sha256Hex(rawNonce)
+
+    const result = await SignInWithApple.authorize({
+      clientId: IOS_APP_BUNDLE_ID,
+      redirectURI: APPLE_OAUTH_REDIRECT,
+      scopes: 'email name',
+      nonce: hashedNonce,
     })
-    if (error) throw error
+
+    const idToken = result?.response?.identityToken
+    if (!idToken) {
+      throw new Error('Apple Sign-In did not return an identity token.')
+    }
+
+    const { data, error } = await supabase.auth.signInWithIdToken({
+      provider: 'apple',
+      token: idToken,
+      nonce: rawNonce,
+    })
+    if (error) {
+      const msg = error.message || ''
+      if (msg.includes('Unacceptable audience')) {
+        throw new Error(
+          `Apple sign-in: in Supabase → Authentication → Providers → Apple, add "${IOS_APP_BUNDLE_ID}" to Client IDs (native tokens use the bundle ID as the token audience). See MOBILE_SETUP.md.`
+        )
+      }
+      throw error
+    }
     return data
   }
 

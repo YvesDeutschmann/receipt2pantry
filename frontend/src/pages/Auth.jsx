@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
+import { Capacitor } from '@capacitor/core'
 import { useAuth } from '../contexts/AuthContext'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
@@ -117,14 +118,16 @@ function Auth() {
         {!showEmailForm ? (
           <>
             <div className="space-y-3 mb-6">
-              <button
-                type="button"
-                onClick={() => handleSSO('apple')}
-                disabled={loading}
-                className="w-full btn btn-primary min-h-[48px] bg-black text-white hover:bg-gray-800 hover:opacity-90"
-              >
-                Sign in with Apple
-              </button>
+              {Capacitor.getPlatform() === 'ios' && (
+                <button
+                  type="button"
+                  onClick={() => handleSSO('apple')}
+                  disabled={loading}
+                  className="w-full btn btn-primary min-h-[48px] bg-black text-white hover:bg-gray-800 hover:opacity-90"
+                >
+                  Sign in with Apple
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => handleSSO('google')}

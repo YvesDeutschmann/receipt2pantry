@@ -18,7 +18,10 @@
     "cap:run:ios": "cap run ios",
     "build:mobile": "node scripts/patch-capacitor-proguard.js && vite build && cap sync",
     "assets:generate": "node scripts/generate-assets.js && npx capacitor-assets generate --iconBackgroundColor '#ffffff' --splashBackgroundColor '#ffffff' --ios --android",
-    "postinstall": "node scripts/patch-capacitor-proguard.js"
+    "postinstall": "node scripts/patch-capacitor-proguard.js",
+    "ios:16": "npx cap run ios --target-name='iPhone 16 Pro'",
+    "ios:se": "npx cap run ios --target-name='iPhone SE'",
+    "ios:ipad": "npx cap run ios --target-name='iPad Air 11-inch (M2)'"
   },
   "dependencies": {
     "@capacitor/android": "^8.1.0",

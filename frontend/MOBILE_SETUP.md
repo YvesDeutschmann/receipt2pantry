@@ -87,14 +87,27 @@ To use the Vite dev server with hot reload on your phone (same Wi‑Fi as your P
 
 ---
 
-## Supabase: Google / Apple OAuth on native (required)
+## Supabase: Google / Apple (native)
 
-After clearing app data, browser-based OAuth must return to the app via a custom URL scheme. The app uses **`com.meald.app://auth-callback`**.
+### Google
 
-1. In [Supabase Dashboard](https://supabase.com/dashboard) → your project → **Authentication** → **URL Configuration** → **Redirect URLs**, add:
+Native Android and iOS use **@capawesome/capacitor-google-sign-in** and `supabase.auth.signInWithIdToken` (no custom URL scheme).
 
-   `com.meald.app://auth-callback`
+### Sign in with Apple (iOS only)
 
-2. Save. Rebuild/sync the native app after changing OAuth code (`npm run build:mobile` then `npx cap sync`).
+The iOS app uses a local Capacitor **native** Sign in with Apple bridge and `supabase.auth.signInWithIdToken` — there is no Safari redirect back into the app. The “Sign in with Apple” button is only shown on iOS.
 
-For **web** sign-in, the app uses `{origin}/auth` as `redirectTo` automatically (ensure that URL is also allowed in Redirect URLs if you use a custom domain).
+1. **Apple Developer**  
+   - Identifiers → your App ID `com.meald.app` → enable **Sign In with Apple** (capability is configured in the repo in `ios/App/App/App.entitlements`).
+
+2. **Supabase**  
+   - Dashboard → your project → **Authentication** → **Sign In / Providers** → **Apple** → enable.  
+   - **Client ID(s)** must include the iOS app’s **bundle ID** so native Sign in with Apple is accepted. Apple puts that value in the ID token as `aud` (for example `com.meald.app`). In the provider form, set **Client IDs** to:  
+     - `com.meald.app`  
+     or, if you also use a **Services ID** for web/OAuth (e.g. `com.meald.app.service`), use a **comma-separated** list, for example:  
+     `com.meald.app,com.meald.app.service`  
+   - If you see **`Unacceptable audience in id_token: [com.meald.app]`**, the bundle ID is missing from **Client IDs** (or is typo’d). Add `com.meald.app` and save. The **client secret** (`.p8` JWT) is only required for the **OAuth redirect** / Services ID flow, not for verifying a native iOS ID token, but the dashboard may still require it when the provider is enabled; generate it per [Supabase Apple docs](https://supabase.com/docs/guides/auth/social-login/auth-apple) if needed.
+
+3. Rebuild the iOS app after auth changes: `npm run build:mobile` then `npx cap sync` (or `npx cap sync ios`).
+
+For **web** sign-in, Google still uses the browser `redirectTo` (`{origin}/auth`); add that URL under **Authentication** → **URL Configuration** → **Redirect URLs** if you use a custom domain.
