@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from '../contexts/AuthContext'
 
 const {
   isNativePlatformMock,
+  mockGetPlatform,
   mockGetSession,
   mockOnAuthStateChange,
   mockSignInWithPassword,
@@ -13,9 +14,11 @@ const {
   mockSignOut,
   mockGoogleInitialize,
   mockGoogleSignIn,
+  mockAppleAuthorize,
   mockUnsubscribe,
 } = vi.hoisted(() => ({
   isNativePlatformMock: vi.fn(() => false),
+  mockGetPlatform: vi.fn(() => 'web'),
   mockGetSession: vi.fn(),
   mockOnAuthStateChange: vi.fn(),
   mockSignInWithPassword: vi.fn(),
@@ -25,12 +28,13 @@ const {
   mockSignOut: vi.fn(),
   mockGoogleInitialize: vi.fn(),
   mockGoogleSignIn: vi.fn(),
+  mockAppleAuthorize: vi.fn(),
   mockUnsubscribe: vi.fn(),
 }))
 
 vi.mock('@capacitor/core', () => ({
   Capacitor: {
-    getPlatform: () => 'web',
+    getPlatform: (...args) => mockGetPlatform(...args),
     isNativePlatform: (...args) => isNativePlatformMock(...args),
   },
 }))
@@ -56,6 +60,12 @@ vi.mock('@capawesome/capacitor-google-sign-in', () => ({
   },
 }))
 
+vi.mock('../native/signInWithApple', () => ({
+  SignInWithApple: {
+    authorize: (...args) => mockAppleAuthorize(...args),
+  },
+}))
+
 function createWrapper() {
   function Wrapper({ children }) {
     return <AuthProvider>{children}</AuthProvider>
@@ -67,6 +77,7 @@ describe('AuthContext', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     isNativePlatformMock.mockReturnValue(false)
+    mockGetPlatform.mockReturnValue('web')
     mockGetSession.mockResolvedValue({ data: { session: null } })
     mockOnAuthStateChange.mockImplementation(() => ({
       data: { subscription: { unsubscribe: mockUnsubscribe } },
@@ -78,6 +89,9 @@ describe('AuthContext', () => {
     mockSignOut.mockResolvedValue({ error: null })
     mockGoogleInitialize.mockResolvedValue(undefined)
     mockGoogleSignIn.mockResolvedValue({ idToken: 'test-id-token' })
+    mockAppleAuthorize.mockResolvedValue({
+      response: { identityToken: 'test-apple-id-token' },
+    })
   })
 
   describe('A — initial load', () => {
@@ -184,8 +198,20 @@ describe('AuthContext', () => {
       })
     })
 
-    it('test_signInWithApple_uses_oauth_with_native_redirect_on_native', async () => {
-      isNativePlatformMock.mockReturnValue(true)
+    it('test_signInWithApple_ios_uses_native_authorize_and_signInWithIdToken', async () => {
+      mockGetPlatform.mockReturnValue('ios')
+      const rawNonce = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee'
+      const digestBuf = new Uint8Array(32)
+      for (let i = 0; i < 32; i += 1) {
+        digestBuf[i] = i
+      }
+      vi.spyOn(crypto, 'randomUUID').mockReturnValue(rawNonce)
+      const digestSpy = vi.spyOn(crypto.subtle, 'digest').mockResolvedValue(digestBuf.buffer)
+
+      mockAppleAuthorize.mockResolvedValue({
+        response: { identityToken: 'native-apple-jwt' },
+      })
+      mockSignInWithIdToken.mockResolvedValue({ data: { user: { id: 'a1' } }, error: null })
 
       const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() })
 
@@ -197,14 +223,33 @@ describe('AuthContext', () => {
         await result.current.signInWithApple()
       })
 
-      expect(mockSignInWithOAuth).toHaveBeenCalledWith({
+      expect(digestSpy).toHaveBeenCalled()
+      expect(digestSpy.mock.calls[0][0]).toBe('SHA-256')
+      expect(mockAppleAuthorize).toHaveBeenCalledWith(
+        expect.objectContaining({
+          clientId: 'com.meald.app',
+          redirectURI: 'com.meald.app://auth-callback',
+          scopes: 'email name',
+        })
+      )
+      const nonceArg = mockAppleAuthorize.mock.calls[0][0].nonce
+      expect(nonceArg).toMatch(/^[0-9a-f]{64}$/)
+      expect(mockSignInWithIdToken).toHaveBeenCalledWith({
         provider: 'apple',
-        options: { redirectTo: 'com.meald.app://auth-callback' },
+        token: 'native-apple-jwt',
+        nonce: rawNonce,
       })
+      expect(mockSignInWithOAuth).not.toHaveBeenCalled()
+
+      digestSpy.mockRestore()
     })
 
-    it('test_signInWithApple_uses_oauth_with_web_redirect_on_web', async () => {
-      isNativePlatformMock.mockReturnValue(false)
+    it('test_signInWithApple_ios_throws_when_identity_token_missing', async () => {
+      mockGetPlatform.mockReturnValue('ios')
+      mockAppleAuthorize.mockResolvedValue({ response: { identityToken: null } })
+      const digestBuf = new Uint8Array(32)
+      vi.spyOn(crypto, 'randomUUID').mockReturnValue('00000000-0000-4000-8000-000000000001')
+      vi.spyOn(crypto.subtle, 'digest').mockResolvedValue(digestBuf.buffer)
 
       const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() })
 
@@ -212,14 +257,31 @@ describe('AuthContext', () => {
         expect(result.current.loading).toBe(false)
       })
 
-      await act(async () => {
-        await result.current.signInWithApple()
+      await expect(
+        act(async () => {
+          await result.current.signInWithApple()
+        })
+      ).rejects.toThrow('Apple Sign-In did not return an identity token.')
+
+      expect(mockSignInWithIdToken).not.toHaveBeenCalled()
+    })
+
+    it('test_signInWithApple_non_ios_throws', async () => {
+      mockGetPlatform.mockReturnValue('web')
+
+      const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() })
+
+      await waitFor(() => {
+        expect(result.current.loading).toBe(false)
       })
 
-      expect(mockSignInWithOAuth).toHaveBeenCalledWith({
-        provider: 'apple',
-        options: { redirectTo: `${window.location.origin}/auth` },
-      })
+      await expect(
+        act(async () => {
+          await result.current.signInWithApple()
+        })
+      ).rejects.toThrow('Sign in with Apple is only available on iOS.')
+
+      expect(mockAppleAuthorize).not.toHaveBeenCalled()
     })
   })
 
