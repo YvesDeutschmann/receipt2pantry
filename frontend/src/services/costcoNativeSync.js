@@ -5,37 +5,7 @@
 
 import { api } from './apiClient'
 
-function base64UrlDecode(str) {
-  let payload = str.replace(/-/g, '+').replace(/_/g, '/');
-  const pad = payload.length % 4;
-  if (pad) payload += '='.repeat(4 - pad);
-  try {
-    return JSON.parse(atob(payload));
-  } catch {
-    return {};
-  }
-}
-
-/**
- * Decode JWT payload without verification
- */
-export function decodeJwtPayload(token) {
-  if (!token) return {};
-  const parts = token.split('.');
-  if (parts.length !== 3) return {};
-  return base64UrlDecode(parts[1]);
-}
-
-/**
- * Check if token is expired or will expire within bufferSeconds
- */
-export function isTokenExpired(token, bufferSeconds = 60) {
-  const payload = decodeJwtPayload(token);
-  const exp = payload.exp;
-  if (!exp) return true;
-  const expiryTime = exp * 1000;
-  return Date.now() >= expiryTime - bufferSeconds * 1000;
-}
+export { decodeJwtPayload, isTokenExpired } from './jwtUtils'
 
 /**
  * Parse raw Costco API receipt to standard format. Exported for use by costcoWebViewBridge.
