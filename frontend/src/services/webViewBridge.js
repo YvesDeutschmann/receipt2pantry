@@ -70,6 +70,8 @@ async function closeWebView(logPrefix) {
  * @param {number} [config.extractIntervalMs]
  * @param {string} [config.loginTitle] - WebView title for login
  * @param {string} [config.urlExcludePattern] - URL pattern to exclude from extraction trigger (e.g. '/LogonForm')
+ * @param {string[]} [config.skipInjectionUrlPatterns] - Substrings when present in WebView URL skip executeScript extraction (Costco login: signin/Azure/B2C)
+ * @param {boolean} [config.clearBrowserSessionBeforeLogin=false] - clearAllCookies+clearCache after close, before opening login WebView
  * @param {Object} [config.httpOnlyCookies] - Optional HttpOnly cookie extraction: { url, cookieName, parseToken, injectKey, injectVarName }
  * @param {() => string} [config.preExtractVars] - Optional JS snippet to inject before extract script (e.g. window.__knownOrderIds=...)
  * @param {() => Promise<string|undefined>} [config.extractCookiesBeforeClose] - Optional: read cookies from InAppBrowser before close (e.g. for native API Cookie header)
@@ -93,6 +95,8 @@ export function createWebViewBridge(config) {
     extractIntervalMs = DEFAULT_EXTRACT_INTERVAL_MS,
     loginTitle = `Sign in to ${provider}`,
     urlExcludePattern = '',
+    skipInjectionUrlPatterns = [],
+    clearBrowserSessionBeforeLogin = false,
     httpOnlyCookies,
     preExtractVars,
     extractCookiesBeforeClose,
@@ -105,6 +109,19 @@ export function createWebViewBridge(config) {
     if (!url) return false;
     if (urlExcludePattern && url.includes(urlExcludePattern)) return false;
     return extractDomains.some((d) => url.includes(d));
+  };
+
+  const shouldSkipInjectionForUrl = (url) => {
+    if (!url || !skipInjectionUrlPatterns.length) return false;
+    return skipInjectionUrlPatterns.some((p) => url.includes(p));
+  };
+
+  /** For logging Akamai/https diagnostics (blocked URLs still report https in practice). */
+  const logUrlScheme = (prefix, url) => {
+    if (!url) return;
+    const isHttps = url.startsWith('https:');
+    const schemeHint = isHttps ? 'https' : url.startsWith('http:') ? 'http' : 'other';
+    console.log(`${LOG_PREFIX} ${prefix} (${schemeHint}), len=${url.length}`);
   };
 
   const handleReceiptsMessage = async (d, finish) => {
@@ -146,6 +163,16 @@ export function createWebViewBridge(config) {
       }
       await InAppBrowser.close().catch(() => {});
 
+      if (clearBrowserSessionBeforeLogin) {
+        try {
+          await InAppBrowser.clearAllCookies({});
+          await InAppBrowser.clearCache({});
+          console.log(`${LOG_PREFIX} Cleared browser cookies + cache before login`);
+        } catch (e) {
+          console.warn(`${LOG_PREFIX} Pre-login clearCookies/clearCache:`, e?.message || e);
+        }
+      }
+
       let messageListener;
       let closeListener;
       let urlListener;
@@ -159,7 +186,9 @@ export function createWebViewBridge(config) {
       let extractionAttempts = 0;
       let httpOnlyTokenInjected = false;
       /** Last URL from urlChangeEvent (diagnostics / bridge logging only). */
-      let lastBrowserUrl = '';
+      let lastBrowserUrl = loginUrl;
+      /** Per-origin set: hosts where we have already wiped LS/SS this login session. */
+      const wipedHosts = new Set();
       const loginLogTag = `${provider}Login`;
 
       const runHttpOnlyCookiePoll = async () => {
@@ -185,8 +214,35 @@ export function createWebViewBridge(config) {
         }
       };
 
+      /**
+       * Belt-and-suspenders Akamai/MSAL local storage wipe.
+       * Native `clearAllCookies` may or may not include LocalStorage depending on plugin
+       * version. We additionally clear `ak_*`, `_abck`, `bm_*` (Akamai Bot Manager) and
+       * MSAL B2C entries from the live page once per host, only when caller asked for a
+       * fresh session and we are still on a known auth host pre-tokens.
+       */
+      const wipeAkamaiAndMsalStorageOnce = async () => {
+        if (!clearBrowserSessionBeforeLogin || tokensReceived) return;
+        let host = '';
+        try {
+          host = new URL(lastBrowserUrl).hostname;
+        } catch {
+          return;
+        }
+        if (!host || wipedHosts.has(host)) return;
+        if (!extractDomains.some((d) => host.includes(d))) return;
+        wipedHosts.add(host);
+        const code = `(function(){try{var KEYS=['ak_a','ak_ax','ak_bm_tab_id','_abck','bm_sz','bm_sv','bm_mi','bm_so','bm_lso','RT'];function nuke(s){try{KEYS.forEach(function(k){try{s.removeItem(k);}catch(_){ }});for(var i=s.length-1;i>=0;i--){try{var k=s.key(i);if(!k)continue;if(k.indexOf('msal.')===0||k.indexOf('signin.costco.com')>=0||k.indexOf('b2clogin.com')>=0){s.removeItem(k);}}catch(_){}}}catch(_){}}nuke(localStorage);nuke(sessionStorage);try{if(window.indexedDB&&indexedDB.databases){indexedDB.databases().then(function(dbs){(dbs||[]).forEach(function(d){try{indexedDB.deleteDatabase(d.name);}catch(_){}});}).catch(function(){});}}catch(_){}}catch(_){}})();`;
+        await InAppBrowser.executeScript({ code }).catch(() => {});
+      };
+
       const runExtraction = () => {
         if (tokensReceived) return;
+        if (shouldSkipInjectionForUrl(lastBrowserUrl)) {
+          wipeAkamaiAndMsalStorageOnce().catch(() => {});
+          return;
+        }
+        wipeAkamaiAndMsalStorageOnce().catch(() => {});
         extractionAttempts++;
         runHttpOnlyCookiePoll().then(async () => {
           if (preExtractVars) {
@@ -296,11 +352,22 @@ export function createWebViewBridge(config) {
         urlListener = await InAppBrowser.addListener('urlChangeEvent', (ev) => {
           const u = ev?.url || '';
           lastBrowserUrl = u;
-          bridgeDevLog(loginLogTag, `urlChange: ${u.slice(0, 200)} isExtract=${isExtractUrl(u)} tokensReceived=${tokensReceived}`);
-          console.log(`${LOG_PREFIX} urlChange: ${u.slice(0, 120)}, tokensReceived=${tokensReceived}, isExtract=${isExtractUrl(u)}`);
+          logUrlScheme('urlChange', u);
+          bridgeDevLog(
+            loginLogTag,
+            `urlChange: ${u.slice(0, 200)} isExtract=${isExtractUrl(u)} skipInjection=${shouldSkipInjectionForUrl(u)} tokensReceived=${tokensReceived}`
+          );
+          console.log(
+            `${LOG_PREFIX} urlChange: ${u.slice(0, 180)}, tokensReceived=${tokensReceived}, isExtract=${isExtractUrl(u)}, skipInjection=${shouldSkipInjectionForUrl(u)}`
+          );
           if (httpOnlyCookies) httpOnlyTokenInjected = false;
           if (tokensReceived) return;
           if (isExtractUrl(u)) {
+            // Always run storage wipe on extract-domain URLs (login hosts included),
+            // even when injection is skipped, so Akamai/MSAL stale markers don't block retry.
+            wipeAkamaiAndMsalStorageOnce().catch(() => {});
+          }
+          if (isExtractUrl(u) && !shouldSkipInjectionForUrl(u)) {
             runExtraction();
             setTimeout(runExtraction, 800);
             setTimeout(runExtraction, 2500);

@@ -5,7 +5,7 @@
 
 import { useState, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { hasStoredTokens, startLogin, startSilentSync, clearStoredTokens } from '../services/costcoWebViewBridge';
+import { hasStoredTokens, startLogin, startSilentSync, clearStoredTokens, clearCostcoInAppBrowserSession } from '../services/costcoWebViewBridge';
 import { submitToBackend } from '../services/costcoNativeSync';
 import { api } from '../services/apiClient';
 
@@ -95,6 +95,7 @@ export function useCostcoSync(userId) {
       console.error(`${LOG_PREFIX} startSync failed`, err?.message || err, err);
       if (isTokenError) {
         await clearStoredTokens();
+        await clearCostcoInAppBrowserSession().catch(() => {});
         setHasStoredTokensState(false);
       }
       setError(msg);
@@ -165,6 +166,7 @@ export function useCostcoSync(userId) {
       const msg = err?.message || String(err);
       console.error(`${LOG_PREFIX} startSilent failed`, msg);
       await clearStoredTokens();
+      await clearCostcoInAppBrowserSession().catch(() => {});
       setHasStoredTokensState(false);
       setError(msg || 'Failed to fetch receipts.');
       setStatus(STATUS.ERROR);
