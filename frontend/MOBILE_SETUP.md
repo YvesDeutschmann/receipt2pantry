@@ -66,8 +66,8 @@ To use the Vite dev server with hot reload on your phone (same Wi‑Fi as your P
 
 1. From `frontend`, run **`npm run dev`** in one terminal (Vite uses `host: true` so the dev server is reachable on your LAN).
 2. In another terminal, from `frontend`, run **`npm run cap:dev`**. This script:
-   - Detects your machine’s current LAN IPv4
-   - Updates `android/app/src/main/res/xml/network_security_config.xml` so Android allows HTTP to that IP (cleartext)
+   - Detects your machine’s current LAN IPv4 (**or** uses **`ANDROID_DEV_LAN_IP`** / **`CAP_DEV_HOST`** from `.env` / `.env.local` if set — avoids committing IPs in tracked files)
+   - Updates `android/app/src/main/res/xml/network_security_config.xml` so Android allows HTTP to that IP (cleartext); the tracked XML only lists `localhost` + emulator — your LAN IP is injected by this script or by **`npm run cap:sync`** / **`cap run android`** when `ANDROID_DEV_LAN_IP` is in `.env.local`
    - Writes **`VITE_API_BASE_URL`** to `.env.local` (e.g. `http://<your-ip>:5000/api`) so a later **`npm run build:mobile`** bakes the correct dev-machine API URL into the production bundle (otherwise the WebView uses `localhost` and API calls hit the phone)
    - Runs `cap sync` with **`DEV_SERVER_URL`** set so `capacitor.config.ts` points the WebView at `http://<your-ip>:5173/`
 
@@ -79,7 +79,7 @@ To use the Vite dev server with hot reload on your phone (same Wi‑Fi as your P
 
 **Backend / Flask port:** If the API listens on something other than 5000, set `CAP_BACKEND_PORT` before `cap:dev` (e.g. `$env:CAP_BACKEND_PORT=8080; npm run cap:dev`) so `.env.local` gets the matching `VITE_API_BASE_URL`.
 
-**Wrong IP detected:** If you have many virtual adapters (Hyper-V, Docker), set `CAP_DEV_HOST` to your Wi‑Fi IP explicitly (e.g. `$env:CAP_DEV_HOST='192.168.1.42'; npm run cap:dev`).
+**Wrong IP detected:** Add `ANDROID_DEV_LAN_IP=192.168.x.x` (or legacy `CAP_DEV_HOST`) to **`.env.local`** (gitignored), or export it for one session. If you have many virtual adapters (Hyper-V, Docker), prefer an explicit IP over auto-detect.
 
 **Production:** `npm run build:mobile` does not set `DEV_SERVER_URL`, so the app loads the bundled `dist/` and does not embed a dev `server.url`.
 

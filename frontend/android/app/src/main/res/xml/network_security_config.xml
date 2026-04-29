@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
+  <!--
+    Physical-device dev-only: LAN IP cleartext is added by npm run scripts
+    (ANDROID_DEV_LAN_IP or CAP_DEV_HOST from .env / .env.local, or npm run cap:dev auto-detect).
+    Do not commit a machine-specific IP — use .env.local (gitignored).
+  -->
   <domain-config cleartextTrafficPermitted="true">
     <domain includeSubdomains="true">10.0.2.2</domain>
     <domain includeSubdomains="true">localhost</domain>
-    <domain includeSubdomains="true">192.168.50.31</domain>
   </domain-config>
 </network-security-config>
