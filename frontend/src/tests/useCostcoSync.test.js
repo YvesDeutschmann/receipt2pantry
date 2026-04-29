@@ -6,6 +6,7 @@ const mockStartLogin = vi.fn()
 const mockStartSilentSync = vi.fn()
 const mockHasStoredTokens = vi.fn()
 const mockClearStoredTokens = vi.fn()
+const mockClearCostcoInAppBrowserSession = vi.fn(() => Promise.resolve())
 const mockSubmitToBackend = vi.fn()
 const mockConnectCostcoFromApp = vi.fn()
 const mockTriggerGeneration = vi.fn(() => Promise.resolve({ status: 'completed' }))
@@ -27,6 +28,7 @@ vi.mock('../services/costcoWebViewBridge', () => ({
   startLogin: () => mockStartLogin(),
   startSilentSync: () => mockStartSilentSync(),
   clearStoredTokens: () => mockClearStoredTokens(),
+  clearCostcoInAppBrowserSession: () => mockClearCostcoInAppBrowserSession(),
 }))
 
 vi.mock('../services/costcoNativeSync', () => ({

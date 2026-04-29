@@ -36,6 +36,8 @@ const { ibState, InAppBrowser } = vi.hoisted(() => {
     close: vi.fn(() => Promise.resolve()),
     executeScript: vi.fn(() => Promise.resolve()),
     getCookies: vi.fn(() => Promise.resolve({})),
+    clearAllCookies: vi.fn(() => Promise.resolve()),
+    clearCache: vi.fn(() => Promise.resolve()),
   }
   return { ibState: state, InAppBrowser }
 })
@@ -134,6 +136,25 @@ describe('webViewBridge contract', () => {
   })
 
   describe('group A — Costco bridge message shape', () => {
+    it('test_costco_login_clears_inapp_browser_session_before_open', async () => {
+      const { startLogin } = await import('../services/costcoWebViewBridge.js')
+      const p = startLogin()
+      await flushUntilListenersReady()
+      expect(InAppBrowser.clearAllCookies).toHaveBeenCalled()
+      expect(InAppBrowser.clearCache).toHaveBeenCalled()
+      fireMessage({
+        type: 'costco-tokens',
+        idToken: FAKE_ID_TOKEN_XYZ789,
+        accessToken: FAKE_ACCESS_TOKEN_ABC123,
+        clientID: 'cid',
+        wcsClientId: 'wcs',
+        refreshToken: 'rt',
+        refreshTokenClientId: 'rtc',
+        userAgent: 'ua',
+      })
+      await p
+    })
+
     it('test_costco_startLogin_returns_object_with_required_token_keys', async () => {
       const { startLogin } = await import('../services/costcoWebViewBridge.js')
       const p = startLogin()

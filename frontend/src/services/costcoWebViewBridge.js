@@ -10,6 +10,7 @@ import { createWebViewBridge } from './webViewBridge';
 import { createTokenStorage } from './tokenStorage';
 import { parseApiReceipt } from './costcoNativeSync';
 import { getExtractScript } from './costcoExtractScript';
+import { InAppBrowser } from '@capgo/inappbrowser';
 
 const COSTCO_GRAPHQL_URL = 'https://ecom-api.costco.com/ebusiness/order/v1/orders/graphql';
 
@@ -76,6 +77,13 @@ const bridge = createWebViewBridge({
     }),
   loginTitle: 'Sign in to Costco',
   urlExcludePattern: 'signin.costco.com',
+  /** Do not inject MSAL/receipt polling on SSO hosts (avoids overlay + stale token close during OTP/password). */
+  skipInjectionUrlPatterns: [
+    'signin.costco.com',
+    'b2clogin.com',
+    'login.microsoftonline.com',
+  ],
+  clearBrowserSessionBeforeLogin: true,
 });
 
 export const startLogin = bridge.startLogin.bind(bridge);
@@ -84,3 +92,10 @@ export const closeWebViewAfterFetch = bridge.closeWebViewAfterFetch.bind(bridge)
 export const getStoredTokens = bridge.getStoredTokens.bind(bridge);
 export const hasStoredTokens = bridge.hasStoredTokens.bind(bridge);
 export const clearStoredTokens = bridge.clearStoredTokens.bind(bridge);
+
+/** Clears InAppBrowser cookie jar + disk cache (reduces stale B2C / Akamai state after failures). Safe to call from error handlers. */
+export async function clearCostcoInAppBrowserSession() {
+  await InAppBrowser.close().catch(() => {});
+  await InAppBrowser.clearAllCookies({}).catch((e) => console.warn('[costcoWebViewBridge] clearAllCookies:', e?.message ?? e));
+  await InAppBrowser.clearCache({}).catch((e) => console.warn('[costcoWebViewBridge] clearCache:', e?.message ?? e));
+}

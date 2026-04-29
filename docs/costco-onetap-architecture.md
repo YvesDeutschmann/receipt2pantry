@@ -1,6 +1,8 @@
-# Costco One-Tap Sync – Technical Spike
+# Costco One-Tap Sync – Architecture (reference)
 
-A WebView-based authentication bridge that extracts Costco MSAL tokens after login, fetches receipts via native device HTTP (avoiding Akamai bot detection), and submits them to the app backend.
+A WebView-based authentication bridge that extracts Costco MSAL tokens after login, fetches receipts via native device HTTP (avoiding Akamai bot detection) and/or in-WebView GraphQL, and submits them to the app backend.
+
+**Production code** lives under [`frontend/src/services/`](../frontend/src/services/) (see table below). The old `frontend/spike/` folder has been removed to avoid duplicate implementations.
 
 ## Architecture
 
@@ -15,15 +17,16 @@ User taps "Sync" → WebView opens (Costco login) → JS injection polls localSt
 - **Storage**: `@capacitor/preferences` for token persistence
 - **Backend**: `POST /api/providers/costco/store-receipts` (added for spike)
 
-## Files
+## Canonical files (production)
 
-| File | Purpose |
+| Path | Purpose |
 |------|---------|
-| `costcoInjectionScript.js` | Raw JS injected into WebView; polls localStorage for idToken, clientID, refreshToken |
-| `costcoWebViewBridge.js` | InAppBrowser orchestrator; `startLogin()` (visible), `startSilentSync()` (hidden) |
-| `costcoNativeSync.js` | CapacitorHttp GraphQL fetch, JWT decode, token refresh, `submitToBackend()` |
-| `useCostcoSync.js` | React hook; state machine for token check → refresh/login → fetch → handoff |
-| `CostcoOneTapSync.jsx` | React UI component with sync button and status display |
+| [`frontend/src/services/costcoExtractScript.js`](../frontend/src/services/costcoExtractScript.js) | Script string injected into WebView; MSAL token poll + in-WebView receipt fetch |
+| [`frontend/src/services/costcoWebViewBridge.js`](../frontend/src/services/costcoWebViewBridge.js) | InAppBrowser orchestrator; `startLogin()`, `startSilentSync()` |
+| [`frontend/src/services/costcoNativeSync.js`](../frontend/src/services/costcoNativeSync.js) | Native HTTP GraphQL / handoff, `submitToBackend()` |
+| [`frontend/src/services/webViewBridge.js`](../frontend/src/services/webViewBridge.js) | Shared bridge factory (used by Costco and other providers) |
+| [`frontend/src/hooks/useCostcoSync.js`](../frontend/src/hooks/useCostcoSync.js) | React hook; token check → login → fetch → backend |
+| [`frontend/src/components/CostcoOneTapSync.jsx`](../frontend/src/components/CostcoOneTapSync.jsx) | UI: sync button and status |
 
 ## Usage
 
@@ -38,7 +41,7 @@ npm install @capgo/inappbrowser @capacitor/preferences
 ### 2. Add component to your app
 
 ```jsx
-import CostcoOneTapSync from '../spike/CostcoOneTapSync';
+import CostcoOneTapSync from '../components/CostcoOneTapSync';
 
 // In your Providers page or similar:
 <CostcoOneTapSync
