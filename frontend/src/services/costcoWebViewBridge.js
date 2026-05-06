@@ -75,6 +75,14 @@ const bridge = createWebViewBridge({
         normalized !== 'gasandcarwash'
       );
     }),
+  /**
+   * Capture the CAPGO mobileApp bridge reference as early as possible, before
+   * www.costco.com's own native-app bridge code can assign window.mobileApp.
+   * The extract script uses window.__capgoBridge (falling back to window.mobileApp)
+   * so our postMessage calls always reach the Capacitor layer, not Costco's bridge.
+   */
+  preExtractVars: () =>
+    `if(!window.__capgoBridge&&window.mobileApp&&typeof window.mobileApp.postMessage==='function'){window.__capgoBridge=window.mobileApp;}`,
   loginTitle: 'Sign in to Costco',
   urlExcludePattern: 'signin.costco.com',
   /** Do not inject MSAL/receipt polling on SSO hosts (avoids overlay + stale token close during OTP/password). */
@@ -83,7 +91,6 @@ const bridge = createWebViewBridge({
     'b2clogin.com',
     'login.microsoftonline.com',
   ],
-  clearBrowserSessionBeforeLogin: true,
 });
 
 export const startLogin = bridge.startLogin.bind(bridge);

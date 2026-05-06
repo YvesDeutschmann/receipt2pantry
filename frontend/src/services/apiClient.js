@@ -1,29 +1,172 @@
 import axios from 'axios'
+import { Preferences } from '@capacitor/preferences'
 import { supabase } from './supabaseClient'
 
-function getApiBaseUrl() {
+const PREF_MANUAL = 'dev_api_base_url'
+const PREF_SYNCED = 'dev_api_base_url_synced'
+const SUPABASE_CONFIG_KEY = 'dev_api_base_url'
+
+let manualOverride = null
+let syncedValue = null
+let initPromise = null
+
+/** Normalize user/pasted URL to API base (…/api, no trailing slash). */
+export function normalizeApiBaseUrl(url) {
+  const t = (url || '').trim().replace(/\/+$/, '')
+  if (!t) return ''
+  return /\/api$/.test(t) ? t : `${t}/api`
+}
+
+function getInitialBaseURL() {
   if (import.meta.env.VITE_API_BASE_URL) {
     return import.meta.env.VITE_API_BASE_URL
   }
-  // Derive from current hostname so mobile devices (Capacitor) reach the
-  // dev machine instead of trying localhost on the phone itself.
-  const hostname = window.location.hostname || 'localhost'
+  const hostname = typeof window !== 'undefined' ? (window.location.hostname || 'localhost') : 'localhost'
   return `http://${hostname}:5000/api`
 }
 
-// Create axios instance with default config
+export async function initApiBaseUrl() {
+  if (initPromise) return initPromise
+  initPromise = (async () => {
+    try {
+      const [{ value: m }, { value: s }] = await Promise.all([
+        Preferences.get({ key: PREF_MANUAL }),
+        Preferences.get({ key: PREF_SYNCED }),
+      ])
+      manualOverride = m || null
+      syncedValue = s || null
+    } catch {
+      manualOverride = null
+      syncedValue = null
+    }
+  })()
+  return initPromise
+}
+
+export function shouldSyncApiBaseFromSupabase() {
+  return true
+}
+
+export async function refreshSyncedApiBaseUrl() {
+  try {
+    const { data, error } = await supabase
+      .from('app_config')
+      .select('value')
+      .eq('key', SUPABASE_CONFIG_KEY)
+      .maybeSingle()
+
+    if (error) return { ok: false, error: error.message }
+
+    const next = normalizeApiBaseUrl(data?.value)
+
+    if (!next) {
+      const had = !!syncedValue
+      if (had) {
+        try {
+          await Preferences.remove({ key: PREF_SYNCED })
+        } catch {
+          /* ignore */
+        }
+        syncedValue = null
+      }
+      return { ok: true, changed: had, value: null }
+    }
+
+    if (next !== syncedValue) {
+      try {
+        await Preferences.set({ key: PREF_SYNCED, value: next })
+      } catch {
+        syncedValue = next
+        return { ok: true, changed: true, value: next }
+      }
+      syncedValue = next
+      return { ok: true, changed: true, value: next }
+    }
+
+    return { ok: true, changed: false, value: syncedValue }
+  } catch (e) {
+    return { ok: false, error: String(e) }
+  }
+}
+
+export async function setApiBaseUrlOverride(url) {
+  const normalized = normalizeApiBaseUrl(url)
+  if (normalized) {
+    await Preferences.set({ key: PREF_MANUAL, value: normalized })
+    manualOverride = normalized
+  } else {
+    await Preferences.remove({ key: PREF_MANUAL })
+    manualOverride = null
+  }
+}
+
+export function getEffectiveApiBaseUrl() {
+  if (manualOverride) return { url: manualOverride, source: 'override' }
+  if (syncedValue) return { url: syncedValue, source: 'supabase' }
+  if (import.meta.env.VITE_API_BASE_URL) {
+    return { url: import.meta.env.VITE_API_BASE_URL, source: 'build' }
+  }
+  const hostname = typeof window !== 'undefined' ? (window.location.hostname || 'localhost') : 'localhost'
+  return { url: `http://${hostname}:5000/api`, source: 'auto' }
+}
+
+/** For dev UI: current resolution including raw stored values. */
+export function getApiBaseResolutionDebug() {
+  const eff = getEffectiveApiBaseUrl()
+  return {
+    ...eff,
+    manualStored: manualOverride,
+    syncedStored: syncedValue,
+  }
+}
+
+const API_CLIENT_DEV_LOG_MAX = 2000
+
+/** Best-effort POST to backend /dev/log (same contract as webViewBridge.bridgeDevLog). */
+export function postDevLog(tag, msg) {
+  try {
+    const base = getEffectiveApiBaseUrl().url.replace(/\/+$/, '')
+    const url = `${base}/dev/log`
+    const safeTag = String(tag || 'apiClient').replace(/\s+/g, '_').slice(0, 64)
+    let safeMsg = String(msg ?? '')
+    if (safeMsg.length > API_CLIENT_DEV_LOG_MAX) {
+      safeMsg = safeMsg.slice(0, API_CLIENT_DEV_LOG_MAX) + '…'
+    }
+    fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=UTF-8' },
+      body: `${safeTag}|${safeMsg}`,
+      keepalive: true,
+    }).catch(() => {})
+  } catch {
+    /* ignore */
+  }
+}
+
+// Create axios instance with default config (baseURL updated per request after Preferences init)
 const apiClient = axios.create({
-  baseURL: getApiBaseUrl(),
+  baseURL: getInitialBaseURL(),
   timeout: 120000, // 2 minutes timeout for device verification
   headers: {
     'Content-Type': 'application/json',
+    'ngrok-skip-browser-warning': 'true',
   },
 })
 
-// Request interceptor: add Supabase JWT and X-User-Id from session
+// Request interceptor: resolve API base URL, add Supabase JWT and X-User-Id from session
 apiClient.interceptors.request.use(
   async (config) => {
+    await initApiBaseUrl()
+    config.baseURL = getEffectiveApiBaseUrl().url
     const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      const method = (config.method || 'get').toUpperCase()
+      const fullUrl = `${config.baseURL || ''}${config.url || ''}`
+      postDevLog(
+        'apiClient',
+        `[apiClient] no-session for ${method} ${fullUrl}`
+      )
+    }
     if (session?.access_token) {
       config.headers.Authorization = `Bearer ${session.access_token}`
     }
@@ -45,6 +188,27 @@ apiClient.interceptors.response.use(
       // Server responded with error status
       const message = error.response.data?.error || 'An error occurred'
       console.error('API Error:', message)
+      const cfg = error.config || {}
+      const method = (cfg.method || 'get').toUpperCase()
+      const fullUrl = `${cfg.baseURL || ''}${cfg.url || ''}`
+      let bodyPreview = ''
+      try {
+        const d = error.response.data
+        bodyPreview =
+          typeof d === 'string' ? d.slice(0, 200) : JSON.stringify(d).slice(0, 200)
+      } catch {
+        bodyPreview = ''
+      }
+      let resolution = ''
+      try {
+        resolution = JSON.stringify(getApiBaseResolutionDebug())
+      } catch {
+        resolution = '{}'
+      }
+      postDevLog(
+        'apiClient',
+        `axios ${method} ${fullUrl} status=${error.response.status} bodyPreview=${bodyPreview} resolution=${resolution}`
+      )
     } else if (error.request) {
       // Request made but no response
       console.error('Network Error:', error.message)
@@ -693,4 +857,3 @@ export const api = {
 }
 
 export default apiClient
-

@@ -11,11 +11,12 @@ function renderSettings() {
   )
 }
 
-const { getHousehold, triggerGeneration } = vi.hoisted(() => ({
+const { getHousehold, triggerGeneration, healthCheck } = vi.hoisted(() => ({
   getHousehold: vi.fn(),
   triggerGeneration: vi.fn(() =>
     Promise.resolve({ status: 'completed', suggestions_generated: 5 })
   ),
+  healthCheck: vi.fn(() => Promise.resolve({ status: 'ok' })),
 }))
 
 vi.mock('../contexts/AuthContext', () => ({
@@ -34,10 +35,20 @@ vi.mock('../services/apiClient', () => ({
   api: {
     getHousehold,
     devResetOnboarding: vi.fn(),
+    healthCheck,
     suggestions: {
       triggerGeneration,
     },
   },
+  getApiBaseResolutionDebug: vi.fn(() => ({
+    url: 'http://localhost:5000/api',
+    source: 'auto',
+    manualStored: null,
+    syncedStored: null,
+  })),
+  refreshSyncedApiBaseUrl: vi.fn(() => Promise.resolve({ ok: true, changed: false })),
+  setApiBaseUrlOverride: vi.fn(() => Promise.resolve()),
+  shouldSyncApiBaseFromSupabase: vi.fn(() => false),
 }))
 
 describe('Settings suggestion refresh', () => {

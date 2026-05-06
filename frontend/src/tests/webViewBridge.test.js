@@ -136,12 +136,12 @@ describe('webViewBridge contract', () => {
   })
 
   describe('group A — Costco bridge message shape', () => {
-    it('test_costco_login_clears_inapp_browser_session_before_open', async () => {
+    it('test_costco_startLogin_does_not_pre_clear_cookies_or_cache', async () => {
       const { startLogin } = await import('../services/costcoWebViewBridge.js')
       const p = startLogin()
       await flushUntilListenersReady()
-      expect(InAppBrowser.clearAllCookies).toHaveBeenCalled()
-      expect(InAppBrowser.clearCache).toHaveBeenCalled()
+      expect(InAppBrowser.clearAllCookies).not.toHaveBeenCalled()
+      expect(InAppBrowser.clearCache).not.toHaveBeenCalled()
       fireMessage({
         type: 'costco-tokens',
         idToken: FAKE_ID_TOKEN_XYZ789,
@@ -153,6 +153,14 @@ describe('webViewBridge contract', () => {
         userAgent: 'ua',
       })
       await p
+    })
+
+    it('test_clearCostcoInAppBrowserSession_calls_clearAllCookies_and_clearCache', async () => {
+      const { clearCostcoInAppBrowserSession } = await import('../services/costcoWebViewBridge.js')
+      await clearCostcoInAppBrowserSession()
+      expect(InAppBrowser.close).toHaveBeenCalled()
+      expect(InAppBrowser.clearAllCookies).toHaveBeenCalled()
+      expect(InAppBrowser.clearCache).toHaveBeenCalled()
     })
 
     it('test_costco_startLogin_returns_object_with_required_token_keys', async () => {
@@ -219,6 +227,52 @@ describe('webViewBridge contract', () => {
       const result = await p
       expect(result._closeWebViewAfterFetch).toBe(true)
       expect(result._fromWebView).toBeUndefined()
+    })
+
+    it('test_costco_no_akamai_wipe_executeScript_on_www_costco_com', async () => {
+      const { startLogin } = await import('../services/costcoWebViewBridge.js')
+      const p = startLogin()
+      await flushUntilListenersReady()
+      fireUrlChange('https://www.costco.com/OAuthLogonCmd?x=1')
+      await vi.advanceTimersByTimeAsync(3500)
+      await Promise.resolve()
+      const wipeCalls = InAppBrowser.executeScript.mock.calls.filter((c) =>
+        String(c[0]?.code || '').includes('ak_a')
+      )
+      expect(wipeCalls).toHaveLength(0)
+      fireMessage({
+        type: 'costco-tokens',
+        idToken: FAKE_ID_TOKEN_XYZ789,
+        accessToken: FAKE_ACCESS_TOKEN_ABC123,
+        clientID: 'cid',
+        wcsClientId: 'wcs',
+        refreshToken: 'rt',
+        refreshTokenClientId: 'rtc',
+        userAgent: 'ua',
+      })
+      await p
+    })
+
+    it('test_costco_skip_injection_on_signin_host_skips_executeScript_after_navigation', async () => {
+      const { startLogin } = await import('../services/costcoWebViewBridge.js')
+      const p = startLogin()
+      await flushUntilListenersReady()
+      InAppBrowser.executeScript.mockClear()
+      fireUrlChange('https://signin.costco.com/authorize')
+      await vi.advanceTimersByTimeAsync(3500)
+      await Promise.resolve()
+      expect(InAppBrowser.executeScript).not.toHaveBeenCalled()
+      fireMessage({
+        type: 'costco-tokens',
+        idToken: FAKE_ID_TOKEN_XYZ789,
+        accessToken: FAKE_ACCESS_TOKEN_ABC123,
+        clientID: 'cid',
+        wcsClientId: 'wcs',
+        refreshToken: 'rt',
+        refreshTokenClientId: 'rtc',
+        userAgent: 'ua',
+      })
+      await p
     })
   })
 

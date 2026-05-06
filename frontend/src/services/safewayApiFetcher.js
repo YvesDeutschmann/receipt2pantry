@@ -156,8 +156,10 @@ export async function fetchSafewayReceipts({
   const cutoff = Date.now() - daysOverride * 24 * 60 * 60 * 1000;
 
   const filtered = list.filter((r) => {
-    const id = r._id || r.id || r.transactionId || '';
-    if (knownSet.size && id && knownSet.has(String(id))) return false;
+    // Check every possible ID field — the summary may only carry _id while the stored
+    // order_id was written from transactionId (or vice versa). Any hit is a duplicate.
+    const candidateIds = [r.transactionId, r._id, r.id].filter(Boolean).map(String);
+    if (knownSet.size && candidateIds.some((id) => knownSet.has(id))) return false;
     const dt = r.posDateTime || r.date || '';
     if (dt) {
       try {
@@ -171,6 +173,7 @@ export async function fetchSafewayReceipts({
   });
 
   dispatchProgress('list_fetched', 0, filtered.length);
+  dispatchProgress('list_filtered', filtered.length, list.length);
 
   if (!filtered.length) {
     dispatchProgress('done', 0, 0);
@@ -195,7 +198,7 @@ export async function fetchSafewayReceipts({
     const launchNext = () => {
       while (inFlight < CONCURRENCY && idx < filtered.length) {
         const summary = filtered[idx++];
-        const receiptId = summary._id || summary.id || '';
+        const receiptId = summary.transactionId || summary._id || summary.id || '';
         if (!receiptId) {
           results.push(summary);
           completed++;
