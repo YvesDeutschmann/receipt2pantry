@@ -1,7 +1,13 @@
 import { useState, useEffect } from 'react'
 import { Link } from 'react-router-dom'
 import { Store, Users } from 'lucide-react'
-import { api } from '../services/apiClient'
+import {
+  api,
+  getApiBaseResolutionDebug,
+  refreshSyncedApiBaseUrl,
+  setApiBaseUrlOverride,
+  shouldSyncApiBaseFromSupabase,
+} from '../services/apiClient'
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 import HouseholdModal from '../components/HouseholdModal'
@@ -15,13 +21,27 @@ function Settings() {
   const [refreshSuggestionsMessage, setRefreshSuggestionsMessage] = useState(null)
   const [devMockMessage, setDevMockMessage] = useState(null)
   const [devMockLoading, setDevMockLoading] = useState(false)
-  
+  const [devApiState, setDevApiState] = useState(() => getApiBaseResolutionDebug())
+  const [devApiInput, setDevApiInput] = useState('')
+  const [devApiMessage, setDevApiMessage] = useState(null)
+  const [devApiBusy, setDevApiBusy] = useState(false)
+
+  const showDevTools =
+    import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_SETTINGS === '1'
+
   const { user } = useAuth()
   const userId = user?.id
 
   useEffect(() => {
     fetchHousehold()
   }, [userId])
+
+  useEffect(() => {
+    if (!showDevTools) return
+    const dbg = getApiBaseResolutionDebug()
+    setDevApiState(dbg)
+    setDevApiInput(dbg.manualStored || '')
+  }, [showDevTools])
 
   const fetchHousehold = async () => {
     try {
@@ -244,9 +264,144 @@ function Settings() {
           </div>
         </div>
 
-        {import.meta.env.DEV && (
+        {showDevTools && (
           <div className="card border-dashed border-[var(--color-error)]/50">
             <h2 className="text-sm font-medium text-[var(--color-error)] mb-2">Dev Tools</h2>
+            <div className="mb-6 p-3 rounded-mise-md bg-forest-light/50 space-y-3 w-full max-w-xl">
+              <h3 className="text-sm font-medium text-cream">Dev: API base URL</h3>
+              <p className="text-xs text-sage-light">
+                Effective:{' '}
+                <code className="text-cream break-all">{devApiState.url}</code>{' '}
+                <span className="text-sage-light">({devApiState.source})</span>
+              </p>
+              {devApiState.manualStored ? (
+                <p className="text-xs text-sage-light">
+                  Manual override stored:{' '}
+                  <code className="text-cream break-all">{devApiState.manualStored}</code>
+                </p>
+              ) : null}
+              {devApiState.syncedStored ? (
+                <p className="text-xs text-sage-light">
+                  Last synced from Supabase (cache):{' '}
+                  <code className="text-cream break-all">{devApiState.syncedStored}</code>
+                </p>
+              ) : null}
+              {!shouldSyncApiBaseFromSupabase() ? (
+                <p className="text-xs text-amber-200/90">
+                  Supabase auto-sync is off in this build (only in dev or when{' '}
+                  <code className="text-cream">VITE_ENABLE_DEV_SETTINGS=1</code>).
+                </p>
+              ) : null}
+              <label className="block text-xs text-sage-light">
+                Manual override (optional)
+                <input
+                  type="text"
+                  className="input mt-1 w-full text-sm font-mono"
+                  placeholder="https://xxxx.ngrok-free.app or …/api"
+                  value={devApiInput}
+                  onChange={(e) => setDevApiInput(e.target.value)}
+                />
+              </label>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  className="btn btn-primary text-sm py-1.5 px-3"
+                  disabled={devApiBusy}
+                  onClick={async () => {
+                    setDevApiBusy(true)
+                    setDevApiMessage(null)
+                    try {
+                      await setApiBaseUrlOverride(devApiInput)
+                      setDevApiState(getApiBaseResolutionDebug())
+                      setDevApiMessage('Saved override.')
+                    } catch (e) {
+                      setDevApiMessage(e?.message || String(e))
+                    } finally {
+                      setDevApiBusy(false)
+                    }
+                  }}
+                >
+                  Save override
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost text-sm py-1.5 px-3"
+                  disabled={devApiBusy}
+                  onClick={async () => {
+                    setDevApiBusy(true)
+                    setDevApiMessage(null)
+                    try {
+                      await setApiBaseUrlOverride('')
+                      setDevApiInput('')
+                      setDevApiState(getApiBaseResolutionDebug())
+                      setDevApiMessage('Cleared manual override.')
+                    } catch (e) {
+                      setDevApiMessage(e?.message || String(e))
+                    } finally {
+                      setDevApiBusy(false)
+                    }
+                  }}
+                >
+                  Clear override
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost text-sm py-1.5 px-3"
+                  disabled={devApiBusy || !shouldSyncApiBaseFromSupabase()}
+                  onClick={async () => {
+                    setDevApiBusy(true)
+                    setDevApiMessage(null)
+                    try {
+                      const r = await refreshSyncedApiBaseUrl()
+                      if (r.skipped) {
+                        setDevApiMessage('Server sync skipped (not a dev settings build).')
+                      } else if (!r.ok) {
+                        setDevApiMessage(r.error || 'Refresh failed')
+                      } else {
+                        setDevApiState(getApiBaseResolutionDebug())
+                        setDevApiMessage(
+                          r.changed
+                            ? `Updated from server: ${r.value || '(cleared)'}`
+                            : 'Already up to date.'
+                        )
+                      }
+                    } catch (e) {
+                      setDevApiMessage(e?.message || String(e))
+                    } finally {
+                      setDevApiBusy(false)
+                    }
+                  }}
+                >
+                  Refresh from server
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-ghost text-sm py-1.5 px-3"
+                  disabled={devApiBusy}
+                  onClick={async () => {
+                    setDevApiBusy(true)
+                    setDevApiMessage(null)
+                    try {
+                      await api.healthCheck()
+                      setDevApiMessage('Health check OK.')
+                    } catch (e) {
+                      setDevApiMessage(
+                        e?.response?.data?.error || e?.message || 'Health check failed'
+                      )
+                    } finally {
+                      setDevApiBusy(false)
+                    }
+                  }}
+                >
+                  Test connection
+                </button>
+              </div>
+              {devApiMessage ? (
+                <p className="text-xs text-sage-light wrap-break-word" role="status">
+                  {devApiMessage}
+                </p>
+              ) : null}
+            </div>
             <div className="flex flex-col gap-2 items-start">
             <button
               type="button"
