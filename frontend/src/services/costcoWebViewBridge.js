@@ -83,7 +83,6 @@ const bridge = createWebViewBridge({
     'b2clogin.com',
     'login.microsoftonline.com',
   ],
-  clearBrowserSessionBeforeLogin: true,
 });
 
 export const startLogin = bridge.startLogin.bind(bridge);
