@@ -41,7 +41,8 @@ const config: CapacitorConfig = {
     SplashScreen: {
       launchAutoHide: true,
       launchShowDuration: 2000,
-      backgroundColor: '#ffffff',
+      // Native splash imagesets provide dark mode; this is the fallback / plugin default for light
+      backgroundColor: '#F5F0E8',
       showSpinner: false,
     },
     Keyboard: {
