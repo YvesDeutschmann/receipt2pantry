@@ -61,7 +61,8 @@ export function getExtractScript(graphqlUrl) {
   function findIdToken(st){try{for(var i=0;i<st.length;i++){var k=st.key(i);try{var val=JSON.parse(st.getItem(k));if(val&&val.credentialType==='IdToken'&&val.environment==='signin.costco.com')return val.secret;}catch(e){}}}catch(_){}return null;}
   function findAccessToken(st){try{for(var i=0;i<st.length;i++){var k=st.key(i);try{var val=JSON.parse(st.getItem(k));if(val&&val.credentialType==='AccessToken'&&val.environment==='signin.costco.com')return val.secret;}catch(e){}}}catch(_){}return null;}
 
-  function postDebug(msg,data){try{if(window.mobileApp&&typeof window.mobileApp.postMessage==='function'){window.mobileApp.postMessage(JSON.stringify({detail:{type:'costco-webview-fetch-debug',message:msg,data:data||{}}}));}}catch(_){}}
+  function getBridge(){return window.__capgoBridge||window.mobileApp;}
+  function postDebug(msg,data){try{var b=getBridge();if(b&&typeof b.postMessage==='function'){b.postMessage(JSON.stringify({detail:{type:'costco-webview-fetch-debug',message:msg,data:data||{}}}));}}catch(_){}}
 
   if(!window.__costcoOpenWrapped){window.__costcoOpenWrapped=true;(function(){var origOpen=window.open;window.open=function(url,target,features){try{postDebug('window-open-intercepted',{url:String(url||'').slice(0,500),target:target||'',features:String(features||'').slice(0,200)});}catch(_){}return origOpen?origOpen.apply(this,arguments):null;};})();}
 
@@ -86,11 +87,11 @@ export function getExtractScript(graphqlUrl) {
 
   function postReceiptsFromWebView(receipts,idT,accT,c,rt,rtCid,wcsCid,userAgent){
     if(window.__costcoReceiptsPosted)return true;
-    try{if(window.mobileApp&&typeof window.mobileApp.postMessage==='function'){
+    try{var b=getBridge();if(b&&typeof b.postMessage==='function'){
       window.__costcoReceiptsPosted=true;
       var token=accT||idT;
       var payload=JSON.stringify({detail:{type:'costco-receipts',receipts:receipts||[],idToken:token||idT,accessToken:accT||null,clientID:c,wcsClientId:wcsCid,refreshToken:rt,refreshTokenClientId:rtCid,userAgent:userAgent||(navigator.userAgent||'')}});
-      window.mobileApp.postMessage(payload);
+      b.postMessage(payload);
       return true;
     }}catch(_){}
     return false;
@@ -98,13 +99,13 @@ export function getExtractScript(graphqlUrl) {
 
   function postTokens(idT,accT,c,userAgent,rt,rtCid,wcsCid){
     if(window.__costcoReceiptsPosted)return true;
-    try{if(window.mobileApp&&typeof window.mobileApp.postMessage==='function'){
+    try{var b=getBridge();if(b&&typeof b.postMessage==='function'){
       var token=accT||idT;
       var cid=c;
       var wcs=wcsCid||'${WCS_CLIENT_ID}';
       if(!token||token.length<50)return false;
       var payload=JSON.stringify({detail:{type:'costco-tokens',idToken:token||idT,accessToken:accT||null,clientID:cid,wcsClientId:wcs,capturedFromGraphQL:false,refreshToken:rt,refreshTokenClientId:rtCid,userAgent:userAgent||(navigator.userAgent||''),cookies:(document.cookie||'')}});
-      window.mobileApp.postMessage(payload);
+      b.postMessage(payload);
       return true;
     }}catch(_){}
     return false;
@@ -174,11 +175,28 @@ export function getExtractScript(graphqlUrl) {
 
   function tryPost(){
     var host=typeof location!=='undefined'&&location.hostname?location.hostname:'';
-    if(host!=='www.costco.com'&&host!=='costco.com'){return false;}
     var idT,accT; try{idT=findIdToken(localStorage);}catch(_){}
     if(!idT)try{idT=findIdToken(sessionStorage);}catch(_){}
     try{accT=findAccessToken(localStorage);}catch(_){}
     if(!accT)try{accT=findAccessToken(sessionStorage);}catch(_){}
+    try{
+      if(typeof window!=='undefined'){
+        if(!window.__costcoTryPostTick)window.__costcoTryPostTick=0;
+        window.__costcoTryPostTick++;
+        var tick=window.__costcoTryPostTick;
+        if(tick===1||tick===5||tick===25){
+          var idPre=idT;
+          var tickData={host:host,hasIdT:!!idT,hasAccT:!!accT,lsLen:localStorage.length,idExpired:!!(idPre&&isJwtExpired(idPre,60))};
+          if(host==='www.costco.com'){
+            var lsKeysFirst5=[];
+            try{for(var li=0;li<Math.min(localStorage.length,5);li++){var lk=localStorage.key(li);if(lk)lsKeysFirst5.push(lk);}}catch(_){}
+            tickData.lsKeysFirst5=lsKeysFirst5;
+          }
+          postDebug('tryPost-tick',tickData);
+        }
+      }
+    }catch(_){}
+    if(host!=='www.costco.com'&&host!=='costco.com'){return false;}
     var c; try{c=localStorage.getItem('clientID')||localStorage.getItem('clientId')||sessionStorage.getItem('clientID')||sessionStorage.getItem('clientId')||null;}catch(_){c=null;}
     var r; try{r=findRT(localStorage);if(!r.rt)r=findRT(sessionStorage);}catch(_){r={rt:null,clientId:null};}
     if(idT&&isJwtExpired(idT,60))idT=null;
@@ -191,7 +209,7 @@ export function getExtractScript(graphqlUrl) {
     return window.__costcoReceiptsPosted;
   }
 
-  function waitBridge(cb){var t0=Date.now();function check(){if(window.mobileApp&&typeof window.mobileApp.postMessage==='function'){cb();return;}if(Date.now()-t0>BRIDGE_MAX)return;setTimeout(check,BRIDGE_POLL);}check();}
+  function waitBridge(cb){var t0=Date.now();function check(){var b=getBridge();if(b&&typeof b.postMessage==='function'){cb();return;}if(Date.now()-t0>BRIDGE_MAX)return;setTimeout(check,BRIDGE_POLL);}check();}
   function pollTokens(){postDiag();var t0=Date.now(),iv=setInterval(function(){if(tryPost()){clearInterval(iv);if(typeof window!=='undefined')window.__costcoPollActive=false;return;}if(Date.now()-t0>TOKEN_MAX){clearInterval(iv);if(typeof window!=='undefined')window.__costcoPollActive=false;}},TOKEN_POLL);}
   if(typeof window!=='undefined'&&!window.__costcoPollActive){window.__costcoPollActive=true;waitBridge(pollTokens);}
 })();
