@@ -162,10 +162,27 @@ describe('apiClient', () => {
     it('test_authorization_header_absent_when_no_session', async () => {
       getSession.mockResolvedValue({ data: { session: null } })
 
-      const config = { headers: {} }
+      const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValue({})
+
+      const config = {
+        headers: {},
+        method: 'get',
+        url: '/pantry/staples-receipt-matches',
+        baseURL: 'https://fixed.test/api',
+      }
       await getRequestInterceptor()(config)
 
       expect(config.headers.Authorization).toBeUndefined()
+      expect(fetchSpy).toHaveBeenCalledWith(
+        'https://fixed.test/api/dev/log',
+        expect.objectContaining({
+          method: 'POST',
+          body: expect.stringContaining(
+            '[apiClient] no-session for GET https://fixed.test/api/pantry/staples-receipt-matches'
+          ),
+        })
+      )
+      fetchSpy.mockRestore()
     })
 
     it('test_x_user_id_set_from_session_user_id', async () => {

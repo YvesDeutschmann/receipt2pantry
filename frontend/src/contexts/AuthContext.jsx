@@ -1,6 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { supabase } from '../services/supabaseClient'
+import { postDevLog } from '../services/apiClient'
 import { SignInWithApple } from '../native/signInWithApple'
 
 const AuthContext = createContext(null)
@@ -38,10 +39,16 @@ export function AuthProvider({ children }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, sess) => {
+    } = supabase.auth.onAuthStateChange((event, sess) => {
       setSession(sess)
       setUser(sess?.user ?? null)
       setLoading(false)
+      const uid = sess?.user?.id
+      const uidRedacted = uid ? `${uid.slice(0, 8)}…` : 'none'
+      postDevLog(
+        'Auth',
+        `[Auth] onAuthStateChange event=${event} hasSession=${Boolean(sess)} uid=${uidRedacted}`
+      )
     })
 
     return () => subscription.unsubscribe()

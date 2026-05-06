@@ -33,9 +33,19 @@ vi.mock('../services/apiClient', () => ({
     createHousehold: (...args) => mockCreateHousehold(...args),
     updateHouseholdProfile: (...args) => mockUpdateHouseholdProfile(...args),
   },
+  postDevLog: vi.fn(),
 }))
 
-const mockUpdateUser = vi.fn(() => Promise.resolve({ data: {}, error: null }))
+const mockUpdateUser = vi.fn((payload) =>
+  Promise.resolve({
+    data: {
+      user: {
+        user_metadata: { ...(payload?.data || {}) },
+      },
+    },
+    error: null,
+  })
+)
 
 vi.mock('../services/supabaseClient', () => ({
   supabase: {
