@@ -43,6 +43,9 @@ env/
 debug_screenshots/
 downloads/
 *.png
+!frontend/ios/App/App/Assets.xcassets/**/*.png
+!frontend/android/app/src/main/res/mipmap-*/**/*.png
+!frontend/assets/*.png
 *.html
 .browser_profiles/
 

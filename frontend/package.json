@@ -18,11 +18,12 @@
     "cap:run:android": "npm run cap:patch && node scripts/apply-android-lan-env.js && cap run android",
     "cap:run:ios": "npm run cap:patch && cap sync ios && cap run ios",
     "build:mobile": "npm run cap:patch && vite build && node scripts/apply-android-lan-env.js && cap sync",
-    "assets:generate": "node scripts/generate-assets.js && npx capacitor-assets generate --iconBackgroundColor '#ffffff' --splashBackgroundColor '#ffffff' --ios --android",
+    "assets:generate": "node scripts/generate-assets.js && npx capacitor-assets generate --iconBackgroundColor '#F5F0E8' --iconBackgroundColorDark '#1A1A2E' --splashBackgroundColor '#F5F0E8' --splashBackgroundColorDark '#1A1A2E' --ios --android && node scripts/ios-expand-app-icons.js",
     "postinstall": "npm run cap:patch",
     "ios:16": "npx cap run ios --target-name='iPhone 16 Pro'",
     "ios:se": "npx cap run ios --target-name='iPhone SE'",
-    "ios:ipad": "npx cap run ios --target-name='iPad Air 11-inch (M2)'"
+    "ios:ipad": "npx cap run ios --target-name='iPad Air 11-inch (M2)'",
+    "ngrok:backend": "node scripts/ngrok-backend.js"
   },
   "dependencies": {
     "@capacitor/android": "^8.1.0",
