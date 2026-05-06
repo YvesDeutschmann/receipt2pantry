@@ -1,22 +1,31 @@
 # App Icons and Splash Screens
 
-This folder contains source assets for native app icons and splash screens.
+This folder contains source assets for `@capacitor/assets`, which generates every size for iOS and Android.
 
-## Current Assets
+## Source files
 
-- **logo.png** (1024x1024) - Placeholder logo used by `@capacitor/assets` to generate all platform-specific sizes.
+| File | Role |
+|------|------|
+| `meald-logo-source.png` | Authoritative fork-M mark (1024×1024, terracotta + transparency or cream). Commit this when the brand updates. |
+| `icon.png` | Opaque icon canvas (cream + mark). Passed to `@capacitor/assets` as the **logo** input for iOS icons and Android legacy launcher icons. |
+| `icon-foreground.png` | Transparent adaptive-icon foreground (~62% safe zone). |
+| `icon-background.png` | Solid cream adaptive background. |
+| `splash.png` | Light splash master (2732×2732, cream + terracotta mark). |
+| `splash-dark.png` | Dark splash master (2732×2732, navy + cream mark). |
 
-## Replacing with Final Assets
+`icon.png` through `splash-dark.png` are **regenerated** by `node scripts/generate-assets.js` from `meald-logo-source.png`—do not hand-edit those outputs.
 
-1. Replace `logo.png` with your final 1024x1024 app icon (or add `logo-dark.png` for dark mode).
-2. Run: `npx capacitor-assets generate --iconBackgroundColor '#ffffff' --splashBackgroundColor '#ffffff' --ios --android`
-3. Run: `npm run cap:sync` to copy updated assets to native projects.
+## Regenerate native assets
 
-## Alternative: Advanced Mode
+From `frontend/`:
 
-For full control, use the advanced mode with separate files:
-- `icon-only.png` (min 1024x1024)
-- `icon-foreground.png`, `icon-background.png` (min 1024x1024)
-- `splash.png`, `splash-dark.png` (min 2732x2732)
+`npm run assets:generate` runs `generate-assets.js`, `@capacitor/assets`, then `scripts/ios-expand-app-icons.js` (full iPhone + iPad AppIcon set required for App Store when deployment target is below iOS 17).
 
-See [@capacitor/assets](https://github.com/ionic-team/capacitor-assets) for details.
+```bash
+npm run assets:generate
+npm run cap:sync
+```
+
+Brand colors passed to the generator: cream `#F5F0E8`, navy `#1A1A2E`, terracotta mark as in the source logo.
+
+See [@capacitor/assets](https://github.com/ionic-team/capacitor-assets) for advanced options.
