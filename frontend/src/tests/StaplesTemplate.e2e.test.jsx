@@ -36,7 +36,16 @@ vi.mock('../services/apiClient', () => ({ api: mockApi }))
 vi.mock('../services/supabaseClient', () => ({
   supabase: {
     auth: {
-      updateUser: vi.fn().mockResolvedValue({ data: {}, error: null }),
+      updateUser: vi.fn((payload) =>
+        Promise.resolve({
+          data: {
+            user: {
+              user_metadata: { ...(payload?.data || {}) },
+            },
+          },
+          error: null,
+        })
+      ),
     },
   },
 }))
@@ -45,6 +54,7 @@ vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({
     user: { id: 'user-1', app_metadata: { provider: 'email' } },
     session: { provider: 'email' },
+    signOut: vi.fn().mockResolvedValue(undefined),
   }),
 }))
 

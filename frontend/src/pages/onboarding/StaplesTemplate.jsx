@@ -138,7 +138,7 @@ function CategorySection({ name, items, selectedSet, preSelectedSet, receiptMatc
 
 export default function StaplesTemplate() {
   const navigate = useNavigate()
-  const { user } = useAuth()
+  const { user, signOut } = useAuth()
   const { complete } = useOnboarding()
   const { setReceiptSyncStatus, setReceiptMatchCount } = useColdStart()
   const userId = user?.id
@@ -287,7 +287,11 @@ export default function StaplesTemplate() {
       }, n > 0 ? 600 : 0)
     } catch (e) {
       console.error(e)
-      setError(e.response?.data?.error || 'Could not save your pantry.')
+      setError(
+        e.response?.data?.error ||
+          e.message ||
+          'Could not save your pantry.'
+      )
     } finally {
       setSubmitting(false)
     }
@@ -309,7 +313,7 @@ export default function StaplesTemplate() {
       fireSuggestionPoolWarmup()
       navigate('/', { replace: true })
     } catch (e) {
-      setError(e.response?.data?.error || 'Save failed.')
+      setError(e.response?.data?.error || e.message || 'Save failed.')
     } finally {
       setSubmitting(false)
       setLeaveOpen(false)
@@ -369,7 +373,30 @@ export default function StaplesTemplate() {
 
         {error && (
           <div className="mb-4 rounded-mise-md border border-[var(--color-error)] px-3 py-2 text-sm text-[var(--color-error)] bg-[var(--color-error)]/10">
-            {error}
+            <p>{error}</p>
+            <div className="flex flex-wrap gap-2 mt-3">
+              <button
+                type="button"
+                onClick={() => setError(null)}
+                className="text-xs px-3 py-1.5 rounded-mise-md bg-forest-light border border-sage/30 text-cream hover:border-terra/40"
+              >
+                Try again
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await signOut()
+                    navigate('/auth', { replace: true })
+                  } catch (e) {
+                    setError(e.message || 'Sign out failed.')
+                  }
+                }}
+                className="text-xs px-3 py-1.5 rounded-mise-md bg-transparent border border-sage/40 text-sage-light hover:text-cream"
+              >
+                Sign out and back in
+              </button>
+            </div>
           </div>
         )}
 
