@@ -8,12 +8,34 @@ import {
   useState,
 } from 'react'
 import { useAuth } from './AuthContext'
-import { api } from '../services/apiClient'
+import { api, postDevLog } from '../services/apiClient'
 import { supabase } from '../services/supabaseClient'
 
 const OnboardingContext = createContext(null)
 
 const DEFAULT_HOUSEHOLD_NAME = 'My Household'
+
+function summarizeAuthError(err) {
+  if (!err) return null
+  return {
+    message: err.message,
+    code: err.code,
+    status: err.status,
+    name: err.name,
+  }
+}
+
+/** Matches session/JWT/auth failures for telemetry; broader than retry predicate alone. */
+function looksSessionishError(error) {
+  return (
+    Boolean(error) &&
+    (error.name === 'AuthSessionMissingError' ||
+      error.status === 401 ||
+      /session|jwt|expired|auth|token|refresh|missing/i.test(
+        error.message || String(error.code || '')
+      ))
+  )
+}
 
 /** Ordered onboarding sub-flow steps (cold-start arc). */
 export const ONBOARDING_STEP_NAMES = [
@@ -199,16 +221,86 @@ export function OnboardingProvider({ children, renderProbeRef }) {
       if (completionSentRef.current) return
       completionSentRef.current = true
       const now = new Date().toISOString()
-      await supabase.auth.updateUser({
-        data: {
-          onboarding_completed_at: now,
-          cold_start_pantry_template_completed_at: now,
-          cold_start_step: 2,
-          signup_method: getSignupMethod(),
-          whats_for_dinner_unlocked: true,
-          ...extra,
-        },
-      })
+      const payload = {
+        onboarding_completed_at: now,
+        cold_start_pantry_template_completed_at: now,
+        cold_start_step: 2,
+        signup_method: getSignupMethod(),
+        whats_for_dinner_unlocked: true,
+        ...extra,
+      }
+
+      const doUpdate = () =>
+        supabase.auth.updateUser({
+          data: payload,
+        })
+
+      let { data, error } = await doUpdate()
+
+      let firstErrorSnapshot = null
+      let afterFirstGetSession = null
+      let afterFirstGetUser = null
+      let looksSessionish = false
+      let refreshOutcome = 'skipped_first_update_ok'
+
+      if (error) {
+        firstErrorSnapshot = summarizeAuthError(error)
+        looksSessionish = looksSessionishError(error)
+
+        const gs = await supabase.auth.getSession()
+        const sess = gs.data?.session
+        afterFirstGetSession = {
+          hasSession: Boolean(sess),
+          hasUser: Boolean(sess?.user),
+          expiresAt: sess?.expires_at ?? null,
+          accessTokenLen: sess?.access_token?.length ?? 0,
+          refreshTokenLen: sess?.refresh_token?.length ?? 0,
+        }
+
+        const gu = await supabase.auth.getUser()
+        afterFirstGetUser = {
+          hasUser: Boolean(gu.data?.user),
+          error: gu.error
+            ? { message: gu.error.message, name: gu.error.name }
+            : null,
+        }
+
+        try {
+          const ref = await supabase.auth.refreshSession()
+          if (ref?.error) {
+            refreshOutcome = `api_error:${ref.error.message || ref.error.name || 'unknown'}`
+          } else if (!ref?.data?.session) {
+            refreshOutcome = 'session_null'
+          } else {
+            refreshOutcome = 'session_present'
+          }
+        } catch (e) {
+          refreshOutcome = `rejected:${e?.message || String(e)}`
+        }
+
+        ;({ data, error } = await doUpdate())
+      }
+
+      const secondErrorSnapshot = summarizeAuthError(error)
+      const completedAt = data?.user?.user_metadata?.onboarding_completed_at
+      if (error || !completedAt) {
+        completionSentRef.current = false
+        postDevLog(
+          'OnboardingComplete',
+          JSON.stringify({
+            firstError: firstErrorSnapshot,
+            secondError: secondErrorSnapshot,
+            afterFirstGetSession,
+            afterFirstGetUser,
+            looksSessionish,
+            refreshOutcome,
+            missingCompletedAt: !completedAt,
+          })
+        )
+        throw new Error(
+          error?.message || 'Could not finish setup. Please try again.'
+        )
+      }
     },
     [authLoading, getSignupMethod]
   )

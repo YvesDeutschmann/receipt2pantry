@@ -66,6 +66,10 @@ vi.mock('../native/signInWithApple', () => ({
   },
 }))
 
+vi.mock('../services/apiClient', () => ({
+  postDevLog: vi.fn(),
+}))
+
 function createWrapper() {
   function Wrapper({ children }) {
     return <AuthProvider>{children}</AuthProvider>

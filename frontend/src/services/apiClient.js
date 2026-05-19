@@ -159,6 +159,14 @@ apiClient.interceptors.request.use(
     await initApiBaseUrl()
     config.baseURL = getEffectiveApiBaseUrl().url
     const { data: { session } } = await supabase.auth.getSession()
+    if (!session) {
+      const method = (config.method || 'get').toUpperCase()
+      const fullUrl = `${config.baseURL || ''}${config.url || ''}`
+      postDevLog(
+        'apiClient',
+        `[apiClient] no-session for ${method} ${fullUrl}`
+      )
+    }
     if (session?.access_token) {
       config.headers.Authorization = `Bearer ${session.access_token}`
     }
