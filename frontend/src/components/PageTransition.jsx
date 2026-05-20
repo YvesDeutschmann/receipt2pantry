@@ -1,4 +1,5 @@
 import { motion } from 'framer-motion'
+import { Capacitor } from '@capacitor/core'
 
 const pageVariants = {
   initial: {
@@ -23,7 +24,17 @@ const pageVariants = {
   },
 }
 
+// framer-motion v11 uses WAAPI for opacity/transform animations.
+// In Capacitor's WKWebView on iOS the initial WAAPI frame can silently
+// drop, leaving the element permanently at opacity:0.  Skip the enter/exit
+// fade on native; the tab-switch still feels snappy without it.
+const isNative = Capacitor.isNativePlatform()
+
 function PageTransition({ children }) {
+  if (isNative) {
+    return <div className="min-h-0">{children}</div>
+  }
+
   return (
     <motion.div
       variants={pageVariants}

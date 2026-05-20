@@ -1,5 +1,6 @@
 import { Outlet, useLocation } from 'react-router-dom'
 import { AnimatePresence } from 'framer-motion'
+import { Capacitor } from '@capacitor/core'
 import { useMediaQuery } from '../hooks/useMediaQuery'
 import { useCostcoAutoSync } from '../hooks/useCostcoAutoSync'
 import BottomTabBar from './BottomTabBar'
@@ -7,6 +8,7 @@ import TopNavBar from './TopNavBar'
 import PageTransition from './PageTransition'
 
 const DESKTOP_BREAKPOINT = '(min-width: 1024px)'
+const isNative = Capacitor.isNativePlatform()
 
 function AppShell() {
   const isDesktop = useMediaQuery(DESKTOP_BREAKPOINT)
@@ -19,11 +21,17 @@ function AppShell() {
 
       <main className="flex-1 overflow-y-auto pt-safe-top pb-tab-bar lg:pb-safe-bottom">
         <div className="container mx-auto px-4 py-6 lg:py-8">
-          <AnimatePresence mode="wait">
-            <PageTransition key={location.pathname || location.key}>
+          {isNative ? (
+            <PageTransition key={location.pathname}>
               <Outlet />
             </PageTransition>
-          </AnimatePresence>
+          ) : (
+            <AnimatePresence mode="wait">
+              <PageTransition key={location.pathname || location.key}>
+                <Outlet />
+              </PageTransition>
+            </AnimatePresence>
+          )}
         </div>
       </main>
 
