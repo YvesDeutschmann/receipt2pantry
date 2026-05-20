@@ -61,8 +61,22 @@ export function getExtractScript(graphqlUrl) {
   function findIdToken(st){try{for(var i=0;i<st.length;i++){var k=st.key(i);try{var val=JSON.parse(st.getItem(k));if(val&&val.credentialType==='IdToken'&&val.environment==='signin.costco.com')return val.secret;}catch(e){}}}catch(_){}return null;}
   function findAccessToken(st){try{for(var i=0;i<st.length;i++){var k=st.key(i);try{var val=JSON.parse(st.getItem(k));if(val&&val.credentialType==='AccessToken'&&val.environment==='signin.costco.com')return val.secret;}catch(e){}}}catch(_){}return null;}
 
-  function getBridge(){return window.__capgoBridge||window.mobileApp;}
-  function postDebug(msg,data){try{var b=getBridge();if(b&&typeof b.postMessage==='function'){b.postMessage(JSON.stringify({detail:{type:'costco-webview-fetch-debug',message:msg,data:data||{}}}));}}catch(_){}}
+  // IMPORTANT (iOS): pass an OBJECT, not a JSON string. The iOS plugin casts
+  // message.body as? [String: Any] — if it's a String the cast fails and the
+  // event arrives as { rawMessage: '...' }, hiding type/payload. See safewayExtractScript.js.
+  function postMsg(type,payload){
+    try{
+      var m=window.mobileApp;
+      if(m&&typeof m.postMessage==='function'){
+        var detail={type:type};
+        if(payload){for(var k in payload){if(Object.prototype.hasOwnProperty.call(payload,k))detail[k]=payload[k];}}
+        m.postMessage({detail:detail});
+        return true;
+      }
+    }catch(_){}
+    return false;
+  }
+  function postDebug(msg,data){postMsg('costco-webview-fetch-debug',{message:msg,data:data||{}});}
 
   if(!window.__costcoOpenWrapped){window.__costcoOpenWrapped=true;(function(){var origOpen=window.open;window.open=function(url,target,features){try{postDebug('window-open-intercepted',{url:String(url||'').slice(0,500),target:target||'',features:String(features||'').slice(0,200)});}catch(_){}return origOpen?origOpen.apply(this,arguments):null;};})();}
 
@@ -87,28 +101,37 @@ export function getExtractScript(graphqlUrl) {
 
   function postReceiptsFromWebView(receipts,idT,accT,c,rt,rtCid,wcsCid,userAgent){
     if(window.__costcoReceiptsPosted)return true;
-    try{var b=getBridge();if(b&&typeof b.postMessage==='function'){
-      window.__costcoReceiptsPosted=true;
-      var token=accT||idT;
-      var payload=JSON.stringify({detail:{type:'costco-receipts',receipts:receipts||[],idToken:token||idT,accessToken:accT||null,clientID:c,wcsClientId:wcsCid,refreshToken:rt,refreshTokenClientId:rtCid,userAgent:userAgent||(navigator.userAgent||'')}});
-      b.postMessage(payload);
-      return true;
-    }}catch(_){}
-    return false;
+    window.__costcoReceiptsPosted=true;
+    var token=accT||idT;
+    return postMsg('costco-receipts',{
+      receipts:receipts||[],
+      idToken:token||idT,
+      accessToken:accT||null,
+      clientID:c,
+      wcsClientId:wcsCid,
+      refreshToken:rt,
+      refreshTokenClientId:rtCid,
+      userAgent:userAgent||(navigator.userAgent||'')
+    });
   }
 
   function postTokens(idT,accT,c,userAgent,rt,rtCid,wcsCid){
     if(window.__costcoReceiptsPosted)return true;
-    try{var b=getBridge();if(b&&typeof b.postMessage==='function'){
-      var token=accT||idT;
-      var cid=c;
-      var wcs=wcsCid||'${WCS_CLIENT_ID}';
-      if(!token||token.length<50)return false;
-      var payload=JSON.stringify({detail:{type:'costco-tokens',idToken:token||idT,accessToken:accT||null,clientID:cid,wcsClientId:wcs,capturedFromGraphQL:false,refreshToken:rt,refreshTokenClientId:rtCid,userAgent:userAgent||(navigator.userAgent||''),cookies:(document.cookie||'')}});
-      b.postMessage(payload);
-      return true;
-    }}catch(_){}
-    return false;
+    var token=accT||idT;
+    var cid=c;
+    var wcs=wcsCid||'${WCS_CLIENT_ID}';
+    if(!token||token.length<50)return false;
+    return postMsg('costco-tokens',{
+      idToken:token||idT,
+      accessToken:accT||null,
+      clientID:cid,
+      wcsClientId:wcs,
+      capturedFromGraphQL:false,
+      refreshToken:rt,
+      refreshTokenClientId:rtCid,
+      userAgent:userAgent||(navigator.userAgent||''),
+      cookies:(document.cookie||'')
+    });
   }
 
   function doFetchReceipts(tokens){
@@ -209,7 +232,7 @@ export function getExtractScript(graphqlUrl) {
     return window.__costcoReceiptsPosted;
   }
 
-  function waitBridge(cb){var t0=Date.now();function check(){var b=getBridge();if(b&&typeof b.postMessage==='function'){cb();return;}if(Date.now()-t0>BRIDGE_MAX)return;setTimeout(check,BRIDGE_POLL);}check();}
+  function waitBridge(cb){var t0=Date.now();function check(){var m=window.mobileApp;if(m&&typeof m.postMessage==='function'){cb();return;}if(Date.now()-t0>BRIDGE_MAX)return;setTimeout(check,BRIDGE_POLL);}check();}
   function pollTokens(){postDiag();var t0=Date.now(),iv=setInterval(function(){if(tryPost()){clearInterval(iv);if(typeof window!=='undefined')window.__costcoPollActive=false;return;}if(Date.now()-t0>TOKEN_MAX){clearInterval(iv);if(typeof window!=='undefined')window.__costcoPollActive=false;}},TOKEN_POLL);}
   if(typeof window!=='undefined'&&!window.__costcoPollActive){window.__costcoPollActive=true;waitBridge(pollTokens);}
 })();
