@@ -83,6 +83,12 @@ function fireMessage(detail) {
   }
 }
 
+function fireRawMessage(detail) {
+  for (const cb of [...ibState.messageListeners]) {
+    cb({ rawMessage: JSON.stringify({ detail }) })
+  }
+}
+
 function fireClose() {
   for (const cb of [...ibState.closeListeners]) {
     cb()
@@ -273,6 +279,81 @@ describe('webViewBridge contract', () => {
         userAgent: 'ua',
       })
       await p
+    })
+
+    it('test_costco_rawMessage_debug_is_handled_like_detail', async () => {
+      const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+      const { startLogin } = await import('../services/costcoWebViewBridge.js')
+      const p = startLogin()
+      await flushUntilListenersReady()
+      fireRawMessage({
+        type: 'costco-webview-fetch-debug',
+        message: 'page-diagnostic',
+        data: { href: 'https://www.costco.com/' },
+      })
+      fireMessage({
+        type: 'costco-tokens',
+        idToken: FAKE_ID_TOKEN_XYZ789,
+        accessToken: FAKE_ACCESS_TOKEN_ABC123,
+        clientID: 'cid',
+        wcsClientId: 'wcs',
+        refreshToken: 'rt',
+        refreshTokenClientId: 'rtc',
+        userAgent: 'ua',
+      })
+      await p
+      const debugLogs = logSpy.mock.calls.filter((call) =>
+        stringifyLogArgs(call).includes('page-diagnostic')
+      )
+      expect(debugLogs.length).toBeGreaterThan(0)
+      logSpy.mockRestore()
+    })
+
+    it('test_costco_rawMessage_tokens_resolves_like_detail', async () => {
+      const { startLogin } = await import('../services/costcoWebViewBridge.js')
+      const p = startLogin()
+      await flushUntilListenersReady()
+      fireRawMessage({
+        type: 'costco-tokens',
+        idToken: FAKE_ID_TOKEN_XYZ789,
+        accessToken: FAKE_ACCESS_TOKEN_ABC123,
+        clientID: 'cid',
+        wcsClientId: 'wcs',
+        refreshToken: 'rt',
+        refreshTokenClientId: 'rtc',
+        userAgent: 'ua',
+      })
+      const result = await p
+      expect(result).toMatchObject({
+        idToken: FAKE_ID_TOKEN_XYZ789,
+        accessToken: FAKE_ACCESS_TOKEN_ABC123,
+        clientID: 'cid',
+        wcsClientId: 'wcs',
+        refreshToken: 'rt',
+        refreshTokenClientId: 'rtc',
+        userAgent: 'ua',
+        _closeWebViewAfterFetch: true,
+      })
+    })
+
+    it('test_costco_rawMessage_receipts_resolves_like_detail', async () => {
+      const { startLogin } = await import('../services/costcoWebViewBridge.js')
+      const p = startLogin()
+      await flushUntilListenersReady()
+      fireRawMessage({
+        type: 'costco-receipts',
+        receipts: [{ receiptType: 'InWarehouse' }],
+        idToken: FAKE_ID_TOKEN_XYZ789,
+        accessToken: FAKE_ACCESS_TOKEN_ABC123,
+        clientID: 'cid',
+        wcsClientId: 'wcs',
+        refreshToken: 'rt',
+        refreshTokenClientId: 'rtc',
+        userAgent: 'ua',
+      })
+      const result = await p
+      expect(result._fromWebView).toBe(true)
+      expect(result.receipts).toHaveLength(1)
     })
   })
 
@@ -489,6 +570,8 @@ describe('webViewBridge contract', () => {
       expect(JSON.stringify(safewayStr)).toContain('safeway')
       expect(() => new Function(`return ${JSON.stringify(costcoStr)}`)).not.toThrow()
       expect(() => new Function(`return ${JSON.stringify(safewayStr)}`)).not.toThrow()
+      expect(costcoStr).toContain('postMsg(')
+      expect(costcoStr).not.toMatch(/postMessage\(JSON\.stringify\(\{detail:/)
     })
   })
 })

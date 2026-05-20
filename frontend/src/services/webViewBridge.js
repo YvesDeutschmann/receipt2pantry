@@ -10,13 +10,13 @@ const DEFAULT_LOGIN_TIMEOUT_MS = 5 * 60 * 1000;
 const DEFAULT_SILENT_TIMEOUT_MS = 45_000;
 const DEFAULT_EXTRACT_INTERVAL_MS = 3000;
 
-import { getEffectiveApiBaseUrl } from './apiClient';
-
 const BRIDGE_LOG_MSG_MAX = 2000;
 
 function getDevLogUrl() {
   try {
-    const base = getEffectiveApiBaseUrl().url.replace(/\/+$/, '');
+    const envBase = (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_API_BASE_URL) || null;
+    const hostname = (typeof window !== 'undefined' && window.location && window.location.hostname) || 'localhost';
+    const base = String(envBase || `http://${hostname}:5000/api`).replace(/\/+$/, '');
     return `${base}/dev/log`;
   } catch {
     return 'http://localhost:5000/api/dev/log';
@@ -41,6 +41,23 @@ function bridgeDevLog(tag, msg) {
   } catch {
     /* ignore */
   }
+}
+
+/**
+ * Normalize messageFromWebview payloads. iOS Capgo casts message.body as [String: Any];
+ * stringified JSON arrives as event.rawMessage instead of event.detail.
+ */
+function parseWebViewMessageEvent(event) {
+  let d = event?.detail;
+  if (!d && typeof event?.rawMessage === 'string') {
+    try {
+      const parsed = JSON.parse(event.rawMessage);
+      d = parsed?.detail ?? parsed;
+    } catch {
+      /* ignore */
+    }
+  }
+  return d;
 }
 
 /**
@@ -251,7 +268,7 @@ export function createWebViewBridge(config) {
       try {
         messageListener = await InAppBrowser.addListener('messageFromWebview', (event) => {
           try {
-            const d = event?.detail;
+            const d = parseWebViewMessageEvent(event);
             if (d?.type === messageTypes.debug) {
               console.log(`${LOG_PREFIX} [WebView] ${d.message || ''}`, d.data ?? '');
               try {
@@ -472,7 +489,7 @@ export function createWebViewBridge(config) {
         (async () => {
           try {
             messageListener = await InAppBrowser.addListener('messageFromWebview', (event) => {
-              const d = event?.detail;
+              const d = parseWebViewMessageEvent(event);
               if (d?.type === messageTypes.debug) {
                 console.log(`${LOG_PREFIX} [silent] ${d.message || ''}`, d.data ?? '');
                 try {
