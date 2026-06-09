@@ -175,7 +175,16 @@ function Recipes() {
       setSuggestions(next)
     } catch (err) {
       console.error('Failed to load suggestions:', err)
-      setError(err.response?.data?.error || 'Failed to load recipe suggestions.')
+      const status = err.response?.status
+      const apiError = err.response?.data?.error
+      if (status === 429 || err.response?.data?.code === 'recipe_quota') {
+        setError(
+          apiError ||
+            'Daily recipe lookup limit reached. Suggestions will refresh tomorrow.'
+        )
+      } else {
+        setError(apiError || 'Failed to load recipe suggestions.')
+      }
       setSuggestions(EMPTY_SUGGESTIONS)
       setUsingPool(false)
     } finally {

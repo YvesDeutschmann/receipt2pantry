@@ -6,7 +6,10 @@ from backend.utils.auth import get_user_id_from_request
 from backend.utils.exceptions import (
     ValidationException,
     AIServiceException,
+    RecipeQuotaException,
 )
+
+RECIPE_QUOTA_MESSAGE = "Daily recipe quota reached, try again later."
 
 logger = get_logger(__name__)
 
@@ -50,6 +53,9 @@ def get_recipes():
     except ValidationException as e:
         logger.error(f"Validation error getting recipes: {e}")
         return jsonify({"error": str(e)}), 400
+    except RecipeQuotaException as e:
+        logger.error(f"Recipe quota exceeded getting recipes: {e}")
+        return jsonify({"error": RECIPE_QUOTA_MESSAGE, "code": "recipe_quota"}), 429
     except AIServiceException as e:
         logger.error(f"API service error getting recipes: {e}")
         return jsonify({"error": str(e)}), 500
@@ -83,6 +89,9 @@ def get_recipe_details(recipe_id):
     except ValidationException as e:
         logger.error(f"Validation error getting recipe details: {e}")
         return jsonify({"error": str(e)}), 400
+    except RecipeQuotaException as e:
+        logger.error(f"Recipe quota exceeded getting recipe details: {e}")
+        return jsonify({"error": RECIPE_QUOTA_MESSAGE, "code": "recipe_quota"}), 429
     except AIServiceException as e:
         logger.error(f"API service error getting recipe details: {e}")
         return jsonify({"error": str(e)}), 500
@@ -113,6 +122,9 @@ def get_suggestions():
     except ValidationException as e:
         logger.error(f"Validation error getting suggestions: {e}")
         return jsonify({"error": str(e)}), 400
+    except RecipeQuotaException as e:
+        logger.error(f"Recipe quota exceeded getting suggestions: {e}")
+        return jsonify({"error": RECIPE_QUOTA_MESSAGE, "code": "recipe_quota"}), 429
     except AIServiceException as e:
         logger.error(f"API service error getting suggestions: {e}")
         return jsonify({"error": str(e)}), 500
@@ -144,6 +156,8 @@ def dismiss_suggestion():
         return jsonify({"ok": True})
     except ValidationException as e:
         return jsonify({"error": str(e)}), 400
+    except RecipeQuotaException as e:
+        return jsonify({"error": RECIPE_QUOTA_MESSAGE, "code": "recipe_quota"}), 429
     except AIServiceException as e:
         return jsonify({"error": str(e)}), 500
     except Exception as e:
