@@ -1,0 +1,33 @@
+---
+description: Costco WebView login / receipt-sync — read the post-mortem before debugging
+globs: frontend/src/services/costcoExtractScript.js,frontend/src/services/costcoWebViewBridge.js,frontend/src/services/webViewBridge.js,frontend/src/hooks/useCostcoSync.js,frontend/src/services/safewayExtractScript.js
+alwaysApply: false
+---
+
+# Costco / WebView sync — debug this FIRST
+
+Before re-debugging Costco login or in-WebView receipt fetch, read
+[docs/costco-login-postmortem.md](../../docs/costco-login-postmortem.md). It records the
+resolved root causes and the hypotheses already ruled out, so we don't re-litigate them.
+
+## The three resolved bugs (check these before new theories)
+
+1. **`wcs-err` redirect loop after successful sign-in** = stale guest WC session in the
+   InAppBrowser cookie jar. Fix: `clearSessionBeforeLogin` (Costco-only) clears cookies +
+   cache before opening login. Do NOT add a native Safari User-Agent override — UA bot-scoring
+   was investigated and **ruled out** (a clean retry with the same UA succeeds).
+
+2. **5-minute hang** instead of a fast error = loop detector not tripping. Fix: post-auth
+   fast-fail in `evaluateLoginLoopDetection` (`authCompletePatterns` + `postAuthThreshold`).
+
+3. **No `webview debug:` lines in backend `/api/dev/log`** = iOS `@capgo/inappbrowser`
+   requires an **object**, not a JSON string. Always use the `postMsg(type, payload)` →
+   `mobileApp.postMessage({detail:{...}})` pattern (see Safeway). **Never** call
+   `mobileApp.postMessage(JSON.stringify(...))`.
+
+## Non-issues — do not "fix"
+
+- `duplicate key ... receipts_order_id_key` during sync is expected idempotent behavior (HTTP 200).
+- Repeating `script_run` logs before `ordersandpurchases` are harmless re-injection.
+
+Run `cd frontend && npm test` after any change to these files.

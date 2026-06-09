@@ -92,8 +92,9 @@ export function useCostcoSync(userId) {
     } catch (err) {
       const msg = err?.message || String(err);
       const isTokenError = /token.*invalid|token.*expired|401|403|65535|in-webview fetch/i.test(msg);
+      const isLoopError = /redirect loop|stuck in a redirect loop|finish connecting your account/i.test(msg);
       console.error(`${LOG_PREFIX} startSync failed`, err?.message || err, err);
-      if (isTokenError) {
+      if (isTokenError || isLoopError) {
         await clearStoredTokens();
         await clearCostcoInAppBrowserSession().catch(() => {});
         setHasStoredTokensState(false);
