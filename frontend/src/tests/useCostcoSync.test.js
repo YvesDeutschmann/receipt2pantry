@@ -380,6 +380,52 @@ describe('useCostcoSync', () => {
       expect(result.current.hasStoredTokens).toBe(false)
     })
 
+    it('test_redirect_loop_error_clears_tokens_and_inappbrowser_session', async () => {
+      mockStartLogin.mockRejectedValue(
+        new Error(
+          'Costco sign-in got stuck in a redirect loop. Please tap Retry to start a clean sign-in.'
+        )
+      )
+
+      const { result } = renderHook(() => useCostcoSync(userId))
+
+      await act(async () => {
+        result.current.startSync()
+      })
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.ERROR)
+      })
+
+      expect(result.current.error).toMatch(/redirect loop/)
+      expect(mockClearStoredTokens).toHaveBeenCalled()
+      expect(mockClearCostcoInAppBrowserSession).toHaveBeenCalled()
+      expect(result.current.hasStoredTokens).toBe(false)
+    })
+
+    it('test_post_auth_wcs_err_clears_tokens_and_inappbrowser_session', async () => {
+      mockStartLogin.mockRejectedValue(
+        new Error(
+          'Costco signed you in but could not finish connecting your account. Tap Retry to start a clean sign-in.'
+        )
+      )
+
+      const { result } = renderHook(() => useCostcoSync(userId))
+
+      await act(async () => {
+        result.current.startSync()
+      })
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.ERROR)
+      })
+
+      expect(result.current.error).toMatch(/finish connecting your account/)
+      expect(mockClearStoredTokens).toHaveBeenCalled()
+      expect(mockClearCostcoInAppBrowserSession).toHaveBeenCalled()
+      expect(result.current.hasStoredTokens).toBe(false)
+    })
+
     it('test_65535_error_message_clears_tokens', async () => {
       mockStartLogin.mockResolvedValue({
         idToken: 'token',

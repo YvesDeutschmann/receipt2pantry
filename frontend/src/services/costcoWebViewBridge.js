@@ -9,7 +9,7 @@
 import { createWebViewBridge } from './webViewBridge';
 import { createTokenStorage } from './tokenStorage';
 import { parseApiReceipt } from './costcoNativeSync';
-import { getExtractScript } from './costcoExtractScript';
+import { getExtractScript, getDiagnosticScript } from './costcoExtractScript';
 import { InAppBrowser } from '@capgo/inappbrowser';
 
 const COSTCO_GRAPHQL_URL = 'https://ecom-api.costco.com/ebusiness/order/v1/orders/graphql';
@@ -83,6 +83,31 @@ const bridge = createWebViewBridge({
     'b2clogin.com',
     'login.microsoftonline.com',
   ],
+  clearSessionBeforeLogin: true,
+  diagnosticInjectScript: getDiagnosticScript(),
+  cookieProbe: {
+    urlPatterns: ['OAuthLogonCmd', 'wcs-err'],
+    cookieUrls: ['https://www.costco.com', 'https://signin.costco.com'],
+  },
+  loopDetection: {
+    loopUrlPattern: /wcs-err(?:=|%3d)true/i,
+    resetUrlPatterns: [
+      'claimsexchange=',
+      'fido',
+      'SigninPasskey',
+      'CombinedSigninAndSignup',
+      'NoknokExchange',
+    ],
+    threshold: 10,
+    windowMs: 30000,
+    errorMessage:
+      'Costco sign-in got stuck in a redirect loop. Please tap Retry to start a clean sign-in.',
+    authCompletePatterns: ['CombinedSigninAndSignup/confirmed', 'OAuthLogonCmd'],
+    postAuthThreshold: 2,
+    postAuthWindowMs: 20000,
+    postAuthErrorMessage:
+      'Costco signed you in but could not finish connecting your account. Tap Retry to start a clean sign-in.',
+  },
 });
 
 export const startLogin = bridge.startLogin.bind(bridge);

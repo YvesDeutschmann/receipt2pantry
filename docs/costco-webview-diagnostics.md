@@ -1,5 +1,9 @@
 # Costco one-tap sync — diagnostics (WebView login)
 
+> **Login broken or receipts not syncing? Read [costco-login-postmortem.md](costco-login-postmortem.md) FIRST.**
+> It records the resolved root causes (stale cookie jar, post-auth fast-fail, iOS postMessage
+> object shape) and the hypotheses already ruled out (e.g. UA bot-scoring).
+
 Manual checks and follow-ups referenced by the Costco InAppBrowser flow.
 
 ## Current model (post–Option A, 2026-05)

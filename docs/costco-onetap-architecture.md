@@ -1,5 +1,8 @@
 # Costco One-Tap Sync – Architecture (reference)
 
+> **Debugging a login/sync failure?** See the [Costco login post-mortem](costco-login-postmortem.md)
+> for resolved root causes and ruled-out hypotheses before investigating.
+
 A WebView-based authentication bridge that extracts Costco MSAL tokens after login, fetches receipts via native device HTTP (avoiding Akamai bot detection) and/or in-WebView GraphQL, and submits them to the app backend.
 
 **Production code** lives under [`frontend/src/services/`](../frontend/src/services/) (see table below). The old `frontend/spike/` folder has been removed to avoid duplicate implementations.

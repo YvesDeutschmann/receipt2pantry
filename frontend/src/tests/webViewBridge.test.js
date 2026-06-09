@@ -136,12 +136,12 @@ describe('webViewBridge contract', () => {
   })
 
   describe('group A — Costco bridge message shape', () => {
-    it('test_costco_startLogin_does_not_pre_clear_cookies_or_cache', async () => {
+    it('test_costco_startLogin_pre_clears_cookies_and_cache', async () => {
       const { startLogin } = await import('../services/costcoWebViewBridge.js')
       const p = startLogin()
       await flushUntilListenersReady()
-      expect(InAppBrowser.clearAllCookies).not.toHaveBeenCalled()
-      expect(InAppBrowser.clearCache).not.toHaveBeenCalled()
+      expect(InAppBrowser.clearAllCookies).toHaveBeenCalledWith({})
+      expect(InAppBrowser.clearCache).toHaveBeenCalledWith({})
       fireMessage({
         type: 'costco-tokens',
         idToken: FAKE_ID_TOKEN_XYZ789,
@@ -253,7 +253,7 @@ describe('webViewBridge contract', () => {
       await p
     })
 
-    it('test_costco_skip_injection_on_signin_host_skips_executeScript_after_navigation', async () => {
+    it('test_costco_skip_injection_on_signin_host_skips_extract_script_after_navigation', async () => {
       const { startLogin } = await import('../services/costcoWebViewBridge.js')
       const p = startLogin()
       await flushUntilListenersReady()
@@ -261,7 +261,14 @@ describe('webViewBridge contract', () => {
       fireUrlChange('https://signin.costco.com/authorize')
       await vi.advanceTimersByTimeAsync(3500)
       await Promise.resolve()
-      expect(InAppBrowser.executeScript).not.toHaveBeenCalled()
+      const extractCalls = InAppBrowser.executeScript.mock.calls.filter((c) =>
+        String(c[0]?.code || '').includes('findFreshCredential')
+      )
+      expect(extractCalls).toHaveLength(0)
+      const diagCalls = InAppBrowser.executeScript.mock.calls.filter((c) =>
+        String(c[0]?.code || '').includes('login-diagnostic')
+      )
+      expect(diagCalls.length).toBeGreaterThanOrEqual(1)
       fireMessage({
         type: 'costco-tokens',
         idToken: FAKE_ID_TOKEN_XYZ789,
@@ -277,6 +284,19 @@ describe('webViewBridge contract', () => {
   })
 
   describe('group B — Safeway bridge message shape', () => {
+    it('test_safeway_startLogin_does_not_pre_clear_cookies_or_cache', async () => {
+      const { startLogin } = await import('../services/safewayWebViewBridge.js')
+      const p = startLogin()
+      await flushUntilListenersReady()
+      expect(InAppBrowser.clearAllCookies).not.toHaveBeenCalled()
+      expect(InAppBrowser.clearCache).not.toHaveBeenCalled()
+      fireMessage({
+        type: 'safeway-tokens',
+        accessToken: FAKE_ACCESS_TOKEN_ABC123,
+      })
+      await p
+    })
+
     it('test_safeway_startLogin_returns_accessToken_clubCard_cookieHeader', async () => {
       InAppBrowser.getCookies.mockResolvedValue({
         SWY_ALLOWED: 'cookieval',
@@ -387,6 +407,179 @@ describe('webViewBridge contract', () => {
     })
   })
 
+  describe('group C2 — Costco login loop detection', () => {
+    const WCS_ERR_URL =
+      'https://signin.costco.com/oauth2/v2.0/logout?wcs-err=true&ClientName=USBC'
+
+    it('test_costco_startLogin_rejects_after_sustained_wcs_err_loop', async () => {
+      const { startLogin } = await import('../services/costcoWebViewBridge.js')
+      const p = startLogin()
+      await flushUntilListenersReady()
+      for (let i = 0; i < 10; i++) {
+        fireUrlChange(`${WCS_ERR_URL}&n=${i}`)
+      }
+      await expect(p).rejects.toThrow(/redirect loop/)
+      expect(InAppBrowser.close).toHaveBeenCalled()
+    })
+
+    it('test_costco_startLogin_does_not_trip_on_benign_burst_then_user_progress', async () => {
+      const { startLogin } = await import('../services/costcoWebViewBridge.js')
+      const p = startLogin()
+      await flushUntilListenersReady()
+      fireUrlChange(`${WCS_ERR_URL}&n=1`)
+      fireUrlChange(`${WCS_ERR_URL}&n=2`)
+      fireUrlChange(`${WCS_ERR_URL}&n=3`)
+      fireUrlChange(
+        'https://signin.costco.com/api/CombinedSigninAndSignup/unified?claimsexchange=SignInWithOTPUsingEmailAddressExchange'
+      )
+      for (let i = 0; i < 6; i++) {
+        fireUrlChange(`${WCS_ERR_URL}&after=${i}`)
+      }
+      fireMessage({
+        type: 'costco-tokens',
+        idToken: FAKE_ID_TOKEN_XYZ789,
+        accessToken: FAKE_ACCESS_TOKEN_ABC123,
+        clientID: 'cid',
+        wcsClientId: 'wcs',
+        refreshToken: 'rt',
+        refreshTokenClientId: 'rtc',
+        userAgent: 'ua',
+      })
+      await expect(p).resolves.toMatchObject({ idToken: FAKE_ID_TOKEN_XYZ789 })
+    })
+
+    it('test_evaluateLoginLoopDetection_resets_on_interactive_url', async () => {
+      const { evaluateLoginLoopDetection } = await import('../services/webViewBridge.js')
+      const loopDetection = {
+        loopUrlPattern: /wcs-err(?:=|%3d)true/i,
+        resetUrlPatterns: ['claimsexchange='],
+        threshold: 3,
+        windowMs: 30000,
+      }
+      const state = { loopHits: 0, loopWindowStart: Date.now() }
+      evaluateLoginLoopDetection(`${WCS_ERR_URL}&a=1`, loopDetection, state)
+      evaluateLoginLoopDetection(`${WCS_ERR_URL}&a=2`, loopDetection, state)
+      expect(state.loopHits).toBe(2)
+      evaluateLoginLoopDetection(
+        'https://signin.costco.com/unified?claimsexchange=foo',
+        loopDetection,
+        state
+      )
+      expect(state.loopHits).toBe(0)
+    })
+
+    it('test_evaluateLoginLoopDetection_post_auth_trips_after_confirmed_and_wcs_err', async () => {
+      const { evaluateLoginLoopDetection } = await import('../services/webViewBridge.js')
+      const loopDetection = {
+        loopUrlPattern: /wcs-err(?:=|%3d)true/i,
+        resetUrlPatterns: ['CombinedSigninAndSignup'],
+        threshold: 10,
+        windowMs: 30000,
+        errorMessage: 'pre-auth loop',
+        authCompletePatterns: ['CombinedSigninAndSignup/confirmed', 'OAuthLogonCmd'],
+        postAuthThreshold: 2,
+        postAuthWindowMs: 20000,
+        postAuthErrorMessage: 'post-auth wcs-err',
+      }
+      const state = {
+        loopHits: 0,
+        loopWindowStart: Date.now(),
+        authComplete: false,
+        postAuthHits: 0,
+        postAuthWindowStart: Date.now(),
+      }
+      evaluateLoginLoopDetection(`${WCS_ERR_URL}&pre=1`, loopDetection, state)
+      evaluateLoginLoopDetection(`${WCS_ERR_URL}&pre=2`, loopDetection, state)
+      expect(state.authComplete).toBe(false)
+      expect(state.loopHits).toBe(2)
+
+      evaluateLoginLoopDetection(
+        'https://signin.costco.com/api/CombinedSigninAndSignup/confirmed?rememberMe=true',
+        loopDetection,
+        state
+      )
+      expect(state.authComplete).toBe(true)
+      expect(state.loopHits).toBe(0)
+
+      const r1 = evaluateLoginLoopDetection(`${WCS_ERR_URL}&post=1`, loopDetection, state)
+      expect(r1.tripped).toBe(false)
+      const r2 = evaluateLoginLoopDetection(`${WCS_ERR_URL}&post=2`, loopDetection, state)
+      expect(r2.tripped).toBe(true)
+      expect(r2.reason).toBe('post-auth')
+      expect(r2.errorMessage).toBe('post-auth wcs-err')
+    })
+
+    it('test_evaluateLoginLoopDetection_pre_auth_wcs_err_does_not_trip_post_auth_path', async () => {
+      const { evaluateLoginLoopDetection } = await import('../services/webViewBridge.js')
+      const loopDetection = {
+        loopUrlPattern: /wcs-err(?:=|%3d)true/i,
+        resetUrlPatterns: [],
+        threshold: 10,
+        windowMs: 30000,
+        errorMessage: 'pre-auth loop',
+        authCompletePatterns: ['CombinedSigninAndSignup/confirmed'],
+        postAuthThreshold: 2,
+        postAuthWindowMs: 20000,
+        postAuthErrorMessage: 'post-auth wcs-err',
+      }
+      const state = {
+        loopHits: 0,
+        loopWindowStart: Date.now(),
+        authComplete: false,
+        postAuthHits: 0,
+        postAuthWindowStart: Date.now(),
+      }
+      for (let i = 0; i < 5; i++) {
+        const r = evaluateLoginLoopDetection(`${WCS_ERR_URL}&n=${i}`, loopDetection, state)
+        expect(r.tripped).toBe(false)
+        expect(r.reason).toBeNull()
+      }
+      expect(state.authComplete).toBe(false)
+    })
+
+    it('test_costco_startLogin_rejects_on_post_auth_wcs_err_after_confirmed', async () => {
+      const { startLogin } = await import('../services/costcoWebViewBridge.js')
+      const p = startLogin()
+      await flushUntilListenersReady()
+      fireUrlChange(
+        'https://signin.costco.com/api/CombinedSigninAndSignup/confirmed?rememberMe=true'
+      )
+      fireUrlChange('https://www.costco.com/OAuthLogonCmd')
+      fireUrlChange(`${WCS_ERR_URL}&post=1`)
+      fireUrlChange(`${WCS_ERR_URL}&post=2`)
+      await expect(p).rejects.toThrow(/finish connecting your account/)
+      expect(InAppBrowser.close).toHaveBeenCalled()
+    })
+
+    it('test_costco_cookie_probe_calls_getCookies_on_OAuthLogonCmd', async () => {
+      const { startLogin } = await import('../services/costcoWebViewBridge.js')
+      const p = startLogin()
+      await flushUntilListenersReady()
+      InAppBrowser.getCookies.mockResolvedValue({ WC_SESSION: 'x', _abck: 'y' })
+      fireUrlChange('https://www.costco.com/OAuthLogonCmd')
+      await Promise.resolve()
+      expect(InAppBrowser.getCookies).toHaveBeenCalledWith({
+        url: 'https://www.costco.com',
+        includeHttpOnly: true,
+      })
+      expect(InAppBrowser.getCookies).toHaveBeenCalledWith({
+        url: 'https://signin.costco.com',
+        includeHttpOnly: true,
+      })
+      fireMessage({
+        type: 'costco-tokens',
+        idToken: FAKE_ID_TOKEN_XYZ789,
+        accessToken: FAKE_ACCESS_TOKEN_ABC123,
+        clientID: 'cid',
+        wcsClientId: 'wcs',
+        refreshToken: 'rt',
+        refreshTokenClientId: 'rtc',
+        userAgent: 'ua',
+      })
+      await p
+    })
+  })
+
   describe('group D — cancel / cleanup', () => {
     it('test_startLogin_rejects_when_webview_is_cancelled_by_user', async () => {
       const { startLogin } = await import('../services/costcoWebViewBridge.js')
@@ -489,6 +682,103 @@ describe('webViewBridge contract', () => {
       expect(JSON.stringify(safewayStr)).toContain('safeway')
       expect(() => new Function(`return ${JSON.stringify(costcoStr)}`)).not.toThrow()
       expect(() => new Function(`return ${JSON.stringify(safewayStr)}`)).not.toThrow()
+    })
+
+    it('test_costco_extract_script_posts_object_shaped_debug_on_script_run', async () => {
+      const { getExtractScript } = await import('../services/costcoExtractScript.js')
+      const posts = []
+      const prevPollActive = window.__costcoPollActive
+      const prevMobileApp = window.mobileApp
+      window.__costcoPollActive = true
+      window.mobileApp = { postMessage: (m) => posts.push(m) }
+      try {
+        // eslint-disable-next-line no-new-func
+        new Function(getExtractScript('https://example.com/graphql'))()
+      } finally {
+        window.__costcoPollActive = prevPollActive
+        window.mobileApp = prevMobileApp
+      }
+      const scriptRun = posts.find((p) => p?.detail?.message === 'script_run')
+      expect(scriptRun).toBeDefined()
+      expect(typeof scriptRun).toBe('object')
+      expect(scriptRun.detail.type).toBe('costco-webview-fetch-debug')
+    })
+
+    it('test_costco_diagnostic_script_posts_object_shaped_login_diagnostic', async () => {
+      const { getDiagnosticScript } = await import('../services/costcoExtractScript.js')
+      const posts = []
+      const fakeWin = {
+        mobileApp: { postMessage: (m) => posts.push(m) },
+        __costcoLoginDiagHosts: {},
+        localStorage: { length: 0, key: () => null },
+        location: { href: 'https://signin.costco.com/', hostname: 'signin.costco.com' },
+        navigator: { userAgent: 'test-ua' },
+        document: { cookie: '' },
+      }
+      // eslint-disable-next-line no-new-func
+      new Function('window', `with(window){ ${getDiagnosticScript()} }`)(fakeWin)
+      expect(posts).toHaveLength(1)
+      expect(typeof posts[0]).toBe('object')
+      expect(posts[0].detail.type).toBe('costco-webview-fetch-debug')
+      expect(posts[0].detail.message).toBe('login-diagnostic')
+    })
+
+    it('test_normalizeWebViewMessageDetail_parses_ios_rawMessage_json_string', async () => {
+      const { normalizeWebViewMessageDetail } = await import('../services/webViewBridge.js')
+      const inner = {
+        type: 'costco-webview-fetch-debug',
+        message: 'doFetchReceipts entry',
+        data: { tokenLen: 120 },
+      }
+      const normalized = normalizeWebViewMessageDetail({
+        detail: { rawMessage: JSON.stringify({ detail: inner }) },
+      })
+      expect(normalized).toMatchObject(inner)
+    })
+
+    it('test_costco_debug_message_reaches_dev_log_for_object_and_rawMessage_shapes', async () => {
+      const fetchSpy = vi.fn(() => Promise.resolve({ ok: true }))
+      vi.stubGlobal('fetch', fetchSpy)
+      try {
+        const { startLogin } = await import('../services/costcoWebViewBridge.js')
+        const p = startLogin()
+        await flushUntilListenersReady()
+
+        fireMessage({
+          type: 'costco-webview-fetch-debug',
+          message: 'doFetchReceipts entry',
+          data: { tokenLen: 120 },
+        })
+        fireMessage({
+          rawMessage: JSON.stringify({
+            detail: {
+              type: 'costco-webview-fetch-debug',
+              message: 'script_run',
+              data: {},
+            },
+          }),
+        })
+
+        await Promise.resolve()
+        const bodies = fetchSpy.mock.calls.map((c) => String(c[1]?.body || ''))
+        expect(bodies.some((b) => b.includes('doFetchReceipts entry'))).toBe(true)
+        expect(bodies.some((b) => b.includes('script_run'))).toBe(true)
+        expect(ibState.messageListeners.length).toBeGreaterThan(0)
+
+        fireMessage({
+          type: 'costco-tokens',
+          idToken: FAKE_ID_TOKEN_XYZ789,
+          accessToken: FAKE_ACCESS_TOKEN_ABC123,
+          clientID: 'cid',
+          wcsClientId: 'wcs',
+          refreshToken: 'rt',
+          refreshTokenClientId: 'rtc',
+          userAgent: 'ua',
+        })
+        await p
+      } finally {
+        vi.unstubAllGlobals()
+      }
     })
   })
 })

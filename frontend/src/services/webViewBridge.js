@@ -84,7 +84,104 @@ async function closeWebView(logPrefix) {
  * @param {Object} [config.httpOnlyCookies] - Optional HttpOnly cookie extraction: { url, cookieName, parseToken, injectKey, injectVarName }
  * @param {() => string} [config.preExtractVars] - Optional JS snippet to inject before extract script (e.g. window.__knownOrderIds=...)
  * @param {() => Promise<string|undefined>} [config.extractCookiesBeforeClose] - Optional: read cookies from InAppBrowser before close (e.g. for native API Cookie header)
+ * @param {Object} [config.loopDetection] - Optional login redirect-loop detector: { loopUrlPattern, resetUrlPatterns, threshold, windowMs, errorMessage, authCompletePatterns, postAuthThreshold, postAuthWindowMs, postAuthErrorMessage }
+ * @param {string} [config.diagnosticInjectScript] - Read-only JS snippet injected once per host on urlChange (bypasses skipInjection)
+ * @param {{ urlPatterns: string[], cookieUrls: string[] }} [config.cookieProbe] - Native getCookies probe at matching URLs (logs key names only)
+ * @param {boolean} [config.clearSessionBeforeLogin] - Clear InAppBrowser cookies/cache before opening login (Costco stale WC session fix)
  */
+export function normalizeWebViewMessageDetail(event) {
+  let d = event?.detail;
+  if (!d || typeof d !== 'object') return null;
+  if (d.type != null && String(d.type).length > 0) return d;
+  const raw = d.rawMessage;
+  if (typeof raw === 'string' && raw.length > 0) {
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed === 'object') {
+        const inner = parsed.detail ?? parsed;
+        if (inner && typeof inner === 'object') return inner;
+      }
+    } catch {
+      /* legacy JSON-string postMessage body */
+    }
+  }
+  return d;
+}
+
+export function evaluateLoginLoopDetection(url, loopDetection, state) {
+  if (!loopDetection || !url) {
+    return { tripped: false, hits: state?.loopHits ?? 0, reason: null };
+  }
+  const {
+    loopUrlPattern,
+    resetUrlPatterns = [],
+    threshold,
+    windowMs,
+    errorMessage,
+    authCompletePatterns = [],
+    postAuthThreshold,
+    postAuthWindowMs,
+    postAuthErrorMessage,
+  } = loopDetection;
+  const now = Date.now();
+  if (!state.loopWindowStart) state.loopWindowStart = now;
+  if (!state.postAuthWindowStart) state.postAuthWindowStart = now;
+
+  if (authCompletePatterns.length && authCompletePatterns.some((p) => url.includes(p))) {
+    state.authComplete = true;
+    state.postAuthHits = 0;
+    state.postAuthWindowStart = now;
+  }
+
+  if (resetUrlPatterns.some((p) => url.includes(p))) {
+    state.loopHits = 0;
+    state.loopWindowStart = now;
+  }
+
+  const matchesLoop =
+    loopUrlPattern instanceof RegExp ? loopUrlPattern.test(url) : url.includes(String(loopUrlPattern));
+  if (!matchesLoop) {
+    return {
+      tripped: false,
+      hits: state.authComplete ? (state.postAuthHits ?? 0) : (state.loopHits ?? 0),
+      reason: null,
+    };
+  }
+
+  if (
+    state.authComplete &&
+    postAuthThreshold != null &&
+    postAuthWindowMs != null &&
+    postAuthErrorMessage
+  ) {
+    if (now - state.postAuthWindowStart > postAuthWindowMs) {
+      state.postAuthWindowStart = now;
+      state.postAuthHits = 0;
+    }
+    state.postAuthHits = (state.postAuthHits ?? 0) + 1;
+    const tripped = state.postAuthHits >= postAuthThreshold;
+    return {
+      tripped,
+      hits: state.postAuthHits,
+      reason: tripped ? 'post-auth' : null,
+      errorMessage: tripped ? postAuthErrorMessage : undefined,
+    };
+  }
+
+  if (now - state.loopWindowStart > windowMs) {
+    state.loopWindowStart = now;
+    state.loopHits = 0;
+  }
+  state.loopHits = (state.loopHits ?? 0) + 1;
+  const tripped = state.loopHits >= threshold;
+  return {
+    tripped,
+    hits: state.loopHits,
+    reason: tripped ? 'pre-auth' : null,
+    errorMessage: tripped ? errorMessage : undefined,
+  };
+}
+
 export function createWebViewBridge(config) {
   const {
     provider,
@@ -108,6 +205,10 @@ export function createWebViewBridge(config) {
     httpOnlyCookies,
     preExtractVars,
     extractCookiesBeforeClose,
+    loopDetection,
+    diagnosticInjectScript,
+    cookieProbe,
+    clearSessionBeforeLogin,
   } = config;
 
   const LOG_PREFIX = `[${provider}WebViewBridge]`;
@@ -170,6 +271,11 @@ export function createWebViewBridge(config) {
         throw new Error(`${provider} WebView bridge requires a native platform (iOS/Android)`);
       }
       await InAppBrowser.close().catch(() => {});
+      if (clearSessionBeforeLogin) {
+        await InAppBrowser.clearAllCookies({}).catch(() => {});
+        await InAppBrowser.clearCache({}).catch(() => {});
+        bridgeDevLog(`${provider}Login`, 'pre-login session cleared');
+      }
 
       let messageListener;
       let closeListener;
@@ -186,6 +292,14 @@ export function createWebViewBridge(config) {
       /** Last URL from urlChangeEvent (diagnostics / bridge logging only). */
       let lastBrowserUrl = loginUrl;
       const loginLogTag = `${provider}Login`;
+      const loopState = {
+        loopHits: 0,
+        loopWindowStart: Date.now(),
+        authComplete: false,
+        postAuthHits: 0,
+        postAuthWindowStart: Date.now(),
+      };
+      const diagnosticHostsInjected = new Set();
 
       const runHttpOnlyCookiePoll = async () => {
         if (!httpOnlyCookies || tokensReceived || httpOnlyTokenInjected) return;
@@ -251,7 +365,8 @@ export function createWebViewBridge(config) {
       try {
         messageListener = await InAppBrowser.addListener('messageFromWebview', (event) => {
           try {
-            const d = event?.detail;
+            const d = normalizeWebViewMessageDetail(event);
+            if (!d) return;
             if (d?.type === messageTypes.debug) {
               console.log(`${LOG_PREFIX} [WebView] ${d.message || ''}`, d.data ?? '');
               try {
@@ -334,6 +449,50 @@ export function createWebViewBridge(config) {
           );
           if (httpOnlyCookies) httpOnlyTokenInjected = false;
           if (tokensReceived) return;
+          if (cookieProbe?.urlPatterns?.some((p) => u.includes(p))) {
+            for (const probeUrl of cookieProbe.cookieUrls ?? []) {
+              InAppBrowser.getCookies({ url: probeUrl, includeHttpOnly: true })
+                .then((c) => {
+                  const keys = Object.keys(c || {});
+                  bridgeDevLog(
+                    loginLogTag,
+                    `cookieProbe ${probeUrl} count=${keys.length} names=${keys.join(',')}`
+                  );
+                })
+                .catch(() => {});
+            }
+          }
+          if (diagnosticInjectScript) {
+            let diagHost = '';
+            try {
+              diagHost = new URL(u).hostname;
+            } catch {
+              try {
+                diagHost = new URL(u, loginUrl).hostname;
+              } catch {
+                diagHost = u.slice(0, 80);
+              }
+            }
+            if (diagHost && !diagnosticHostsInjected.has(diagHost)) {
+              diagnosticHostsInjected.add(diagHost);
+              InAppBrowser.executeScript({ code: diagnosticInjectScript }).catch(() => {});
+            }
+          }
+          if (loopDetection) {
+            const loopResult = evaluateLoginLoopDetection(u, loopDetection, loopState);
+            if (loopResult.tripped) {
+              bridgeDevLog(
+                loginLogTag,
+                `loop detected reason=${loopResult.reason ?? 'unknown'} hits=${loopResult.hits} lastUrl=${u.slice(0, 160)}`
+              );
+              cleanup();
+              InAppBrowser.close().catch(() => {});
+              finish.reject?.(
+                new Error(loopResult.errorMessage || loopDetection.errorMessage)
+              );
+              return;
+            }
+          }
           if (isExtractUrl(u) && !shouldSkipInjectionForUrl(u)) {
             runExtraction();
             setTimeout(runExtraction, 800);
@@ -472,7 +631,8 @@ export function createWebViewBridge(config) {
         (async () => {
           try {
             messageListener = await InAppBrowser.addListener('messageFromWebview', (event) => {
-              const d = event?.detail;
+              const d = normalizeWebViewMessageDetail(event);
+              if (!d) return;
               if (d?.type === messageTypes.debug) {
                 console.log(`${LOG_PREFIX} [silent] ${d.message || ''}`, d.data ?? '');
                 try {
