@@ -12,6 +12,7 @@ from difflib import SequenceMatcher
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from backend.config import Config
+from backend.services.recipe_meal_filter import is_appropriate_for_meal, is_treat
 from backend.services.confidence_engine import (
     _find_pantry_match,
     _to_date,
@@ -22,7 +23,7 @@ from backend.services.confidence_engine import (
 from backend.services.pantry_service import PantryService
 from backend.services.recipe_service import RecipeService
 from backend.services.supabase_service import SupabaseService
-from backend.utils.exceptions import ValidationException
+from backend.utils.exceptions import RecipeQuotaException, ValidationException
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -292,6 +293,8 @@ class SuggestionService:
                 continue
             try:
                 details = self.recipe_service.get_recipe_details(int(rid))
+            except RecipeQuotaException:
+                raise
             except Exception as e:
                 logger.warning("Skipping recipe %s: %s", rid, e)
                 continue
@@ -306,6 +309,7 @@ class SuggestionService:
                 today=today,
                 engagement_multiplier=engagement,
                 calibrated_for_base=calibrated_for,
+                meal_type=None,
             )
             tier = scored.get("tier")
             if tier == "suppressed":
@@ -338,10 +342,17 @@ class SuggestionService:
         engagement_multiplier: float = 1.0,
         calibrated_for_base: Optional[Callable[[str], int]] = None,
         confidence_override_by_base: Optional[Dict[str, float]] = None,
+        meal_type: Optional[str] = None,
     ) -> Dict:
         """
         Score one recipe. Returns a recipe card dict, or {"tier": "suppressed"} if suppressed.
         """
+        dish_types = recipe.get("dishTypes") or []
+        if is_treat(dish_types):
+            return {"tier": "suppressed"}
+        if meal_type and not is_appropriate_for_meal(dish_types, meal_type):
+            return {"tier": "suppressed"}
+
         extended = recipe.get("extendedIngredients") or []
         if not extended:
             return {"tier": "suppressed"}

@@ -63,6 +63,11 @@ class AIServiceException(GrocerySyncException):
     pass
 
 
+class RecipeQuotaException(AIServiceException):
+    """Spoonacular daily quota exhausted (402) or rate limit (429)."""
+    pass
+
+
 class AIRateLimitException(AIServiceException):
     """Exception raised when AI API rate limit is exceeded"""
     pass

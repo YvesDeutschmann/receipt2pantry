@@ -10,7 +10,7 @@ from backend.services.depletion_engine import DepletionEngine
 from backend.services.meal_plan_service import MealPlanService
 from backend.services.pool_store_service import PoolStoreService
 from backend.services.recipe_service import RecipeService
-from backend.utils.exceptions import AIServiceException
+from backend.utils.exceptions import AIServiceException, RecipeQuotaException
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -144,9 +144,11 @@ class PoolGenerator:
             return []
         else:
             try:
-                raw = self.recipe_service.get_recipes_by_pantry(
-                    household_id, user_id, av, number=5
+                raw = self.recipe_service.search_recipes_complex(
+                    household_id, user_id, av, meal_type, number=5
                 )
+            except RecipeQuotaException:
+                raise
             except AIServiceException:
                 raise
             except Exception as e:
@@ -242,7 +244,7 @@ class PoolGenerator:
                             swiped,
                             run_ids,
                         )
-                    except AIServiceException as e:
+                    except (AIServiceException, RecipeQuotaException) as e:
                         err_msg = str(e)
                         final_status = "partial"
                         stop_steps = True
@@ -278,18 +280,26 @@ class PoolGenerator:
                     if top_id.startswith("staple_"):
                         continue
                     try:
-                        details = self.recipe_service.get_recipe_details(int(top["id"]))
-                        members = self.supabase.get_household_members(household_id)
-                        member_count = len(members) if members else 1
-                        orig = details.get("servings", member_count) or 1
-                        if orig != member_count:
-                            details = self.recipe_service.scale_recipe(
-                                details, member_count
+                        inline_ex = top.get("extendedIngredients")
+                        if inline_ex:
+                            ex = inline_ex
+                        else:
+                            details = self.recipe_service.get_recipe_details(
+                                int(top["id"])
                             )
-                        ex = details.get("extendedIngredients") or []
+                            members = self.supabase.get_household_members(household_id)
+                            member_count = len(members) if members else 1
+                            orig = details.get("servings", member_count) or 1
+                            if orig != member_count:
+                                details = self.recipe_service.scale_recipe(
+                                    details, member_count
+                                )
+                            ex = details.get("extendedIngredients") or []
                         simulated = self.depletion.deplete_from_extended_ingredients(
                             simulated, ex
                         )
+                    except RecipeQuotaException:
+                        raise
                     except Exception as e:
                         logger.warning(f"Depletion step skipped for recipe {top_id}: {e}")
 
