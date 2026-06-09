@@ -13,11 +13,37 @@
  * Look for `configkey: "site_context"` → custom.usbc.clientIdentifier
  */
 
+import { MSAL_CREDENTIAL_JS } from './costcoMsalCredentialSource';
+
 const RECEIPTS_QUERY =
   'query receiptsWithCounts($startDate: String!, $endDate: String!,$documentType:String!,$documentSubType:String!) { receiptsWithCounts(startDate: $startDate, endDate: $endDate,documentType:$documentType,documentSubType:$documentSubType) { inWarehouse gasStation carWash gasAndCarWash receipts{ warehouseName receiptType documentType transactionDateTime transactionBarcode transactionType total totalItemCount itemArray { itemNumber itemDescription01 itemDescription02 amount unit } tenderArray { tenderTypeCode tenderDescription amountTender } couponArray { upcnumberCoupon } } } }';
 
 const WCS_CLIENT_ID = '4900eb1f-0c10-4bd9-99c3-c59e6c1ecebf';
 const CLIENT_IDENTIFIER = '481b1aec-aa3b-454b-b81b-48187e28f205';
+
+/**
+ * Read-only login diagnostic script (UA, lsKeys, cookie names). Safe on signin/OTP hosts.
+ * @returns {string} IIFE script string for WebView injection
+ */
+export function getDiagnosticScript() {
+  return `
+(function(){
+  try{
+    var host=typeof location!=='undefined'&&location.hostname?location.hostname:'';
+    if(!window.__costcoLoginDiagHosts)window.__costcoLoginDiagHosts={};
+    if(window.__costcoLoginDiagHosts[host])return;
+    window.__costcoLoginDiagHosts[host]=true;
+    var lsKeys=[],cookieNames=[];
+    try{for(var i=0;i<Math.min(localStorage.length,12);i++){var k=localStorage.key(i);if(k)lsKeys.push(k);}}catch(_){}
+    try{cookieNames=(document.cookie||'').split(';').map(function(s){return s.trim().split('=')[0];}).filter(Boolean).slice(0,20);}catch(_){}
+    var payload={host:host,ua:navigator.userAgent||'',lsLen:localStorage.length,lsKeys:lsKeys,cookieNames:cookieNames,href:(location.href||'').slice(0,200)};
+    if(window.mobileApp&&typeof window.mobileApp.postMessage==='function'){
+      window.mobileApp.postMessage({detail:{type:'costco-webview-fetch-debug',message:'login-diagnostic',data:payload}});
+    }
+  }catch(_){}
+})();
+`;
+}
 
 /**
  * Returns the injection script as a string. Called at build/runtime with the GraphQL URL.
@@ -32,36 +58,21 @@ export function getExtractScript(graphqlUrl) {
   var GRAPHQL_URL='${graphqlUrl}';
   var CLIENT_ID='${CLIENT_IDENTIFIER}';
 
-  function isJwtExpired(token,bufferSec){
+  // iOS InAppBrowser: pass an OBJECT to postMessage, not JSON.stringify (Safeway pattern).
+  function postMsg(type,payload){
     try{
-      var parts=token.split('.');
-      if(parts.length!==3)return true;
-      var b64=parts[1].replace(/-/g,'+').replace(/_/g,'/');
-      var pad=b64.length%4;
-      if(pad)b64+='===='.substring(0,pad);
-      var payload=JSON.parse(atob(b64));
-      if(!payload.exp)return true;
-      return Date.now()/1000>=payload.exp-(bufferSec||60);
-    }catch(_){return true;}
+      if(window.mobileApp&&typeof window.mobileApp.postMessage==='function'){
+        var detail={type:type};
+        if(payload){for(var k in payload){if(Object.prototype.hasOwnProperty.call(payload,k))detail[k]=payload[k];}}
+        window.mobileApp.postMessage({detail:detail});
+        return true;
+      }
+    }catch(_){}
+    return false;
   }
+  function postDebug(msg,data){postMsg('costco-webview-fetch-debug',{message:msg,data:data||{}});}
 
-  function jwtExpiresAtSec(token){
-    try{
-      var parts=token.split('.');
-      if(parts.length!==3)return null;
-      var b64=parts[1].replace(/-/g,'+').replace(/_/g,'/');
-      var pad=b64.length%4;
-      if(pad)b64+='===='.substring(0,pad);
-      var payload=JSON.parse(atob(b64));
-      return payload.exp!=null?payload.exp:null;
-    }catch(_){return null;}
-  }
-
-  function findRT(st){try{for(var i=0;i<st.length;i++){var k=st.key(i);try{var val=JSON.parse(st.getItem(k));if(val&&val.credentialType==='RefreshToken'&&val.environment==='signin.costco.com')return{rt:val.secret,clientId:val.clientId||null};}catch(e){}}}catch(_){}return{rt:null,clientId:null};}
-  function findIdToken(st){try{for(var i=0;i<st.length;i++){var k=st.key(i);try{var val=JSON.parse(st.getItem(k));if(val&&val.credentialType==='IdToken'&&val.environment==='signin.costco.com')return val.secret;}catch(e){}}}catch(_){}return null;}
-  function findAccessToken(st){try{for(var i=0;i<st.length;i++){var k=st.key(i);try{var val=JSON.parse(st.getItem(k));if(val&&val.credentialType==='AccessToken'&&val.environment==='signin.costco.com')return val.secret;}catch(e){}}}catch(_){}return null;}
-
-  function postDebug(msg,data){try{if(window.mobileApp&&typeof window.mobileApp.postMessage==='function'){window.mobileApp.postMessage(JSON.stringify({detail:{type:'costco-webview-fetch-debug',message:msg,data:data||{}}}));}}catch(_){}}
+  ${MSAL_CREDENTIAL_JS}
 
   if(!window.__costcoOpenWrapped){window.__costcoOpenWrapped=true;(function(){var origOpen=window.open;window.open=function(url,target,features){try{postDebug('window-open-intercepted',{url:String(url||'').slice(0,500),target:target||'',features:String(features||'').slice(0,200)});}catch(_){}return origOpen?origOpen.apply(this,arguments):null;};})();}
 
@@ -86,28 +97,18 @@ export function getExtractScript(graphqlUrl) {
 
   function postReceiptsFromWebView(receipts,idT,accT,c,rt,rtCid,wcsCid,userAgent){
     if(window.__costcoReceiptsPosted)return true;
-    try{if(window.mobileApp&&typeof window.mobileApp.postMessage==='function'){
-      window.__costcoReceiptsPosted=true;
-      var token=accT||idT;
-      var payload=JSON.stringify({detail:{type:'costco-receipts',receipts:receipts||[],idToken:token||idT,accessToken:accT||null,clientID:c,wcsClientId:wcsCid,refreshToken:rt,refreshTokenClientId:rtCid,userAgent:userAgent||(navigator.userAgent||'')}});
-      window.mobileApp.postMessage(payload);
-      return true;
-    }}catch(_){}
-    return false;
+    var token=accT||idT;
+    var ok=postMsg('costco-receipts',{receipts:receipts||[],idToken:token||idT,accessToken:accT||null,clientID:c,wcsClientId:wcsCid,refreshToken:rt,refreshTokenClientId:rtCid,userAgent:userAgent||(navigator.userAgent||'')});
+    if(ok)window.__costcoReceiptsPosted=true;
+    return ok;
   }
 
   function postTokens(idT,accT,c,userAgent,rt,rtCid,wcsCid){
     if(window.__costcoReceiptsPosted)return true;
-    try{if(window.mobileApp&&typeof window.mobileApp.postMessage==='function'){
-      var token=accT||idT;
-      var cid=c;
-      var wcs=wcsCid||'${WCS_CLIENT_ID}';
-      if(!token||token.length<50)return false;
-      var payload=JSON.stringify({detail:{type:'costco-tokens',idToken:token||idT,accessToken:accT||null,clientID:cid,wcsClientId:wcs,capturedFromGraphQL:false,refreshToken:rt,refreshTokenClientId:rtCid,userAgent:userAgent||(navigator.userAgent||''),cookies:(document.cookie||'')}});
-      window.mobileApp.postMessage(payload);
-      return true;
-    }}catch(_){}
-    return false;
+    var token=accT||idT;
+    var wcs=wcsCid||'${WCS_CLIENT_ID}';
+    if(!token||token.length<50)return false;
+    return postMsg('costco-tokens',{idToken:token||idT,accessToken:accT||null,clientID:c,wcsClientId:wcs,capturedFromGraphQL:false,refreshToken:rt,refreshTokenClientId:rtCid,userAgent:userAgent||(navigator.userAgent||''),cookies:(document.cookie||'')});
   }
 
   function doFetchReceipts(tokens){
@@ -193,6 +194,7 @@ export function getExtractScript(graphqlUrl) {
 
   function waitBridge(cb){var t0=Date.now();function check(){if(window.mobileApp&&typeof window.mobileApp.postMessage==='function'){cb();return;}if(Date.now()-t0>BRIDGE_MAX)return;setTimeout(check,BRIDGE_POLL);}check();}
   function pollTokens(){postDiag();var t0=Date.now(),iv=setInterval(function(){if(tryPost()){clearInterval(iv);if(typeof window!=='undefined')window.__costcoPollActive=false;return;}if(Date.now()-t0>TOKEN_MAX){clearInterval(iv);if(typeof window!=='undefined')window.__costcoPollActive=false;}},TOKEN_POLL);}
+  postDebug('script_run',{href:(location.href||'').slice(0,200),host:(location.hostname||'')});
   if(typeof window!=='undefined'&&!window.__costcoPollActive){window.__costcoPollActive=true;waitBridge(pollTokens);}
 })();
 `;
