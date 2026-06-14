@@ -1066,3 +1066,99 @@ def test_cache_invalidate_on_dismiss():
     supabase.increment_ingredient_dismiss_counts.assert_called_once()
     # cache cleared should not raise
     svc.invalidate_suggestion_cache("u1", "hh")
+
+
+def test_score_recipe_suppresses_treat_dish_types(suggestion_svc):
+    recipe = {
+        "id": 3,
+        "title": "Chocolate Cake",
+        "dishTypes": ["dessert"],
+        "extendedIngredients": [{"name": "flour", "aisle": "Baking"}],
+    }
+    pantry = [make_pantry_item(base_ingredient="flour")]
+    out = suggestion_svc.score_recipe(
+        recipe,
+        pantry,
+        {"depletion_multiplier": 1.0},
+        [],
+        {},
+        {"flour": {"is_soft_required": False}},
+        today=TEST_DATE,
+        confidence_override_by_base={"flour": 0.95},
+    )
+    assert out["tier"] == "suppressed"
+
+
+def test_score_recipe_suppresses_wrong_meal_type(suggestion_svc):
+    recipe = {
+        "id": 4,
+        "title": "Pancakes",
+        "dishTypes": ["breakfast", "brunch"],
+        "extendedIngredients": [{"name": "flour", "aisle": "Baking"}],
+    }
+    pantry = [make_pantry_item(base_ingredient="flour")]
+    out = suggestion_svc.score_recipe(
+        recipe,
+        pantry,
+        {"depletion_multiplier": 1.0},
+        [],
+        {},
+        {"flour": {"is_soft_required": False}},
+        today=TEST_DATE,
+        confidence_override_by_base={"flour": 0.95},
+        meal_type="dinner",
+    )
+    assert out["tier"] == "suppressed"
+
+
+def test_get_recipe_suggestions_propagates_quota_exception(monkeypatch):
+    monkeypatch.setattr(
+        "backend.services.suggestion_service.compute_confidence", lambda *a, **k: 0.80
+    )
+    monkeypatch.setattr(
+        "backend.services.suggestion_service.get_calibrated_days_supply",
+        lambda *a, **k: 45,
+    )
+    monkeypatch.setattr(
+        "backend.services.suggestion_service.get_engagement_multiplier",
+        lambda *a, **k: 1.0,
+    )
+
+    from backend.utils.exceptions import RecipeQuotaException
+
+    supabase = MagicMock()
+    supabase.get_user_preferences.return_value = None
+    supabase.get_item_classifications_by_names.return_value = {
+        "chicken breast": {
+            "item_name": "chicken breast",
+            "default_days_supply": 45,
+            "is_soft_required": False,
+        }
+    }
+    supabase.get_ingredient_signal_counts.return_value = {}
+
+    pantry = [
+        make_pantry_item(
+            base_ingredient="chicken breast",
+            id="p1",
+            depletion_class="CONSUMABLE",
+            purchase_date=TEST_DATE.isoformat(),
+        ),
+    ]
+    pantry_service = MagicMock()
+    pantry_service._get_household_id_for_user.return_value = "hh"
+    pantry_service._get_pantry_items.return_value = pantry
+
+    recipe_service = MagicMock()
+    recipe_service.get_recipes_by_pantry.return_value = [
+        {"id": 1, "title": "Test", "image": "", "missedIngredientCount": 0}
+    ]
+    recipe_service.get_recipe_details.side_effect = RecipeQuotaException(
+        "Spoonacular API daily quota exceeded"
+    )
+
+    config = MagicMock()
+    svc = SuggestionService(supabase, pantry_service, recipe_service, config)
+
+    with pytest.raises(RecipeQuotaException):
+        svc.get_recipe_suggestions("user-1", "hh", today=TEST_DATE)

@@ -218,10 +218,10 @@ class MealPlanService:
                     return await self.suggest_staple_meals(session_pantry, meal_type)
                 return []
             
-            # Get recipes from Spoonacular
+            # Get recipes from Spoonacular (meal-type-aware complexSearch)
             household_id = session["household_id"]
-            recipes = self.recipe_service.get_recipes_by_pantry(
-                household_id, user_id, available_ingredients
+            recipes = self.recipe_service.search_recipes_complex(
+                household_id, user_id, available_ingredients, meal_type, number=10
             )
             
             # Filter by threshold (calculate match percentage) and exclude rejected/accepted/banned recipes

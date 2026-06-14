@@ -9,7 +9,7 @@ from flask import Blueprint, current_app, jsonify, request
 
 from backend.services.pool_generator import meal_types_from_slots
 from backend.utils.auth import get_user_id_from_request
-from backend.utils.exceptions import DatabaseException, ValidationException
+from backend.utils.exceptions import DatabaseException, RecipeQuotaException, ValidationException
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -229,6 +229,14 @@ def generate_pool():
         return jsonify(result)
     except ValidationException as e:
         return jsonify({"error": str(e)}), 400
+    except RecipeQuotaException as e:
+        logger.error(f"generate_pool quota: {e}")
+        return jsonify(
+            {
+                "error": "Daily recipe quota reached, try again later.",
+                "code": "recipe_quota",
+            }
+        ), 429
     except DatabaseException as e:
         return jsonify({"error": str(e)}), 400
     except Exception as e:

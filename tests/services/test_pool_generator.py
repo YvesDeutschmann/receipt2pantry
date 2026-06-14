@@ -156,7 +156,7 @@ def test_generate_pool_calls_start_generation_before_any_db_reads(
     gen = create_pool_generator(pool_store, depletion, recipe_service, meal_plan_service)
     gen._client = client_side
 
-    recipe_service.get_recipes_by_pantry.return_value = [
+    recipe_service.search_recipes_complex.return_value = [
         {
             "id": 401,
             "title": "Ok",
@@ -183,7 +183,7 @@ def test_generate_pool_calls_complete_generation_with_completed_on_happy_path(
     pool_store, depletion, recipe_service, meal_plan_service
 ):
     gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
-    recipe_service.get_recipes_by_pantry.return_value = [
+    recipe_service.search_recipes_complex.return_value = [
         {
             "id": 501,
             "title": "A",
@@ -211,7 +211,7 @@ def test_generate_pool_calls_complete_generation_with_completed_on_happy_path(
 def test_generate_pool_marks_partial_on_ai_service_exception_mid_run(
     pool_store, depletion, recipe_service, meal_plan_service
 ):
-    recipe_service.get_recipes_by_pantry.side_effect = AIServiceException("quota")
+    recipe_service.search_recipes_complex.side_effect = AIServiceException("quota")
     gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
 
     out = gen.generate_pool("hh", "user", "manual_refresh", ["dinner"])
@@ -239,7 +239,7 @@ def test_generate_pool_marks_failed_on_unexpected_exception(
 def test_clear_unused_not_called_when_status_partial(
     pool_store, depletion, recipe_service, meal_plan_service
 ):
-    recipe_service.get_recipes_by_pantry.side_effect = AIServiceException("quota")
+    recipe_service.search_recipes_complex.side_effect = AIServiceException("quota")
     gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
 
     gen.generate_pool("hh", "user", "manual_refresh", ["dinner"])
@@ -278,7 +278,7 @@ def test_threshold_walks_from_point_nine_to_point_seven(
 
     gen._filter_recipes = tracking_filter  # type: ignore[method-assign]
 
-    recipe_service.get_recipes_by_pantry.return_value = [
+    recipe_service.search_recipes_complex.return_value = [
         {
             "id": 601,
             "title": "Marginal",
@@ -320,7 +320,7 @@ def test_threshold_walk_stops_at_first_non_empty_set(
 
     gen._filter_recipes = tracking_filter  # type: ignore[method-assign]
 
-    recipe_service.get_recipes_by_pantry.return_value = [
+    recipe_service.search_recipes_complex.return_value = [
         {
             "id": 602,
             "title": "Strong",
@@ -370,7 +370,7 @@ def test_sparse_pantry_triggers_staple_fallback_for_breakfast_and_lunch_only(
     gen.generate_pool("hh", "user", "onboarding", ["breakfast", "lunch"])
 
     assert meal_plan_service.suggest_staple_meals.call_count == 14
-    recipe_service.get_recipes_by_pantry.assert_not_called()
+    recipe_service.search_recipes_complex.assert_not_called()
 
 
 def test_dinner_never_uses_staple_fallback(pool_store, recipe_service, meal_plan_service):
@@ -396,7 +396,7 @@ def test_dinner_never_uses_staple_fallback(pool_store, recipe_service, meal_plan
     d.deplete_from_extended_ingredients.side_effect = real_de.deplete_from_extended_ingredients
 
     gen = _generator_with_bans_mock(pool_store, d, recipe_service, meal_plan_service)
-    recipe_service.get_recipes_by_pantry.return_value = []
+    recipe_service.search_recipes_complex.return_value = []
 
     gen.generate_pool("hh", "user", "x", ["dinner"])
 
@@ -464,7 +464,7 @@ def test_top_candidate_depletes_simulated_pantry_before_next_step(
 ):
     av_seen = []
 
-    def recipes_by_pantry(hid, uid, av, number=5):
+    def recipes_by_pantry(hid, uid, av, meal_type, number=5):
         av_seen.append(list(av))
         if "chicken breast" in av:
             return [
@@ -486,7 +486,7 @@ def test_top_candidate_depletes_simulated_pantry_before_next_step(
             }
         ]
 
-    recipe_service.get_recipes_by_pantry.side_effect = recipes_by_pantry
+    recipe_service.search_recipes_complex.side_effect = recipes_by_pantry
     recipe_service.get_recipe_details.return_value = {
         "id": 101,
         "servings": 2,
@@ -510,7 +510,7 @@ def test_top_candidate_depletes_simulated_pantry_before_next_step(
 def test_depletion_failure_is_warned_and_run_continues(
     pool_store, depletion, recipe_service, meal_plan_service
 ):
-    recipe_service.get_recipes_by_pantry.return_value = [
+    recipe_service.search_recipes_complex.return_value = [
         {
             "id": 701,
             "title": "First",
@@ -553,7 +553,7 @@ def test_agent_dbg_patched_does_not_write_debug_file(
 
     with patch("backend.services.pool_generator._agent_dbg", lambda *a, **k: None):
         gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
-        recipe_service.get_recipes_by_pantry.return_value = [
+        recipe_service.search_recipes_complex.return_value = [
             {
                 "id": 801,
                 "title": "X",
@@ -596,7 +596,7 @@ def test_generate_pool_does_not_decrement_real_pantry(
     )
     gen._client = MagicMock(return_value=rc)
 
-    recipe_service.get_recipes_by_pantry.return_value = [
+    recipe_service.search_recipes_complex.return_value = [
         {
             "id": 303,
             "title": "Rice bowl",
@@ -643,7 +643,7 @@ def test_partial_after_first_success_does_not_clear_pool(
             ]
         raise AIServiceException("quota")
 
-    recipe_service.get_recipes_by_pantry.side_effect = by_pantry
+    recipe_service.search_recipes_complex.side_effect = by_pantry
     recipe_service.get_recipe_details.return_value = {
         "id": 1,
         "servings": 1,
@@ -656,3 +656,45 @@ def test_partial_after_first_success_does_not_clear_pool(
     assert out["status"] == "partial"
     pool_store.clear_unused.assert_not_called()
     pool_store.add_suggestions.assert_not_called()
+
+
+def test_recipes_for_step_passes_meal_type_to_complex_search(
+    pool_store, depletion, recipe_service, meal_plan_service
+):
+    gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
+    recipe_service.search_recipes_complex.return_value = [
+        {
+            "id": 701,
+            "title": "Dinner Bowl",
+            "usedIngredientCount": 2,
+            "missedIngredientCount": 0,
+            "extendedIngredients": [{"name": "pasta", "amount": 0.5, "unit": "lb"}],
+        }
+    ]
+
+    gen.generate_pool("hh", "user", "manual_refresh", ["dinner"])
+
+    recipe_service.search_recipes_complex.assert_called()
+    _args, kwargs = recipe_service.search_recipes_complex.call_args
+    assert _args[3] == "dinner"
+    recipe_service.get_recipe_details.assert_not_called()
+
+
+def test_recipes_for_step_uses_inline_extended_ingredients_for_depletion(
+    pool_store, depletion, recipe_service, meal_plan_service
+):
+    gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
+    recipe_service.search_recipes_complex.return_value = [
+        {
+            "id": 801,
+            "title": "Inline",
+            "usedIngredientCount": 2,
+            "missedIngredientCount": 0,
+            "extendedIngredients": [{"name": "pasta", "amount": 0.25, "unit": "lb"}],
+        }
+    ]
+
+    gen.generate_pool("hh", "user", "manual_refresh", ["dinner"])
+
+    recipe_service.get_recipe_details.assert_not_called()
+    depletion.deplete_from_extended_ingredients.assert_called()

@@ -5,7 +5,7 @@ import requests
 from unittest.mock import MagicMock, Mock, patch
 
 from backend.services.recipe_service import RecipeService
-from backend.utils.exceptions import AIServiceException, ValidationException
+from backend.utils.exceptions import RecipeQuotaException, ValidationException
 
 
 def _make_config(
@@ -138,6 +138,8 @@ def test_details_cache_keyed_by_recipe_id_int(mock_get):
         "analyzedInstructions": [],
         "sourceUrl": None,
         "spoonacularSourceUrl": None,
+        "dishTypes": ["main course", "dinner"],
+        "cuisines": ["italian"],
     }
     mock_get.return_value = _ok_find_response(detail)
     pantry = Mock()
@@ -149,6 +151,8 @@ def test_details_cache_keyed_by_recipe_id_int(mock_get):
 
     assert a == b
     assert a["id"] == 42
+    assert a["dishTypes"] == ["main course", "dinner"]
+    assert a["cuisines"] == ["italian"]
     assert mock_get.call_count == 1
 
     svc.get_recipe_details(99)
@@ -184,28 +188,28 @@ def test_missing_api_key_raises_validation_exception():
 
 
 @patch("backend.services.recipe_service.requests.get")
-def test_402_response_mapped_to_ai_service_exception(mock_get):
+def test_402_response_mapped_to_recipe_quota_exception(mock_get):
     resp = MagicMock()
     resp.raise_for_status.side_effect = _http_error(402)
     mock_get.return_value = resp
     pantry = Mock()
     svc = RecipeService(pantry, _make_config())
 
-    with pytest.raises(AIServiceException):
+    with pytest.raises(RecipeQuotaException, match="quota exceeded"):
         svc.get_recipes_by_pantry(
             "hh", "u1", available_ingredients=["flour"], number=5
         )
 
 
 @patch("backend.services.recipe_service.requests.get")
-def test_429_response_mapped_to_ai_service_exception(mock_get):
+def test_429_response_mapped_to_recipe_quota_exception(mock_get):
     resp = MagicMock()
     resp.raise_for_status.side_effect = _http_error(429)
     mock_get.return_value = resp
     pantry = Mock()
     svc = RecipeService(pantry, _make_config())
 
-    with pytest.raises(AIServiceException, match="rate limit exceeded"):
+    with pytest.raises(RecipeQuotaException, match="rate limit exceeded"):
         svc.get_recipes_by_pantry(
             "hh", "u1", available_ingredients=["flour"], number=5
         )
@@ -271,3 +275,55 @@ def test_scale_recipe_rejects_zero_member_count():
     scaled_neg = svc.scale_recipe(details, -3)
     assert scaled_neg["servings"] == 1
     assert scaled_neg["extendedIngredients"][0]["amount"] == pytest.approx(2.0)
+
+
+@patch("backend.services.recipe_service.requests.get")
+def test_search_recipes_complex_uses_meal_type_and_parses_results(mock_get):
+    mock_get.return_value = _ok_find_response(
+        {
+            "results": [
+                {
+                    "id": 99,
+                    "title": "Grilled Chicken",
+                    "image": "chicken.jpg",
+                    "dishTypes": ["main course", "dinner"],
+                    "cuisines": ["american"],
+                    "extendedIngredients": [{"name": "chicken", "amount": 1}],
+                    "usedIngredients": [{"name": "chicken"}],
+                    "missedIngredients": [],
+                    "unusedIngredients": [],
+                }
+            ]
+        }
+    )
+    pantry = Mock()
+    svc = RecipeService(pantry, _make_config())
+
+    out = svc.search_recipes_complex(
+        "hh1", "u1", ["chicken", "rice"], "dinner", number=5
+    )
+
+    assert len(out) == 1
+    assert out[0]["id"] == 99
+    assert out[0]["dishTypes"] == ["main course", "dinner"]
+    assert out[0]["extendedIngredients"]
+    mock_get.assert_called_once()
+    _url, kwargs = mock_get.call_args
+    params = kwargs["params"]
+    assert params["type"] == "main course"
+    assert params["sort"] == "max-used-ingredients"
+    assert params["fillIngredients"] is True
+    assert params["addRecipeInformation"] is True
+    assert "chicken" in params["includeIngredients"]
+
+
+@patch("backend.services.recipe_service.requests.get")
+def test_search_recipes_complex_cache_hit(mock_get):
+    mock_get.return_value = _ok_find_response({"results": []})
+    pantry = Mock()
+    svc = RecipeService(pantry, _make_config())
+
+    svc.search_recipes_complex("hh", "u1", ["egg"], "breakfast", number=3)
+    svc.search_recipes_complex("hh", "u1", ["egg"], "breakfast", number=3)
+
+    assert mock_get.call_count == 1
