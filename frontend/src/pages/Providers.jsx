@@ -11,6 +11,8 @@ import CostcoConnectPage from '../components/CostcoConnectPage'
 import CostcoOneTapSync from '../components/CostcoOneTapSync'
 import SafewayConnectCard from '../components/SafewayConnectCard'
 
+const MVP_PROVIDERS = ['safeway', 'costco']
+
 function Providers() {
   const { user, onboardingComplete } = useAuth()
   const navigate = useNavigate()
@@ -67,7 +69,9 @@ function Providers() {
     try {
       setLoading(true)
       const data = await api.listProviders()
-      const providerList = data.providers || []
+      const providerList = (data.providers || []).filter((p) =>
+        MVP_PROVIDERS.includes(p)
+      )
       setProviders(providerList)
       
       // Fetch status for each provider

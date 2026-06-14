@@ -1,8 +1,5 @@
 """Suggestion pool API (pre-generated recipes)."""
 
-import json
-import os
-import time
 from typing import Optional
 
 from flask import Blueprint, current_app, jsonify, request
@@ -15,33 +12,6 @@ from backend.utils.logger import get_logger
 logger = get_logger(__name__)
 
 pool_bp = Blueprint("pool", __name__)
-
-
-# #region agent log
-def _agent_dbg(location: str, message: str, hypothesis_id: str, **data):
-    try:
-        root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        path = os.path.join(root, "debug-ef2920.log")
-        line = (
-            json.dumps(
-                {
-                    "sessionId": "ef2920",
-                    "timestamp": int(time.time() * 1000),
-                    "location": location,
-                    "message": message,
-                    "hypothesisId": hypothesis_id,
-                    "data": data,
-                }
-            )
-            + "\n"
-        )
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(line)
-    except Exception:
-        pass
-
-
-# #endregion
 
 
 def _get_pool_store():
@@ -82,20 +52,7 @@ def get_pool():
         return jsonify({"error": "Suggestion pool not available"}), 503
     try:
         household_id = _resolve_household_id(user_id, request.args.get("household_id"))
-        # #region agent log
-        _t0 = time.perf_counter()
-        # #endregion
         grouped = store.get_pool_grouped_by_meal(household_id, status="unused")
-        # #region agent log
-        _counts = {k: len(v) for k, v in (grouped or {}).items()}
-        _agent_dbg(
-            "pool.py:get_pool",
-            "get_pool grouped",
-            "H2-H5",
-            elapsedMs=round((time.perf_counter() - _t0) * 1000),
-            counts=_counts,
-        )
-        # #endregion
         return jsonify({"pool": grouped, "household_id": household_id})
     except ValidationException as e:
         return jsonify({"error": str(e)}), 400
@@ -114,19 +71,7 @@ def get_depth():
         return jsonify({"error": "Suggestion pool not available"}), 503
     try:
         household_id = _resolve_household_id(user_id, request.args.get("household_id"))
-        # #region agent log
-        _t0 = time.perf_counter()
-        # #endregion
         depth = store.get_pool_depth(household_id)
-        # #region agent log
-        _agent_dbg(
-            "pool.py:get_depth",
-            "get_depth",
-            "H1-H4",
-            elapsedMs=round((time.perf_counter() - _t0) * 1000),
-            depth=dict(depth or {}),
-        )
-        # #endregion
         return jsonify({"depth": depth, "household_id": household_id})
     except ValidationException as e:
         return jsonify({"error": str(e)}), 400
@@ -200,32 +145,12 @@ def generate_pool():
                 {"error": "At least one of breakfast, lunch, dinner must be selected"}
             ), 400
 
-        # #region agent log
-        _agent_dbg(
-            "pool.py:generate_pool",
-            "generate_pool enter",
-            "H1-H4",
-            trigger_reason=trigger_reason,
-            meal_types=meal_types,
-        )
-        _t_gen = time.perf_counter()
-        # #endregion
         result = gen.generate_pool(
             household_id,
             user_id,
             trigger_reason,
             meal_types,
         )
-        # #region agent log
-        _agent_dbg(
-            "pool.py:generate_pool",
-            "generate_pool exit",
-            "H1-H4",
-            elapsedMs=round((time.perf_counter() - _t_gen) * 1000),
-            status=result.get("status"),
-            suggestions_generated=result.get("suggestions_generated"),
-        )
-        # #endregion
         return jsonify(result)
     except ValidationException as e:
         return jsonify({"error": str(e)}), 400

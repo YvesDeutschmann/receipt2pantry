@@ -15,13 +15,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 DEBUG_LOG_PATH = REPO_ROOT / "debug-ef2920.log"
 
 
-@pytest.fixture(autouse=True)
-def patch_agent_dbg_globally():
-    """SUG: do not write debug-ef2920.log during tests (functional-core hygiene)."""
-    with patch("backend.services.pool_generator._agent_dbg", lambda *a, **k: None):
-        yield
-
-
 @pytest.fixture
 def pool_store():
     ps = MagicMock()
@@ -545,28 +538,27 @@ def test_depletion_failure_is_warned_and_run_continues(
 # --- Group F — side-effects hygiene ------------------------------------------
 
 
-def test_agent_dbg_patched_does_not_write_debug_file(
+def test_generate_pool_does_not_write_debug_file(
     pool_store, depletion, recipe_service, meal_plan_service
 ):
     if DEBUG_LOG_PATH.exists():
         DEBUG_LOG_PATH.unlink()
 
-    with patch("backend.services.pool_generator._agent_dbg", lambda *a, **k: None):
-        gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
-        recipe_service.search_recipes_complex.return_value = [
-            {
-                "id": 801,
-                "title": "X",
-                "usedIngredientCount": 1,
-                "missedIngredientCount": 0,
-            }
-        ]
-        recipe_service.get_recipe_details.return_value = {
+    gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
+    recipe_service.search_recipes_complex.return_value = [
+        {
             "id": 801,
-            "servings": 1,
-            "extendedIngredients": [],
+            "title": "X",
+            "usedIngredientCount": 1,
+            "missedIngredientCount": 0,
         }
-        gen.generate_pool("hh", "user", "y", ["dinner"])
+    ]
+    recipe_service.get_recipe_details.return_value = {
+        "id": 801,
+        "servings": 1,
+        "extendedIngredients": [],
+    }
+    gen.generate_pool("hh", "user", "y", ["dinner"])
 
     assert not DEBUG_LOG_PATH.exists()
 
