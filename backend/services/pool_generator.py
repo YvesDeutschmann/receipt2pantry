@@ -1,8 +1,5 @@
 """Generate suggestion pool with simulated pantry depletion across the planning window."""
 
-import json
-import os
-import time
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
 
@@ -14,32 +11,6 @@ from backend.utils.exceptions import AIServiceException, RecipeQuotaException
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-# #region agent log
-def _agent_dbg(location: str, message: str, hypothesis_id: str, **data):
-    try:
-        root = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
-        path = os.path.join(root, "debug-ef2920.log")
-        line = (
-            json.dumps(
-                {
-                    "sessionId": "ef2920",
-                    "timestamp": int(time.time() * 1000),
-                    "location": location,
-                    "message": message,
-                    "hypothesisId": hypothesis_id,
-                    "data": data,
-                }
-            )
-            + "\n"
-        )
-        with open(path, "a", encoding="utf-8") as f:
-            f.write(line)
-    except Exception:
-        pass
-
-
-# #endregion
 
 ORDERED_MEALS = ("breakfast", "lunch", "dinner")
 INGREDIENT_SPARSE_THRESHOLD = 3
@@ -188,32 +159,11 @@ class PoolGenerator:
         )
         gen_id = start["generation_id"]
         if start.get("already_running"):
-            # #region agent log
-            _agent_dbg(
-                "pool_generator.py:generate_pool",
-                "already_running short-circuit",
-                "H4",
-                generation_id=gen_id,
-                trigger_reason=trigger_reason,
-            )
-            # #endregion
             return {
                 "generation_id": gen_id,
                 "status": "already_running",
                 "suggestions_generated": 0,
             }
-
-        # #region agent log
-        _t_body = time.perf_counter()
-        _agent_dbg(
-            "pool_generator.py:generate_pool",
-            "generate body start",
-            "H1-H4",
-            generation_id=gen_id,
-            trigger_reason=trigger_reason,
-            meal_types=meal_types,
-        )
-        # #endregion
 
         total_inserted = 0
         final_status = "completed"
@@ -323,17 +273,6 @@ class PoolGenerator:
                 total_inserted,
                 error_message=err_msg,
             )
-
-        # #region agent log
-        _agent_dbg(
-            "pool_generator.py:generate_pool",
-            "generate body end",
-            "H1-H4",
-            elapsedMs=round((time.perf_counter() - _t_body) * 1000),
-            final_status=final_status,
-            total_inserted=total_inserted,
-        )
-        # #endregion
 
         return {
             "generation_id": gen_id,
