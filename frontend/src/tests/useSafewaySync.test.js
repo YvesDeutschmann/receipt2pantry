@@ -253,6 +253,25 @@ describe('useSafewaySync — Test-First Suite', () => {
   })
 
   describe('group E — auth error branches', () => {
+    it('test_431_from_fetcher_surfaces_error_and_does_not_clear_tokens', async () => {
+      const err431 = new Error('Safeway list API failed (431)');
+      err431.status = 431;
+      mockFetchSafewayReceipts.mockRejectedValue(err431);
+
+      const { result } = renderHook(() => useSafewaySync(userId));
+
+      await act(async () => {
+        await result.current.startSync();
+      });
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.ERROR);
+      });
+
+      expect(result.current.error).toMatch(/431/);
+      expect(vi.mocked(clearStoredTokens)).not.toHaveBeenCalled();
+    });
+
     it('test_401_clears_tokens', async () => {
       mockStartLogin.mockRejectedValue(new Error('Upstream returned 401 Unauthorized'))
 

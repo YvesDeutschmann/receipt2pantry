@@ -81,11 +81,9 @@ import { trace, redact } from './syncDebugFlags';
 const SAFEWAY_URL = 'https://www.safeway.com';
 const SESSION_COOKIE = 'SWY_SHARED_SESSION';
 
-export function isAllowedSafewayCookieKey(k) { /* same allowlist as safewayWebViewBridge.js lines 12-24 */ }
-
-export function buildCookieHeader(cookies) {
-  // Filter via isAllowedSafewayCookieKey, join with '; '. Never logs raw values.
-}
+// Import from safewayCookieHeader.js (implemented 2026-06; see docs/safeway_cookie_431_fix.md).
+// Denies SWY_SHARED_SESSION in Cookie header; WAF allowlist + 4096-byte budget; shared with login fetch.
+import { buildCookieHeader } from './safewayCookieHeader';
 
 /**
  * Tier 2 refresh for Safeway: read cookies natively, parse HttpOnly session,
