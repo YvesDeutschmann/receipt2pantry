@@ -212,31 +212,7 @@ def create_app(config=None):
             app.config["SECRETS_SERVICE"] = secrets_service
             logger.info("Using mock Secrets Service (development mode)")
     
-    # Initialize Login Session Manager for MFA flows (legacy Safeway; kept for session cleanup)
-    from backend.services._deprecated.login_session_manager import LoginSessionManager
-    session_manager = LoginSessionManager(default_timeout=config.MFA_SESSION_TIMEOUT)
-    app.config["LOGIN_SESSION_MANAGER"] = session_manager
-    logger.info("Login session manager initialized")
-    
-    # Start session cleanup worker
-    from backend.workers.session_cleanup import SessionCleanupWorker
-    cleanup_worker = SessionCleanupWorker(
-        session_manager=session_manager,
-        cleanup_interval=config.SESSION_CLEANUP_INTERVAL
-    )
-    cleanup_worker.start()
-    app.config["SESSION_CLEANUP_WORKER"] = cleanup_worker
-    logger.info("Session cleanup worker started")
-    
-    # Store config values
-    app.config["PLAYWRIGHT_HEADLESS"] = config.PLAYWRIGHT_HEADLESS
-    app.config["PLAYWRIGHT_TIMEOUT"] = config.PLAYWRIGHT_TIMEOUT
-    app.config["MFA_SESSION_TIMEOUT"] = config.MFA_SESSION_TIMEOUT
-    app.config["MFA_MAX_RETRY_ATTEMPTS"] = config.MFA_MAX_RETRY_ATTEMPTS
-    
     # Import providers and parsers to register them
-    # This ensures @register_provider and @register_parser decorators are executed
-    # Safeway Playwright provider deprecated (M1) - use native WebView bridge instead
     from backend.providers import costco_provider  # noqa: F401
     from backend.parsers import safeway_parser  # noqa: F401
     from backend.parsers import costco_parser  # noqa: F401
@@ -301,18 +277,8 @@ def main():
             threaded=True,  # Enable threading for concurrent requests
             use_reloader=False  # Disable reloader to prevent double initialization
         )
-    finally:
-        # Cleanup on shutdown
-        cleanup_worker = app.config.get("SESSION_CLEANUP_WORKER")
-        if cleanup_worker:
-            logger.info("Stopping session cleanup worker...")
-            cleanup_worker.stop()
-        
-        # Cleanup any remaining sessions
-        session_manager = app.config.get("LOGIN_SESSION_MANAGER")
-        if session_manager:
-            logger.info("Cleaning up remaining login sessions...")
-            session_manager.cleanup_expired_sessions()
+    except KeyboardInterrupt:
+        logger.info("Shutting down...")
 
 
 if __name__ == "__main__":

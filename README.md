@@ -18,7 +18,6 @@ Meald automatically fetches grocery receipts from your favorite stores and organ
 
 ### Backend (Python + Flask)
 - **Flask** for REST API
-- **Playwright** for browser automation
 - **Supabase** for database
 - **AWS Secrets Manager** for credential storage
 - **Provider abstraction layer** for easy store integration
@@ -56,7 +55,6 @@ Meald automatically fetches grocery receipts from your favorite stores and organ
 2. **Install Python dependencies**
    ```bash
    uv sync
-   uv run playwright install
    ```
 
 3. **Install frontend dependencies**
@@ -160,7 +158,6 @@ See `.env.example` for all available configuration options.
 - `SUPABASE_URL` and `SUPABASE_KEY`: Database connection
 - `CONTENTSTACK_ACCESS_TOKEN`: Costco Contentstack CMS read-only token (for client-identifier verification)
 - `AWS_*`: Secrets Manager for credential storage (use mock in development)
-- `PLAYWRIGHT_HEADLESS`: Run browser automation headless or visible
 - `LOG_LEVEL`: Logging verbosity
 
 ## Security

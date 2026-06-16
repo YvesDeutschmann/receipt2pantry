@@ -13,13 +13,9 @@ if [ ! -f .env ]; then
     echo ""
 fi
 
-# Check if Python dependencies are installed
+# Install Python dependencies
 echo "📦 Installing Python dependencies..."
 uv sync
-
-# Install Playwright browsers
-echo "🌐 Installing Playwright browsers..."
-uv run playwright install chromium
 
 # Check if frontend dependencies are installed
 if [ ! -d "frontend/node_modules" ]; then

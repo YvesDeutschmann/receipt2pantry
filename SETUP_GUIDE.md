@@ -22,9 +22,6 @@ cd receipt2pantry
 # Install Python dependencies
 uv sync
 
-# Install Playwright browsers
-uv run playwright install
-
 # Install frontend dependencies
 cd frontend
 npm install
@@ -57,7 +54,6 @@ AWS_ACCESS_KEY_ID=
 AWS_SECRET_ACCESS_KEY=
 
 LOG_LEVEL=DEBUG
-PLAYWRIGHT_HEADLESS=false
 ```
 
 ## Step 3: Database Setup (Optional)
@@ -146,7 +142,6 @@ Expected response:
 - Ensure your IP is allowed in Supabase project settings
 
 ### Provider automation fails
-- Try running with `PLAYWRIGHT_HEADLESS=false` to see what's happening
 - Check that credentials are correct
 - Some stores may have captcha or additional security measures
 
@@ -166,7 +161,6 @@ For production deployment:
 3. Configure proper Supabase production database
 4. Set up AWS Secrets Manager for credential storage
 5. Enable HTTPS
-6. Set `PLAYWRIGHT_HEADLESS=true`
 7. Configure proper CORS origins
 8. Set up monitoring and logging
 

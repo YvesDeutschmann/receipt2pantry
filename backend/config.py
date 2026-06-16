@@ -33,15 +33,6 @@ class Config:
     # Logging
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
     
-    # Playwright
-    PLAYWRIGHT_HEADLESS: bool = os.getenv("PLAYWRIGHT_HEADLESS", "true").lower() == "true"
-    PLAYWRIGHT_TIMEOUT: int = int(os.getenv("PLAYWRIGHT_TIMEOUT", "30000"))
-    
-    # MFA Settings
-    MFA_SESSION_TIMEOUT: int = int(os.getenv("MFA_SESSION_TIMEOUT", "300"))  # 5 minutes
-    SESSION_CLEANUP_INTERVAL: int = int(os.getenv("SESSION_CLEANUP_INTERVAL", "60"))  # 1 minute
-    MFA_MAX_RETRY_ATTEMPTS: int = int(os.getenv("MFA_MAX_RETRY_ATTEMPTS", "3"))
-    
     # CORS
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
     

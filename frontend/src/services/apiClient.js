@@ -257,66 +257,6 @@ export const api = {
     return response.data
   },
 
-  testProviderConnection: async (providerName, username, password, userId = 'anonymous') => {
-    const response = await apiClient.post(`/providers/${providerName}/test`, {
-      username,
-      password,
-      user_id: userId
-    })
-    return response.data
-  },
-
-  // Device Verification Methods
-  getDeviceVerificationOptions: async (providerName, sessionId) => {
-    const response = await apiClient.get(
-      `/providers/${providerName}/login/${sessionId}/device-verification`
-    )
-    return response.data
-  },
-
-  selectDeviceVerificationMethod: async (providerName, sessionId, method) => {
-    const response = await apiClient.post(
-      `/providers/${providerName}/login/${sessionId}/device-verification`,
-      { method }
-    )
-    return response.data
-  },
-
-  // MFA Methods
-  submitMfaCode: async (providerName, sessionId, code) => {
-    const response = await apiClient.post(
-      `/providers/${providerName}/login/${sessionId}/mfa`,
-      { code }
-    )
-    return response.data
-  },
-
-  getLoginStatus: async (providerName, sessionId) => {
-    const response = await apiClient.get(
-      `/providers/${providerName}/login/${sessionId}/status`
-    )
-    return response.data
-  },
-
-  cancelLoginSession: async (providerName, sessionId) => {
-    await apiClient.delete(`/providers/${providerName}/login/${sessionId}`)
-  },
-
-  // Receipt Fetching
-  fetchReceipts: async (providerName, username, password, days = 14, userId = 'anonymous') => {
-    const body = { username, password, days, user_id: userId }
-    const response = await apiClient.post(`/providers/${providerName}/fetch-receipts`, body)
-    return response.data
-  },
-
-  fetchReceiptsAfterMfa: async (providerName, sessionId, days = 14) => {
-    const response = await apiClient.post(
-      `/providers/${providerName}/login/${sessionId}/fetch-receipts`,
-      { days }
-    )
-    return response.data
-  },
-
   // Token-Based Connection (Generic for providers like Costco)
   getConnectionCode: async (provider, userId) => {
     const response = await apiClient.get(`/providers/${provider}/connection-code`, {
