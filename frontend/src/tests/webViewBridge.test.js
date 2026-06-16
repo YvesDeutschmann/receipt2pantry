@@ -299,7 +299,9 @@ describe('webViewBridge contract', () => {
 
     it('test_safeway_startLogin_returns_accessToken_clubCard_cookieHeader', async () => {
       InAppBrowser.getCookies.mockResolvedValue({
-        SWY_ALLOWED: 'cookieval',
+        ACI_S_abs_previouslogin: 'small',
+        JSESSIONID: 'cookieval',
+        SWY_SHARED_SESSION: '{"accessToken":"ignored-in-header"}',
       })
       const { startLogin } = await import('../services/safewayWebViewBridge.js')
       const p = startLogin()
@@ -313,7 +315,8 @@ describe('webViewBridge contract', () => {
       const result = await p
       expect(result.accessToken).toBe(FAKE_ACCESS_TOKEN_ABC123)
       expect(result.clubCard).toBe('1234567890')
-      expect(result.cookieHeader).toContain('SWY_ALLOWED=cookieval')
+      expect(result.cookieHeader).toContain('JSESSIONID=cookieval')
+      expect(result.cookieHeader).not.toContain('SWY_SHARED_SESSION')
       expect(result._closeWebViewAfterFetch).toBe(true)
     })
 

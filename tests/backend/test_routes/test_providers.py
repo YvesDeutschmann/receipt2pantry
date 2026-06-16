@@ -2,6 +2,8 @@
 
 import json
 
+import pytest
+
 
 def test_list_providers(client):
     """Test listing all providers"""
@@ -31,16 +33,13 @@ def test_get_provider_status_missing_user_id(client):
 
 
 def test_test_provider_connection_missing_body(client):
-    """Safeway Playwright test route is deprecated; before_request returns 410 first."""
+    """Playwright test route removed; callers get 404."""
     response = client.post('/api/providers/safeway/test')
-    
-    assert response.status_code == 410
-    data = json.loads(response.data)
-    assert data.get("deprecated") is True
+    assert response.status_code == 404
 
 
 def test_test_provider_connection_invalid_provider(client):
-    """Test testing connection for non-existent provider"""
+    """Test route removed; non-existent provider also returns 404."""
     response = client.post(
         '/api/providers/invalid-provider/test',
         data=json.dumps({
@@ -51,9 +50,30 @@ def test_test_provider_connection_invalid_provider(client):
     )
     
     assert response.status_code == 404
-    
-    data = json.loads(response.data)
-    assert "error" in data
+
+
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("POST", "/api/providers/costco/login/abc/mfa"),
+        ("GET", "/api/providers/costco/login/abc/status"),
+        ("GET", "/api/providers/costco/login/abc/device-verification"),
+        ("POST", "/api/providers/costco/login/abc/device-verification"),
+        ("DELETE", "/api/providers/costco/login/abc"),
+        ("POST", "/api/providers/costco/login/abc/fetch-receipts"),
+    ],
+    ids=[
+        "mfa",
+        "status",
+        "device-verification-get",
+        "device-verification-post",
+        "cancel",
+        "fetch-receipts-after-mfa",
+    ],
+)
+def test_deleted_login_routes_return_404(client, method, path):
+    response = client.open(path, method=method)
+    assert response.status_code == 404
 
 
 def test_fetch_receipts_with_stored_credentials_missing_body(client):

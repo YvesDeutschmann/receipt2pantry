@@ -70,6 +70,20 @@ describe('Providers MVP allowlist', () => {
     })
     expect(screen.getByTestId('safeway-card')).toBeInTheDocument()
     expect(screen.getByTestId('costco-sync')).toBeInTheDocument()
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('PROVIDERS_PAGE_DOES_NOT_RENDER_CREDENTIALS_OR_MFA_UI', async () => {
+    vi.mocked(api.listProviders).mockResolvedValue({
+      providers: ['safeway', 'costco'],
+    })
+    const { container } = renderProviders()
+    await waitFor(() => {
+      expect(screen.getByText('safeway')).toBeInTheDocument()
+    })
+    expect(container.innerHTML).not.toMatch(/CredentialsModal/)
+    expect(container.innerHTML).not.toMatch(/MfaDialog/)
+    expect(screen.queryByText('Waiting for device verification')).not.toBeInTheDocument()
   })
 
   it('PROVIDERS_ALLOWLIST_EMPTY_WHEN_NO_KNOWN_PROVIDERS', async () => {

@@ -11,6 +11,7 @@
   - `frontend/src/services/webViewBridge.js` — shared bridge abstraction.
   - `frontend/src/services/costcoWebViewBridge.js` — Costco-specific wrapper.
   - `frontend/src/services/safewayWebViewBridge.js` — Safeway-specific wrapper.
+  - `frontend/src/services/safewayCookieHeader.js` — Cookie header builder for native instore API (denylist `SWY_SHARED_SESSION`, 4 KB budget; see `docs/safeway_cookie_431_fix.md`).
   - `frontend/src/services/costcoExtractScript.js` — injected page script.
   - `frontend/src/services/safewayExtractScript.js` — injected page script.
 - **Message shapes consumed by hooks:**

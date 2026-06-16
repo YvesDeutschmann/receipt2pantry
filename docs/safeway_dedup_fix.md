@@ -1,5 +1,7 @@
 # Safeway sync — every receipt rejected as duplicate
 
+> **List API fails with HTTP 431 after login?** See [safeway_cookie_431_fix.md](safeway_cookie_431_fix.md) — different symptom (headers too large, ingest never reached).
+
 After a successful Safeway login + token extraction, every receipt the in-store API returns is re-submitted to the backend on every sync. Backend rejects each one with `duplicate key value violates unique constraint "receipts_order_id_key"`.
 
 ## Symptom (from backend dev-log, 2026-05-05)

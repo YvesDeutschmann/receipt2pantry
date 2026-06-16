@@ -5,6 +5,11 @@
  */
 
 import { Capacitor, CapacitorHttp } from '@capacitor/core';
+import {
+  cookieHeaderRetryTiers,
+  logSafewayListFetchDiagnostics,
+  parseCookieHeader,
+} from './safewayCookieHeader';
 
 export const INSTORE_URL = 'https://www.safeway.com/order-account/api/instore';
 
@@ -102,6 +107,55 @@ export async function fetchInstore(payload, opts = {}) {
   return { status: res.status, data };
 }
 
+async function fetchListWith431Retry(listPayload, fallbackPayload, cookieHeader) {
+  const tiers = cookieHeaderRetryTiers(cookieHeader);
+  let lastStatus = 0;
+  let lastData = {};
+  let winningOpts = {};
+
+  for (const { tier, cookieHeader: tierHeader } of tiers) {
+    const opts = tierHeader ? { cookieHeader: tierHeader } : {};
+    logSafewayListFetchDiagnostics({
+      tier,
+      cookieHeader: tierHeader,
+      keys: tierHeader ? Object.keys(parseCookieHeader(tierHeader)) : [],
+    });
+
+    let { status, data } = await fetchInstore(listPayload, opts);
+    let list = parseReceiptList(data);
+
+    if (status !== 200 || !list.length) {
+      const r2 = await fetchInstore(fallbackPayload, opts);
+      status = r2.status;
+      data = r2.data;
+      list = parseReceiptList(data);
+    }
+
+    if (status === 431) {
+      lastStatus = status;
+      lastData = data;
+      continue;
+    }
+
+    if (status === 200) {
+      return { status, data, list, opts, tier };
+    }
+
+    lastStatus = status;
+    lastData = data;
+    winningOpts = opts;
+    break;
+  }
+
+  return {
+    status: lastStatus,
+    data: lastData,
+    list: parseReceiptList(lastData),
+    opts: winningOpts,
+    tier: null,
+  };
+}
+
 /**
  * Fetch receipt list + details, filter by date/known IDs, exclude non-food-only receipts.
  *
@@ -127,29 +181,36 @@ export async function fetchSafewayReceipts({
     throw new Error('Safeway club card not found. Please sign in again.');
   }
 
-  const opts = cookieHeader ? { cookieHeader } : {};
-
   const listPayload = {
     params: { clubcard: clubCard, 'client-section': 'purchase' },
     token: accessToken,
     banner: 'safeway',
   };
+  const fallbackPayload = {
+    params: { clubcard: clubCard },
+    token: accessToken,
+    banner: 'safeway',
+  };
 
-  let { status, data } = await fetchInstore(listPayload, opts);
-  let list = parseReceiptList(data);
-
-  if (status !== 200 || !list.length) {
-    const fb = { params: { clubcard: clubCard }, token: accessToken, banner: 'safeway' };
-    const r2 = await fetchInstore(fb, opts);
-    status = r2.status;
-    data = r2.data;
-    list = parseReceiptList(data);
-  }
+  const listResult = await fetchListWith431Retry(
+    listPayload,
+    fallbackPayload,
+    cookieHeader
+  );
+  const { status, list, opts } = listResult;
 
   if (status !== 200) {
     const err = new Error(`Safeway list API failed (${status})`);
     err.status = status;
     throw err;
+  }
+
+  if (listResult.tier && listResult.tier !== 'full') {
+    logSafewayListFetchDiagnostics({
+      tier: `success-${listResult.tier}`,
+      cookieHeader: opts.cookieHeader,
+      keys: opts.cookieHeader ? Object.keys(parseCookieHeader(opts.cookieHeader)) : [],
+    });
   }
 
   const knownSet = new Set((knownOrderIds || []).map(String));
