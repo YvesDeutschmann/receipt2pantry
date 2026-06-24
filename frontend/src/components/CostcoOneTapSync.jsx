@@ -7,6 +7,7 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 import { useCostcoSync, STATUS } from '../hooks/useCostcoSync';
 import { api } from '../services/apiClient';
 import SyncSuccessAlert from './SyncSuccessAlert';
+import ReconnectBanner from './ReconnectBanner';
 
 function DevMockCostcoBlock({ userId, onSyncSuccess, className = '' }) {
   const [mockStatus, setMockStatus] = useState('idle');
@@ -136,6 +137,7 @@ export default function CostcoOneTapSync({ userId, className = '', onSyncSuccess
 
   return (
     <div className={`space-y-4 ${className}`}>
+      <ReconnectBanner provider="costco" storeName="Costco" onReconnect={startSync} />
       <div className="flex flex-wrap gap-3 items-center">
         <button
           type="button"

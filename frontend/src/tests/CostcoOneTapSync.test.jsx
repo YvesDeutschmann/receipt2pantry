@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { render, screen, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import CostcoOneTapSync from '../components/CostcoOneTapSync'
 
 vi.mock('@capacitor/core', () => ({
@@ -112,5 +112,30 @@ describe('CostcoOneTapSync', () => {
     render(<CostcoOneTapSync userId="test-user-id" />)
     expect(screen.getByText(/Sync complete/)).toBeInTheDocument()
     expect(screen.getByText(/3 receipt/)).toBeInTheDocument()
+  })
+
+  it('RECONNECT_BANNER_MOUNTED_IN_COSTCO_CARD', () => {
+    vi.mocked(useCostcoSync).mockReturnValue({ ...defaultHookReturn, isNative: true })
+    render(<CostcoOneTapSync userId="test-user-id" />)
+    act(() => {
+      window.dispatchEvent(new CustomEvent('costco-sync-needs-reconnect'))
+    })
+    expect(screen.getByRole('alert')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Reconnect Costco/ })).toBeInTheDocument()
+  })
+
+  it('RECONNECT_BANNER_CALLS_START_SYNC_IN_COSTCO_CARD', () => {
+    const startSync = vi.fn()
+    vi.mocked(useCostcoSync).mockReturnValue({
+      ...defaultHookReturn,
+      isNative: true,
+      startSync,
+    })
+    render(<CostcoOneTapSync userId="test-user-id" />)
+    act(() => {
+      window.dispatchEvent(new CustomEvent('costco-sync-needs-reconnect'))
+    })
+    fireEvent.click(screen.getByRole('button', { name: /Reconnect Costco/ }))
+    expect(startSync).toHaveBeenCalledOnce()
   })
 })

@@ -14,6 +14,7 @@ import {
 } from '../services/safewayWebViewBridge';
 import { parseSafewayReceipt } from '../services/safewayReceiptParser';
 import { api } from '../services/apiClient';
+import { dispatchProviderSyncCompleted } from '../services/providerSyncEvents';
 
 const LOG_PREFIX = '[SafewaySync]';
 const STATUS = {
@@ -119,6 +120,11 @@ export function useSafewaySync(userId) {
       if (!userId) {
         setProgress(null);
         setResult({ receipts, count: receipts.length, receipts_stored: 0, items_added_to_pantry: 0 });
+        dispatchProviderSyncCompleted('safeway', {
+          tier: 'manual',
+          receipts_stored: 0,
+          items_added: 0,
+        });
         setStatus(STATUS.SUCCESS);
         return;
       }
@@ -138,6 +144,11 @@ export function useSafewaySync(userId) {
         receipts_stored: finalBackend.receipts_stored ?? receipts.length,
         items_added_to_pantry: itemsAdded,
         errors: finalBackend.errors ?? [],
+      });
+      dispatchProviderSyncCompleted('safeway', {
+        tier: 'manual',
+        receipts_stored: finalBackend.receipts_stored ?? receipts.length,
+        items_added: itemsAdded,
       });
       setStatus(STATUS.SUCCESS);
       setHasStoredTokensState(true);
@@ -237,6 +248,11 @@ export function useSafewaySync(userId) {
           items_added_to_pantry: itemsAddedSilent,
           errors: finalBackend.errors ?? [],
         });
+        dispatchProviderSyncCompleted('safeway', {
+          tier: 'silent',
+          receipts_stored: finalBackend.receipts_stored ?? receipts.length,
+          items_added: itemsAddedSilent,
+        });
       } else {
         setResult({
           receipts: [],
@@ -244,6 +260,11 @@ export function useSafewaySync(userId) {
           receipts_stored: 0,
           items_added_to_pantry: 0,
           errors: [],
+        });
+        dispatchProviderSyncCompleted('safeway', {
+          tier: 'silent',
+          receipts_stored: 0,
+          items_added: 0,
         });
       }
       setStatus(STATUS.SUCCESS);

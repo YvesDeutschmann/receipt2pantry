@@ -411,6 +411,82 @@ describe('useSafewaySync — Test-First Suite', () => {
       expect(mockTriggerGeneration).not.toHaveBeenCalled()
     })
   })
+
+  describe('group H — sync-completed events', () => {
+    function getSafewaySyncCompletedEvents(dispatchSpy) {
+      return dispatchSpy.mock.calls
+        .map(([event]) => event)
+        .filter((event) => event instanceof CustomEvent && event.type === 'safeway-sync-completed');
+    }
+
+    it('test_startSync_dispatches_safeway_sync_completed_on_success', async () => {
+      const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+      const { result } = renderHook(() => useSafewaySync(userId));
+
+      await act(async () => {
+        await result.current.startSync();
+      });
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.SUCCESS);
+      });
+
+      const completedEvents = getSafewaySyncCompletedEvents(dispatchSpy);
+      expect(completedEvents).toHaveLength(1);
+      expect(completedEvents[0].detail).toEqual({
+        tier: 'manual',
+        receipts_stored: 1,
+        items_added: 0,
+      });
+
+      dispatchSpy.mockRestore();
+    });
+
+    it('test_startSilent_dispatches_safeway_sync_completed_on_success', async () => {
+      vi.mocked(startSilentSync).mockResolvedValue({
+        accessToken: 'silent-tok',
+        clubCard: '999',
+      });
+      mockFetchSafewayReceipts.mockResolvedValue([]);
+      const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+      const { result } = renderHook(() => useSafewaySync(userId));
+
+      await act(async () => {
+        await result.current.startSilent();
+      });
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.SUCCESS);
+      });
+
+      const completedEvents = getSafewaySyncCompletedEvents(dispatchSpy);
+      expect(completedEvents).toHaveLength(1);
+      expect(completedEvents[0].detail).toEqual({
+        tier: 'silent',
+        receipts_stored: 0,
+        items_added: 0,
+      });
+
+      dispatchSpy.mockRestore();
+    });
+
+    it('test_startSync_does_not_dispatch_sync_completed_on_error', async () => {
+      mockStartLogin.mockRejectedValue(new Error('login failed'));
+      const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+      const { result } = renderHook(() => useSafewaySync(userId));
+
+      await act(async () => {
+        await result.current.startSync();
+      });
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.ERROR);
+      });
+
+      expect(getSafewaySyncCompletedEvents(dispatchSpy)).toHaveLength(0);
+      dispatchSpy.mockRestore();
+    });
+  })
 })
 
 describe('useSafewaySync receipt_scan pool trigger', () => {
