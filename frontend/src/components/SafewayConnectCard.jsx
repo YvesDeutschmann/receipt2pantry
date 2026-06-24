@@ -8,6 +8,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { useSafewaySync, STATUS } from '../hooks/useSafewaySync';
 import { api } from '../services/apiClient';
 import SyncSuccessAlert from './SyncSuccessAlert';
+import ReconnectBanner from './ReconnectBanner';
 
 function DevMockSafewayBlock({ userId, className = '' }) {
   const [mockStatus, setMockStatus] = useState('idle');
@@ -125,6 +126,7 @@ export default function SafewayConnectCard({ userId, className = '' }) {
 
   return (
     <div className={`space-y-4 ${className}`}>
+      <ReconnectBanner provider="safeway" storeName="Safeway" onReconnect={startSync} />
       <div className="flex flex-wrap gap-3 items-center">
         <button
           type="button"

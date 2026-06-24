@@ -294,6 +294,72 @@ describe('useCostcoSync', () => {
     })
   })
 
+  describe('group H — sync-completed events', () => {
+    function getCostcoSyncCompletedEvents(dispatchSpy) {
+      return dispatchSpy.mock.calls
+        .map(([event]) => event)
+        .filter((event) => event instanceof CustomEvent && event.type === 'costco-sync-completed')
+    }
+
+    it('test_startSync_dispatches_costco_sync_completed_on_success', async () => {
+      const receipts = [{ order_id: 'r1', total_amount: 50, items: [] }]
+      mockStartLogin.mockResolvedValue({
+        idToken: 'token',
+        receipts,
+        _fromWebView: true,
+      })
+      mockSubmitToBackend.mockResolvedValue({
+        receipts_stored: 1,
+        items_added_to_pantry: 2,
+        errors: [],
+      })
+      const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+      const { result } = renderHook(() => useCostcoSync(userId))
+
+      await act(async () => {
+        result.current.startSync()
+      })
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.SUCCESS)
+      })
+
+      const completedEvents = getCostcoSyncCompletedEvents(dispatchSpy)
+      expect(completedEvents).toHaveLength(1)
+      expect(completedEvents[0].detail).toEqual({
+        tier: 'manual',
+        receipts_stored: 1,
+        items_added: 2,
+      })
+
+      dispatchSpy.mockRestore()
+    })
+
+    it('test_startSilent_dispatches_costco_sync_completed_on_zero_receipts', async () => {
+      mockStartSilentSync.mockResolvedValue({ receipts: [] })
+      const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+      const { result } = renderHook(() => useCostcoSync(userId))
+
+      await act(async () => {
+        await result.current.startSilent()
+      })
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.SUCCESS)
+      })
+
+      const completedEvents = getCostcoSyncCompletedEvents(dispatchSpy)
+      expect(completedEvents).toHaveLength(1)
+      expect(completedEvents[0].detail).toEqual({
+        tier: 'silent',
+        receipts_stored: 0,
+        items_added: 0,
+      })
+
+      dispatchSpy.mockRestore()
+    })
+  })
+
   describe('group C — auth-error branches', () => {
     const receipts = [{ order_id: 'r1', total_amount: 50, items: [] }]
 

@@ -8,6 +8,7 @@ import { Capacitor } from '@capacitor/core';
 import { hasStoredTokens, startLogin, startSilentSync, clearStoredTokens, clearCostcoInAppBrowserSession } from '../services/costcoWebViewBridge';
 import { submitToBackend } from '../services/costcoNativeSync';
 import { api } from '../services/apiClient';
+import { dispatchProviderSyncCompleted } from '../services/providerSyncEvents';
 
 const LOG_PREFIX = '[CostcoSync]';
 const STATUS = {
@@ -61,6 +62,11 @@ export function useCostcoSync(userId) {
 
       if (!userId) {
         setResult({ receipts, count: receipts.length, receipts_stored: 0, items_added_to_pantry: 0 });
+        dispatchProviderSyncCompleted('costco', {
+          tier: 'manual',
+          receipts_stored: 0,
+          items_added: 0,
+        });
         setStatus(STATUS.SUCCESS);
         return;
       }
@@ -86,6 +92,11 @@ export function useCostcoSync(userId) {
         receipts_stored: finalBackend.receipts_stored ?? receipts.length,
         items_added_to_pantry: itemsAddedCostco,
         errors: finalBackend.errors,
+      });
+      dispatchProviderSyncCompleted('costco', {
+        tier: 'manual',
+        receipts_stored: finalBackend.receipts_stored ?? receipts.length,
+        items_added: itemsAddedCostco,
       });
       setStatus(STATUS.SUCCESS);
       setHasStoredTokensState(true);
@@ -152,6 +163,11 @@ export function useCostcoSync(userId) {
           items_added_to_pantry: itemsAddedSilent,
           errors: finalBackend.errors,
         });
+        dispatchProviderSyncCompleted('costco', {
+          tier: 'silent',
+          receipts_stored: finalBackend.receipts_stored ?? receipts.length,
+          items_added: itemsAddedSilent,
+        });
       } else {
         setResult({
           receipts: [],
@@ -159,6 +175,11 @@ export function useCostcoSync(userId) {
           receipts_stored: 0,
           items_added_to_pantry: 0,
           errors: [],
+        });
+        dispatchProviderSyncCompleted('costco', {
+          tier: 'silent',
+          receipts_stored: 0,
+          items_added: 0,
         });
       }
       setStatus(STATUS.SUCCESS);
