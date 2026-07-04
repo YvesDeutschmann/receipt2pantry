@@ -249,27 +249,6 @@ export const api = {
     return response.data
   },
 
-  fetchReceiptsWithStoredCredentials: async (providerName, userId, days = 90) => {
-    const response = await apiClient.post(`/providers/${providerName}/fetch-receipts`, {
-      user_id: userId,
-      days
-    })
-    return response.data
-  },
-
-  // Token-Based Connection (Generic for providers like Costco)
-  getConnectionCode: async (provider, userId) => {
-    const response = await apiClient.get(`/providers/${provider}/connection-code`, {
-      params: { user_id: userId }
-    })
-    return response.data
-  },
-
-  connectProvider: async (provider, tokenData) => {
-    const response = await apiClient.post(`/providers/${provider}/connect`, tokenData)
-    return response.data
-  },
-
   connectCostcoFromApp: async (userId, tokens) => {
     const response = await apiClient.post('/providers/costco/connect-from-app', {
       user_id: userId,
@@ -299,24 +278,6 @@ export const api = {
       user_id: userId,
     })
     return response.data
-  },
-
-  getConnectionStatus: async (provider, connectionCode) => {
-    const response = await apiClient.get(`/providers/${provider}/connection/${connectionCode}/status`)
-    return response.data
-  },
-
-  // Legacy Costco methods (for backward compatibility)
-  getCostcoConnectionCode: async (userId) => {
-    return api.getConnectionCode('costco', userId)
-  },
-
-  connectCostcoWithTokens: async (connectionCode, tokens) => {
-    return api.connectProvider('costco', { connection_code: connectionCode, ...tokens })
-  },
-
-  getCostcoConnectionStatus: async (connectionCode) => {
-    return api.getConnectionStatus('costco', connectionCode)
   },
 
   // Household Management

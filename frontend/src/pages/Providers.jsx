@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom'
 import { api } from '../services/apiClient'
 import { useAuth } from '../contexts/AuthContext'
 import PageHeader from '../components/PageHeader'
-import CostcoConnectPage from '../components/CostcoConnectPage'
 import CostcoOneTapSync from '../components/CostcoOneTapSync'
 import SafewayConnectCard from '../components/SafewayConnectCard'
 
@@ -18,8 +17,6 @@ function Providers() {
   const [providerStatuses, setProviderStatuses] = useState({})
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
-  const [fetchingReceipts, setFetchingReceipts] = useState(false)
-  const [showCostcoConnect, setShowCostcoConnect] = useState(false)
 
   useEffect(() => {
     fetchProviders()
@@ -54,50 +51,6 @@ function Providers() {
     } finally {
       setLoading(false)
     }
-  }
-
-  const handleFetchWithStoredCredentials = async (provider) => {
-    setFetchingReceipts(true)
-
-    try {
-      const response = await api.fetchReceiptsWithStoredCredentials(provider, userId, 14)
-      alert(`✅ Fetched ${response.count} receipts from ${provider}! Added ${response.items_added_to_pantry} items to pantry.`)
-    } catch (err) {
-      const errorMessage = err.response?.data?.error || 'Failed to fetch receipts'
-
-      if (err.response?.data?.expired_credentials) {
-        alert(`⚠️  Your ${provider} credentials have expired. Please reconnect your account.`)
-      } else {
-        alert(`❌ Failed to fetch receipts: ${errorMessage}`)
-      }
-    } finally {
-      setFetchingReceipts(false)
-    }
-  }
-
-  const handleConnectCostco = () => {
-    setShowCostcoConnect(true)
-  }
-
-  const handleCostcoConnectSuccess = async () => {
-    setShowCostcoConnect(false)
-    await new Promise(resolve => setTimeout(resolve, 300))
-    await fetchProviders()
-    alert('Costco account connected successfully!')
-  }
-
-  const handleCostcoConnectCancel = () => {
-    setShowCostcoConnect(false)
-  }
-
-  if (showCostcoConnect) {
-    return (
-      <CostcoConnectPage
-        userId={userId}
-        onSuccess={handleCostcoConnectSuccess}
-        onCancel={handleCostcoConnectCancel}
-      />
-    )
   }
 
   return (
@@ -164,32 +117,6 @@ function Providers() {
                       <div className="p-3 bg-forest-light rounded-mise-md border border-forest-light">
                         <p className="text-xs font-medium text-sage-light mb-2">One-Tap Sync</p>
                         <CostcoOneTapSync userId={userId} days={90} />
-                      </div>
-                      <div className="flex gap-2">
-                        {isConnected ? (
-                          <>
-                            <button
-                              onClick={() => handleFetchWithStoredCredentials(provider)}
-                              className="btn btn-primary flex-1"
-                              disabled={fetchingReceipts}
-                            >
-                              {fetchingReceipts ? 'Fetching...' : 'Fetch Receipts'}
-                            </button>
-                            <button
-                              onClick={handleConnectCostco}
-                              className="btn btn-ghost"
-                            >
-                              Reconnect
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            onClick={handleConnectCostco}
-                            className="btn btn-primary flex-1"
-                          >
-                            Connect Costco Account
-                          </button>
-                        )}
                       </div>
                     </div>
                   ) : provider === 'safeway' ? (
