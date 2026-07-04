@@ -76,28 +76,26 @@ def test_deleted_login_routes_return_404(client, method, path):
     assert response.status_code == 404
 
 
-def test_fetch_receipts_with_stored_credentials_missing_body(client):
-    """Stored-credentials fetch should handle missing JSON body gracefully."""
-    response = client.post('/api/providers/costco/fetch-receipts')
-
-    assert response.status_code == 400
-
-    data = json.loads(response.data)
-    assert "error" in data
-
-
-def test_fetch_receipts_with_stored_credentials_invalid_json(client):
-    """Stored-credentials fetch should handle invalid JSON without 500s."""
-    response = client.post(
-        '/api/providers/costco/fetch-receipts',
-        data='{',
-        content_type='application/json'
-    )
-
-    assert response.status_code == 400
-
-    data = json.loads(response.data)
-    assert "error" in data
+@pytest.mark.parametrize(
+    "method,path",
+    [
+        ("POST", "/api/providers/costco/fetch-receipts"),
+        ("POST", "/api/providers/costco/fetch-receipts-with-token"),
+        ("GET", "/api/providers/costco/connection-code"),
+        ("POST", "/api/providers/costco/connect"),
+        ("GET", "/api/providers/costco/connection/abc123/status"),
+    ],
+    ids=[
+        "fetch-receipts",
+        "fetch-receipts-with-token",
+        "connection-code",
+        "connect",
+        "connection-status",
+    ],
+)
+def test_deleted_legacy_costco_routes_return_404(client, method, path):
+    response = client.open(path, method=method)
+    assert response.status_code == 404
 
 
 # --- store_costco_receipts (One-Tap Sync) ---

@@ -1,5 +1,7 @@
 # T4-04 — `backend/services/connection_code_manager.py`
 
+> **Superseded (2026-07):** `connection_code_manager.py`, its tests, and the connection-code routes (`/connection-code`, `/connect`, `/connection/<code>/status`) were removed as part of the legacy Costco cleanup. One-Tap Sync uses `connect-from-app` instead. Do not recreate this module.
+
 > **Tier:** 4 — Stable
 > **Why worth testing:** Manages temporary connection codes used in the user-assisted token-extraction flow. Small but concurrency-sensitive (uses `threading.Lock`) and time-dependent (10-minute expiry). No dedicated test file.
 
