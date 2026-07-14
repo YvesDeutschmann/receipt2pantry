@@ -59,6 +59,69 @@ async function closeWebView(logPrefix) {
   }
 }
 
+/** Process-wide InAppBrowser owner — Costco and Safeway share one native WebView. */
+let activeSession = null;
+let nextSessionId = 1;
+
+/**
+ * @param {{ mode: 'login'|'silent', provider: string, abort?: () => void }} opts
+ * @returns {{ ok: true, id: number } | { ok: false }}
+ */
+function tryBeginSession({ mode, provider, abort }) {
+  if (!activeSession) {
+    const id = nextSessionId++;
+    activeSession = { id, mode, provider, abort: abort ?? (() => {}) };
+    return { ok: true, id };
+  }
+  if (mode === 'silent') {
+    return { ok: false };
+  }
+  const prev = activeSession;
+  activeSession = null;
+  try {
+    prev.abort?.();
+  } catch {
+    /* ignore */
+  }
+  const id = nextSessionId++;
+  activeSession = { id, mode, provider, abort: abort ?? (() => {}) };
+  return { ok: true, id };
+}
+
+function endSession(id) {
+  if (activeSession?.id === id) {
+    activeSession = null;
+  }
+}
+
+function isSessionOwner(id) {
+  return activeSession?.id === id;
+}
+
+async function closeIfOwner(id, logPrefix) {
+  if (isSessionOwner(id)) {
+    await closeWebView(logPrefix);
+  }
+}
+
+/** Abort in-flight session hooks and clear ownership (emergency / session clear). */
+export function forceReleaseWebViewSession() {
+  if (activeSession) {
+    try {
+      activeSession.abort?.();
+    } catch {
+      /* ignore */
+    }
+    activeSession = null;
+  }
+}
+
+/** @returns {{ mode: 'login'|'silent', provider: string } | null} */
+export function getActiveWebViewSession() {
+  if (!activeSession) return null;
+  return { mode: activeSession.mode, provider: activeSession.provider };
+}
+
 /**
  * Create a WebView bridge for a grocery provider.
  *
@@ -233,13 +296,21 @@ export function createWebViewBridge(config) {
     console.log(`${LOG_PREFIX} ${prefix} (${schemeHint}), len=${url.length}`);
   };
 
-  const handleReceiptsMessage = async (d, finish) => {
+  const closeBrowserForSession = async (sessionId) => {
+    if (sessionId != null) {
+      await closeIfOwner(sessionId, LOG_PREFIX);
+    } else {
+      await closeWebView(LOG_PREFIX);
+    }
+  };
+
+  const handleReceiptsMessage = async (d, finish, sessionId) => {
     const rawReceipts = extractRawReceipts(d) ?? [];
     const filtered = filterReceipts ? filterReceipts(rawReceipts) : rawReceipts;
     const receipts = parseReceipts(Array.isArray(filtered) ? filtered : []).filter(Boolean);
     const tokens = extractTokensFromReceiptsMessage(d);
 
-    await closeWebView(LOG_PREFIX);
+    await closeBrowserForSession(sessionId);
     await tokenStorage.store(tokens);
 
     finish({
@@ -249,13 +320,13 @@ export function createWebViewBridge(config) {
     });
   };
 
-  const handleTokensMessage = async (d, finish) => {
+  const handleTokensMessage = async (d, finish, sessionId) => {
     const tokens = extractTokensFromTokensMessage(d);
     let cookieHeader;
     if (extractCookiesBeforeClose) {
       cookieHeader = await extractCookiesBeforeClose().catch(() => undefined);
     }
-    await closeWebView(LOG_PREFIX);
+    await closeBrowserForSession(sessionId);
     await tokenStorage.store(tokens);
     finish({
       ...tokens,
@@ -270,12 +341,6 @@ export function createWebViewBridge(config) {
       if (!Capacitor.isNativePlatform()) {
         throw new Error(`${provider} WebView bridge requires a native platform (iOS/Android)`);
       }
-      await InAppBrowser.close().catch(() => {});
-      if (clearSessionBeforeLogin) {
-        await InAppBrowser.clearAllCookies({}).catch(() => {});
-        await InAppBrowser.clearCache({}).catch(() => {});
-        bridgeDevLog(`${provider}Login`, 'pre-login session cleared');
-      }
 
       let messageListener;
       let closeListener;
@@ -286,6 +351,25 @@ export function createWebViewBridge(config) {
       let timeoutHandle;
       let pendingGraceTimer = null;
       const finish = { resolve: null, reject: null };
+      let sessionId = null;
+
+      const loginState = { cleanup: null };
+
+      const loginAbort = () => {
+        loginState.cleanup?.();
+        finish.reject?.(new Error('Login superseded by newer login'));
+        endSession(sessionId);
+      };
+
+      const sessionBegin = tryBeginSession({ mode: 'login', provider, abort: loginAbort });
+      sessionId = sessionBegin.id;
+
+      await InAppBrowser.close().catch(() => {});
+      if (clearSessionBeforeLogin) {
+        await InAppBrowser.clearAllCookies({}).catch(() => {});
+        await InAppBrowser.clearCache({}).catch(() => {});
+        bridgeDevLog(`${provider}Login`, 'pre-login session cleared');
+      }
 
       let extractionAttempts = 0;
       let httpOnlyTokenInjected = false;
@@ -344,7 +428,7 @@ export function createWebViewBridge(config) {
         });
       };
 
-      const cleanup = () => {
+      const cleanupListeners = () => {
         messageListener?.remove?.();
         closeListener?.remove?.();
         urlListener?.remove?.();
@@ -361,6 +445,12 @@ export function createWebViewBridge(config) {
           timeoutHandle = null;
         }
       };
+
+      const cleanup = () => {
+        cleanupListeners();
+        endSession(sessionId);
+      };
+      loginState.cleanup = cleanup;
 
       try {
         messageListener = await InAppBrowser.addListener('messageFromWebview', (event) => {
@@ -388,12 +478,16 @@ export function createWebViewBridge(config) {
               if (tokensReceived) return;
               tokensReceived = true;
               console.log(`${LOG_PREFIX} Receipts message received (attempt ${extractionAttempts})`);
-              cleanup();
-              handleReceiptsMessage(d, (result) => finish.resolve?.(result)).catch((err) => {
+              cleanupListeners();
+              handleReceiptsMessage(d, (result) => {
+                endSession(sessionId);
+                finish.resolve?.(result);
+              }, sessionId).catch((err) => {
                 console.error(`${LOG_PREFIX} receipts handler error`, err?.message || err);
                 const raw = extractRawReceipts(d) ?? [];
                 const filtered = filterReceipts ? filterReceipts(raw) : raw;
                 tokenStorage.store(extractTokensFromReceiptsMessage(d)).then(() => {
+                  endSession(sessionId);
                   finish.resolve?.({ ...extractTokensFromReceiptsMessage(d), receipts: parseReceipts(Array.isArray(filtered) ? filtered : []).filter(Boolean), _fromWebView: true });
                 });
               });
@@ -403,10 +497,14 @@ export function createWebViewBridge(config) {
               if (tokensReceived) return;
               tokensReceived = true;
               console.log(`${LOG_PREFIX} Tokens message received (attempt ${extractionAttempts})`);
-              cleanup();
-              handleTokensMessage(d, (result) => finish.resolve?.(result)).catch((err) => {
+              cleanupListeners();
+              handleTokensMessage(d, (result) => {
+                endSession(sessionId);
+                finish.resolve?.(result);
+              }, sessionId).catch((err) => {
                 console.error(`${LOG_PREFIX} tokens handler error`, err?.message || err);
                 tokenStorage.store(extractTokensFromTokensMessage(d)).then(() => {
+                  endSession(sessionId);
                   finish.resolve?.({ ...extractTokensFromTokensMessage(d), _closeWebViewAfterFetch: true });
                 });
               });
@@ -485,8 +583,8 @@ export function createWebViewBridge(config) {
                 loginLogTag,
                 `loop detected reason=${loopResult.reason ?? 'unknown'} hits=${loopResult.hits} lastUrl=${u.slice(0, 160)}`
               );
-              cleanup();
-              InAppBrowser.close().catch(() => {});
+              cleanupListeners();
+              closeIfOwner(sessionId, LOG_PREFIX).finally(() => endSession(sessionId));
               finish.reject?.(
                 new Error(loopResult.errorMessage || loopDetection.errorMessage)
               );
@@ -516,8 +614,8 @@ export function createWebViewBridge(config) {
             `login timeout ${loginTimeoutMs / 1000}s lastUrl=${(lastBrowserUrl || '').slice(0, 160)}`
           );
           console.warn(`${LOG_PREFIX} Login timeout (${loginTimeoutMs / 1000}s)`);
-          cleanup();
-          InAppBrowser.close().catch(() => {});
+          cleanupListeners();
+          closeIfOwner(sessionId, LOG_PREFIX).finally(() => endSession(sessionId));
           finish.reject?.(new Error(`${provider} login timed out. Please try again and complete sign-in within 5 minutes.`));
         }, loginTimeoutMs);
 
@@ -552,6 +650,7 @@ export function createWebViewBridge(config) {
 
       return new Promise((resolve) => {
         let received = false;
+        let sessionId = null;
         let messageListener;
         let urlListener;
         let silentExtractInterval;
@@ -559,6 +658,30 @@ export function createWebViewBridge(config) {
         /** Last URL from urlChangeEvent (diagnostics / bridge logging only). */
         let silentLastUrl = '';
         const silentLogTag = `${provider}Silent`;
+        let timeout;
+
+        const silentCleanupListeners = () => {
+          if (silentExtractInterval) clearInterval(silentExtractInterval);
+          silentExtractInterval = null;
+          messageListener?.remove?.();
+          urlListener?.remove?.();
+        };
+
+        const silentAbort = () => {
+          if (received) return;
+          received = true;
+          if (timeout) clearTimeout(timeout);
+          silentCleanupListeners();
+          endSession(sessionId);
+          resolve({ _skipped: true, reason: 'preempted' });
+        };
+
+        const sessionBegin = tryBeginSession({ mode: 'silent', provider, abort: silentAbort });
+        if (!sessionBegin.ok) {
+          resolve({ _skipped: true, reason: 'webview_busy' });
+          return;
+        }
+        sessionId = sessionBegin.id;
 
         const runSilentHttpOnlyPoll = async () => {
           if (!httpOnlyCookies || received || silentHttpOnlyInjected) return;
@@ -603,17 +726,16 @@ export function createWebViewBridge(config) {
           });
         };
 
-        const timeout = setTimeout(() => {
+        timeout = setTimeout(() => {
           if (received) return;
+          received = true;
           bridgeDevLog(
             silentLogTag,
             `silent timeout ${silentTimeoutMs / 1000}s lastUrl=${(silentLastUrl || '').slice(0, 160)}`
           );
           console.log(`${LOG_PREFIX} startSilentSync: ${silentTimeoutMs / 1000}s timeout`);
-          if (silentExtractInterval) clearInterval(silentExtractInterval);
-          messageListener?.remove?.();
-          urlListener?.remove?.();
-          InAppBrowser.close().catch(() => {});
+          silentCleanupListeners();
+          closeIfOwner(sessionId, LOG_PREFIX).finally(() => endSession(sessionId));
           resolve(null);
         }, silentTimeoutMs);
 
@@ -621,11 +743,11 @@ export function createWebViewBridge(config) {
           if (received) return;
           received = true;
           clearTimeout(timeout);
-          if (silentExtractInterval) clearInterval(silentExtractInterval);
-          messageListener?.remove?.();
-          urlListener?.remove?.();
-          InAppBrowser.close().catch(() => {});
-          resolve(result);
+          silentCleanupListeners();
+          closeIfOwner(sessionId, LOG_PREFIX).finally(() => {
+            endSession(sessionId);
+            resolve(result);
+          });
         };
 
         (async () => {
@@ -655,7 +777,7 @@ export function createWebViewBridge(config) {
                 const filtered = filterReceipts ? filterReceipts(rawReceipts) : rawReceipts;
                 const receipts = parseReceipts(filtered).filter(Boolean);
                 const tokens = extractTokensFromReceiptsMessage(d);
-                closeWebView(LOG_PREFIX).then(() =>
+                closeIfOwner(sessionId, LOG_PREFIX).then(() =>
                   tokenStorage.store(tokens)
                 ).then(() => {
                   finish({ ...tokens, receipts, _fromWebView: true });
@@ -673,7 +795,7 @@ export function createWebViewBridge(config) {
                   if (extractCookiesBeforeClose) {
                     cookieHeader = await extractCookiesBeforeClose().catch(() => undefined);
                   }
-                  await closeWebView(LOG_PREFIX);
+                  await closeIfOwner(sessionId, LOG_PREFIX);
                   await tokenStorage.store(tokens);
                   finish({ ...tokens, _closeWebViewAfterFetch: true, cookieHeader });
                 })().catch((err) => {
@@ -715,9 +837,9 @@ export function createWebViewBridge(config) {
           } catch (err) {
             bridgeDevLog(silentLogTag, `startSilentSync failed: ${(err?.message || err || '').toString().slice(0, 300)}`);
             console.error(`${LOG_PREFIX} startSilentSync failed`, err);
-            clearTimeout(timeout);
-            messageListener?.remove?.();
-            urlListener?.remove?.();
+            if (timeout) clearTimeout(timeout);
+            silentCleanupListeners();
+            endSession(sessionId);
             resolve(null);
           }
         })();

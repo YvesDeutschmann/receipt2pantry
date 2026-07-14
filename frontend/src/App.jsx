@@ -1,6 +1,8 @@
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom'
-import { AuthProvider } from './contexts/AuthContext'
+import { AuthProvider, useAuth } from './contexts/AuthContext'
 import { ColdStartProvider } from './contexts/ColdStartContext'
+import { useAppSyncScheduler } from './hooks/useAppSyncScheduler'
+import { useProviderAttentionSync } from './hooks/useProviderAttentionSync'
 import AppShell from './components/AppShell'
 import Dashboard from './pages/Dashboard'
 import Pantry from './pages/Pantry'
@@ -16,12 +18,13 @@ import DietaryRestrictions from './pages/onboarding/DietaryRestrictions'
 import BridgeScreen from './pages/onboarding/BridgeScreen'
 import StaplesTemplate from './pages/onboarding/StaplesTemplate'
 
-function App() {
+function AppRoutes() {
+  const { user } = useAuth()
+  useAppSyncScheduler({ userId: user?.id ?? null })
+  useProviderAttentionSync()
+
   return (
-    <AuthProvider>
-      <ColdStartProvider>
-        <Router>
-          <Routes>
+    <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/onboarding" element={<OnboardingRoute />}>
               <Route index element={<HouseholdSize />} />
@@ -44,7 +47,16 @@ function App() {
               <Route path="providers" element={<Providers />} />
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+    </Routes>
+  )
+}
+
+function App() {
+  return (
+    <AuthProvider>
+      <ColdStartProvider>
+        <Router>
+          <AppRoutes />
         </Router>
       </ColdStartProvider>
     </AuthProvider>

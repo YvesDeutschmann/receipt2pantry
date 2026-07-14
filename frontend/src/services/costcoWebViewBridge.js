@@ -6,7 +6,7 @@
  * when Preferences plugin is not available (e.g. "not implemented on android").
  */
 
-import { createWebViewBridge } from './webViewBridge';
+import { createWebViewBridge, forceReleaseWebViewSession } from './webViewBridge';
 import { createTokenStorage } from './tokenStorage';
 import { parseApiReceipt } from './costcoNativeSync';
 import { getExtractScript, getDiagnosticScript } from './costcoExtractScript';
@@ -119,6 +119,7 @@ export const clearStoredTokens = bridge.clearStoredTokens.bind(bridge);
 
 /** Clears InAppBrowser cookie jar + disk cache (reduces stale B2C / Akamai state after failures). Safe to call from error handlers. */
 export async function clearCostcoInAppBrowserSession() {
+  forceReleaseWebViewSession();
   await InAppBrowser.close().catch(() => {});
   await InAppBrowser.clearAllCookies({}).catch((e) => console.warn('[costcoWebViewBridge] clearAllCookies:', e?.message ?? e));
   await InAppBrowser.clearCache({}).catch((e) => console.warn('[costcoWebViewBridge] clearCache:', e?.message ?? e));
