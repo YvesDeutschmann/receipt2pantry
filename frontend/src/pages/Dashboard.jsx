@@ -5,6 +5,7 @@ import { api } from '../services/apiClient'
 import PageHeader from '../components/PageHeader'
 import PullToRefresh from '../components/PullToRefresh'
 import PantrySearchOverlay from '../components/PantrySearchOverlay'
+import NeedsAttentionSection from '../components/NeedsAttentionSection'
 
 function Dashboard() {
   const { user } = useAuth()
@@ -57,6 +58,8 @@ function Dashboard() {
         title="Dashboard"
         subtitle="Welcome to Meald! View your recent receipts and shopping statistics."
       />
+
+      <NeedsAttentionSection />
 
       {whatsForDinnerUnlocked && (
         <div className="mb-8 p-5 rounded-mise-lg border border-[var(--color-terra)]/35 bg-forest-light">

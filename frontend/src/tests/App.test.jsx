@@ -1,9 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 
-const { getHousehold, getPantry } = vi.hoisted(() => ({
+const { getHousehold, getPantry, useAppSyncSchedulerMock, useProviderAttentionSyncMock } = vi.hoisted(() => ({
   getHousehold: vi.fn(),
   getPantry: vi.fn(),
+  useAppSyncSchedulerMock: vi.fn(),
+  useProviderAttentionSyncMock: vi.fn(),
 }))
 
 // Mock AuthContext to provide authenticated user for tests
@@ -24,6 +26,23 @@ vi.mock('../contexts/AuthContext', () => ({
     signInWithApple: vi.fn(),
     signInWithGoogle: vi.fn(),
   }),
+}))
+
+vi.mock('../hooks/useAppSyncScheduler', () => ({
+  useAppSyncScheduler: (...args) => useAppSyncSchedulerMock(...args),
+}))
+
+vi.mock('../hooks/useProviderAttentionSync', () => ({
+  useProviderAttentionSync: (...args) => useProviderAttentionSyncMock(...args),
+}))
+
+vi.mock('../services/providerAttentionStore', () => ({
+  getAttention: vi.fn(() => Promise.resolve({})),
+  subscribe: vi.fn((listener) => {
+    listener({});
+    return () => {};
+  }),
+  PROVIDER_LABELS: { safeway: 'Safeway', costco: 'Costco' },
 }))
 
 vi.mock('../services/apiClient', () => ({
@@ -59,5 +78,17 @@ describe('App', () => {
     expect(screen.getByRole('link', { name: /dashboard/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /providers/i })).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /settings/i })).toBeInTheDocument()
+  })
+
+  it('SCHEDULER_MOUNTED_AT_ROOT — useAppSyncScheduler invoked with user id', () => {
+    render(<App />)
+    expect(useAppSyncSchedulerMock).toHaveBeenCalledWith({
+      userId: '00000000-0000-0000-0000-000000000001',
+    })
+  })
+
+  it('ATTENTION_LISTENER_MOUNTED_AT_APPROUTES — useProviderAttentionSync invoked', () => {
+    render(<App />)
+    expect(useProviderAttentionSyncMock).toHaveBeenCalled()
   })
 })

@@ -131,6 +131,11 @@ describe('webViewBridge contract', () => {
     vi.useFakeTimers({ shouldAdvanceTime: false })
   })
 
+  beforeEach(async () => {
+    const { forceReleaseWebViewSession } = await import('../services/webViewBridge.js')
+    forceReleaseWebViewSession()
+  })
+
   afterEach(() => {
     vi.useRealTimers()
   })
@@ -782,6 +787,87 @@ describe('webViewBridge contract', () => {
       } finally {
         vi.unstubAllGlobals()
       }
+    })
+  })
+
+  describe('group G — InAppBrowser session mutex', () => {
+    it('SILENT_SKIPS_WHILE_LOGIN_ACTIVE — no second openWebView; silent timeout does not close login', async () => {
+      const { startLogin, startSilentSync } = await import('../services/costcoWebViewBridge.js')
+      const loginPromise = startLogin()
+      await flushUntilListenersReady()
+      expect(InAppBrowser.openWebView).toHaveBeenCalledTimes(1)
+
+      const silentPromise = startSilentSync()
+      await expect(silentPromise).resolves.toEqual({ _skipped: true, reason: 'webview_busy' })
+      expect(InAppBrowser.openWebView).toHaveBeenCalledTimes(1)
+
+      const closeCountBefore = InAppBrowser.close.mock.calls.length
+      await vi.advanceTimersByTimeAsync(45_000)
+      await Promise.resolve()
+      expect(InAppBrowser.close.mock.calls.length).toBe(closeCountBefore)
+
+      fireMessage({
+        type: 'costco-tokens',
+        idToken: FAKE_ID_TOKEN_XYZ789,
+        accessToken: FAKE_ACCESS_TOKEN_ABC123,
+        clientID: 'c',
+        wcsClientId: 'w',
+        refreshToken: 'r',
+        refreshTokenClientId: 'rc',
+        userAgent: 'ua',
+      })
+      await loginPromise
+    })
+
+    it('LOGIN_PREEMPTS_SILENT — silent resolves preempted; login opens WebView', async () => {
+      const { startLogin, startSilentSync } = await import('../services/costcoWebViewBridge.js')
+      const silentPromise = startSilentSync()
+      await vi.waitFor(() => {
+        expect(InAppBrowser.openWebView).toHaveBeenCalledTimes(1)
+      })
+
+      const loginPromise = startLogin()
+      await expect(silentPromise).resolves.toEqual({ _skipped: true, reason: 'preempted' })
+      await flushUntilListenersReady()
+      expect(InAppBrowser.openWebView.mock.calls.length).toBeGreaterThanOrEqual(2)
+
+      fireMessage({
+        type: 'costco-tokens',
+        idToken: FAKE_ID_TOKEN_XYZ789,
+        accessToken: FAKE_ACCESS_TOKEN_ABC123,
+        clientID: 'c',
+        wcsClientId: 'w',
+        refreshToken: 'r',
+        refreshTokenClientId: 'rc',
+        userAgent: 'ua',
+      })
+      await loginPromise
+    })
+
+    it('CROSS_PROVIDER_SILENT_EXCLUSIVE — safeway silent skips while costco silent active', async () => {
+      const { startSilentSync: costcoSilent } = await import('../services/costcoWebViewBridge.js')
+      const { startSilentSync: safewaySilent } = await import('../services/safewayWebViewBridge.js')
+      const costcoPromise = costcoSilent()
+      await vi.waitFor(() => {
+        expect(InAppBrowser.openWebView).toHaveBeenCalledTimes(1)
+      })
+
+      await expect(safewaySilent()).resolves.toEqual({ _skipped: true, reason: 'webview_busy' })
+      expect(InAppBrowser.openWebView).toHaveBeenCalledTimes(1)
+
+      await vi.advanceTimersByTimeAsync(45_000)
+      await costcoPromise
+    })
+
+    it('TIMEOUT_STILL_NULL_WHEN_ALONE — silent alone times out to null', async () => {
+      const { startSilentSync } = await import('../services/costcoWebViewBridge.js')
+      const silentPromise = startSilentSync()
+      await vi.waitFor(() => {
+        expect(InAppBrowser.openWebView).toHaveBeenCalledTimes(1)
+      })
+      await vi.advanceTimersByTimeAsync(45_000)
+      await expect(silentPromise).resolves.toBeNull()
+      expect(InAppBrowser.close).toHaveBeenCalled()
     })
   })
 })
