@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import { supabase } from '../services/supabaseClient'
 import { SignInWithApple } from '../native/signInWithApple'
+import { emit, FunnelEvent } from '../services/funnelTelemetry'
 
 const AuthContext = createContext(null)
 
@@ -42,6 +43,9 @@ export function AuthProvider({ children }) {
       setSession(sess)
       setUser(sess?.user ?? null)
       setLoading(false)
+      if (_event === 'SIGNED_IN' && sess?.user?.id) {
+        void emit(FunnelEvent.SIGN_IN, sess.user.id)
+      }
     })
 
     return () => subscription.unsubscribe()
