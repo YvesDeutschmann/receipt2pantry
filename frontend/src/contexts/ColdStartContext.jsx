@@ -1,5 +1,6 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { useAuth } from './AuthContext'
+import { emit, FunnelEvent } from '../services/funnelTelemetry'
 
 const ColdStartContext = createContext(null)
 
@@ -21,6 +22,37 @@ export function ColdStartProvider({ children }) {
   const refreshMetadataFromSession = useCallback(() => {
     // AuthContext updates user on onAuthStateChange after updateUser
   }, [])
+
+  useEffect(() => {
+    if (groceryConnectedFlag && user?.id) {
+      void emit(FunnelEvent.STORE_CONNECTED, user.id)
+    }
+  }, [groceryConnectedFlag, user?.id])
+
+  useEffect(() => {
+    const userId = user?.id
+    if (!userId) return undefined
+
+    const onSyncCompleted = () => {
+      void emit(FunnelEvent.STORE_CONNECTED, userId)
+    }
+
+    window.addEventListener('safeway-sync-completed', onSyncCompleted)
+    window.addEventListener('costco-sync-completed', onSyncCompleted)
+
+    return () => {
+      window.removeEventListener('safeway-sync-completed', onSyncCompleted)
+      window.removeEventListener('costco-sync-completed', onSyncCompleted)
+    }
+  }, [user?.id])
+
+  useEffect(() => {
+    if (receiptSyncStatus === 'complete' && receiptMatchCount > 0 && user?.id) {
+      void emit(FunnelEvent.RECEIPTS_SYNCED, user.id, {
+        matchCount: receiptMatchCount,
+      })
+    }
+  }, [receiptSyncStatus, receiptMatchCount, user?.id])
 
   const value = useMemo(
     () => ({

@@ -107,6 +107,15 @@ const MealPlan = () => {
     }
   }
 
+  const handleToggleLeftover = async (meal) => {
+    try {
+      await api.mealPlan.updateMeal(meal.id, { is_leftover: !meal.is_leftover })
+      loadMealPlan()
+    } catch (err) {
+      alert(err.response?.data?.error || 'Failed to update meal')
+    }
+  }
+
   // Handle wizard complete
   const handleWizardComplete = () => {
     loadMealPlan()
@@ -209,6 +218,15 @@ const MealPlan = () => {
                             {/* Hover Actions */}
                             <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 rounded-mise-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                               <div className="flex gap-2">
+                                <button
+                                  className="px-3 py-1 bg-forest-mid text-cream text-sm rounded-mise-sm hover:bg-forest-light"
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    handleToggleLeftover(meal)
+                                  }}
+                                >
+                                  {meal.is_leftover ? '✓ Leftover' : 'Leftover'}
+                                </button>
                                 <button
                                   className="px-3 py-1 bg-forest-mid text-cream text-sm rounded-mise-sm hover:bg-forest-light"
                                   onClick={(e) => {

@@ -19,6 +19,14 @@ from backend.routes.meal_plan import meal_plan_bp
 from backend.routes.pool import pool_bp
 
 
+def wire_suggestion_pool_store(app: Flask) -> None:
+    """Attach pool store to suggestion service after both are initialized."""
+    suggestion_service = app.config.get("SUGGESTION_SERVICE")
+    pool_store_service = app.config.get("POOL_STORE_SERVICE")
+    if suggestion_service is not None and pool_store_service is not None:
+        suggestion_service.pool_store = pool_store_service
+
+
 def create_app(config=None):
     """
     Flask application factory
@@ -148,6 +156,7 @@ def create_app(config=None):
                     app.config["POOL_STORE_SERVICE"] = pool_store_service
                     app.config["DEPLETION_ENGINE"] = depletion_engine
                     app.config["POOL_GENERATOR"] = pool_generator
+                    wire_suggestion_pool_store(app)
                     logger.info("Suggestion pool services initialized")
                 except Exception as e:
                     logger.warning(f"Failed to initialize Meal plan services: {e}")

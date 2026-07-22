@@ -9,7 +9,7 @@ import json
 import time
 from datetime import date
 from difflib import SequenceMatcher
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
 
 from backend.config import Config
 from backend.services.recipe_meal_filter import is_appropriate_for_meal, is_treat
@@ -23,8 +23,11 @@ from backend.services.confidence_engine import (
 from backend.services.pantry_service import PantryService
 from backend.services.recipe_service import RecipeService
 from backend.services.supabase_service import SupabaseService
-from backend.utils.exceptions import RecipeQuotaException, ValidationException
+from backend.utils.exceptions import AIServiceException, RecipeQuotaException, ValidationException
 from backend.utils.logger import get_logger
+
+if TYPE_CHECKING:
+    from backend.services.pool_store_service import PoolStoreService
 
 logger = get_logger(__name__)
 
@@ -34,6 +37,99 @@ SUGGESTION_CACHE_TTL_SECONDS = 30 * 60
 CANDIDATE_NUMBER = 50
 
 DEFAULT_USER_PREFS: Dict[str, Any] = {"depletion_multiplier": 1.0}
+
+
+def _confidence_threshold_for_pantry_size(pantry_item_count: int) -> float:
+    """
+    Return the minimum confidence required to include a pantry item in the
+    ingredient list sent to Spoonacular.
+
+    Breakpoints (chosen to match onboarding staples flow):
+      0–2 items  → 0.0  (any item used, even freshly added staples)
+      3–9 items  → 0.20 (check_first tier and above)
+      ≥ 10 items → 0.50 (probably_have tier and above — normal operation)
+    """
+    if pantry_item_count < 3:
+        return 0.0
+    if pantry_item_count < 10:
+        return 0.20
+    return 0.50
+
+
+def _empty_suggestion_tiers() -> Dict[str, List[Dict]]:
+    return {
+        "use_soon_shelf": [],
+        "cook_tonight": [],
+        "probably_have": [],
+        "check_first": [],
+    }
+
+
+def _attach_meta(
+    result: Dict[str, Any],
+    *,
+    fallback_mode: bool,
+    pantry_item_count: int,
+    threshold_used: float,
+) -> Dict[str, Any]:
+    result["meta"] = {
+        "fallback_mode": bool(fallback_mode),
+        "pantry_item_count": pantry_item_count,
+        "threshold_used": float(threshold_used),
+    }
+    return result
+
+
+def _pool_fallback_suggestion_result(
+    pool_store: "PoolStoreService",
+    household_id: str,
+) -> Optional[Dict[str, Any]]:
+    """Try unused pool rows, then swiped (read-only)."""
+    grouped = pool_store.get_pool_grouped_by_meal(household_id, status="unused")
+    if any(grouped.values()):
+        return _pool_grouped_to_suggestion_result(grouped)
+    grouped = pool_store.get_pool_grouped_by_meal(household_id, status="swiped")
+    if any(grouped.values()):
+        return _pool_grouped_to_suggestion_result(grouped)
+    return None
+
+
+def _pool_grouped_to_suggestion_result(
+    grouped: Dict[str, List[Dict]],
+) -> Dict[str, List[Dict]]:
+    """Convert pool rows grouped by meal into SuggestionResult-shaped tiers."""
+    results: Dict[str, List[Dict]] = {
+        "use_soon_shelf": [],
+        "cook_tonight": [],
+        "probably_have": [],
+        "check_first": [],
+    }
+    for rows in grouped.values():
+        for row in rows:
+            recipe_id = row.get("recipe_id")
+            if recipe_id is None:
+                continue
+            raw_score = row.get("match_score")
+            score = float(raw_score) if raw_score is not None else 0.0
+            if score >= 0.90:
+                tier = "cook_tonight"
+            elif score >= 0.70:
+                tier = "probably_have"
+            else:
+                tier = "check_first"
+            card = {
+                "id": str(recipe_id),
+                "title": row.get("recipe_name") or "",
+                "image": row.get("recipe_image"),
+                "tier": tier,
+                "ingredient_flags": [],
+                "score": score,
+                "trigger_ingredient": None,
+            }
+            results[tier].append(card)
+    for key in ("cook_tonight", "probably_have", "check_first"):
+        results[key].sort(key=lambda r: float(r.get("score") or 0.0), reverse=True)
+    return results
 
 
 def get_tier(min_required_confidence: float) -> str:
@@ -104,11 +200,13 @@ class SuggestionService:
         pantry_service: PantryService,
         recipe_service: RecipeService,
         config: Config,
+        pool_store: Optional["PoolStoreService"] = None,
     ):
         self.supabase = supabase
         self.pantry_service = pantry_service
         self.recipe_service = recipe_service
         self.config = config
+        self.pool_store = pool_store
         self._result_cache: Dict[str, Tuple[Dict, float]] = {}
 
     def _client_for_db(self) -> Any:
@@ -188,7 +286,29 @@ class SuggestionService:
         if household_id is None:
             household_id = self._get_household_id(user_id)
 
+        if self.pool_store is not None and household_id:
+            depth = self.pool_store.get_pool_depth(household_id)
+            if sum(depth.values()) > 0:
+                grouped = self.pool_store.get_pool_grouped_by_meal(
+                    household_id, status="unused"
+                )
+                result = _pool_grouped_to_suggestion_result(grouped)
+                pantry_count = len(
+                    self._load_active_pantry(user_id, household_id)
+                )
+                pool_threshold = _confidence_threshold_for_pantry_size(
+                    pantry_count
+                )
+                return _attach_meta(
+                    result,
+                    fallback_mode=pool_threshold < 0.50,
+                    pantry_item_count=pantry_count,
+                    threshold_used=pool_threshold,
+                )
+
         pantry = self._load_active_pantry(user_id, household_id)
+        threshold = _confidence_threshold_for_pantry_size(len(pantry))
+        fallback_mode = threshold < 0.50
         prefs_row = self.supabase.get_user_preferences(user_id)
         user_prefs = dict(DEFAULT_USER_PREFS)
         if prefs_row:
@@ -248,7 +368,7 @@ class SuggestionService:
             bid = str(p.get("id") or "")
             c = confidences_by_id.get(bid, 0.0)
             base = (p.get("base_ingredient") or "").strip().lower()
-            if base and c >= 0.50:
+            if base and c >= threshold:
                 high_conf_names.append(base)
 
         use_soon_names = [
@@ -257,13 +377,43 @@ class SuggestionService:
         use_soon_names = [n for n in use_soon_names if n]
 
         ingredient_list = sorted(set(high_conf_names + use_soon_names))
+
+        if not ingredient_list and len(pantry) > 0:
+            ingredient_list = sorted(
+                {
+                    (p.get("base_ingredient") or "").strip().lower()
+                    for p in pantry
+                    if (p.get("base_ingredient") or "").strip()
+                }
+            )
+            fallback_mode = True
+
         if not ingredient_list:
-            return {
-                "use_soon_shelf": [],
-                "cook_tonight": [],
-                "probably_have": [],
-                "check_first": [],
-            }
+            empty = _empty_suggestion_tiers()
+            if len(pantry) > 0:
+                if self.pool_store is not None and household_id:
+                    fb = _pool_fallback_suggestion_result(
+                        self.pool_store, household_id
+                    )
+                    if fb is not None:
+                        return _attach_meta(
+                            fb,
+                            fallback_mode=True,
+                            pantry_item_count=len(pantry),
+                            threshold_used=threshold,
+                        )
+                return _attach_meta(
+                    empty,
+                    fallback_mode=True,
+                    pantry_item_count=len(pantry),
+                    threshold_used=threshold,
+                )
+            return _attach_meta(
+                empty,
+                fallback_mode=False,
+                pantry_item_count=0,
+                threshold_used=threshold,
+            )
 
         cache_key_full = self._build_suggestion_cache_key(
             user_id, household_id, pantry, ingredient_list, user_prefs
@@ -273,11 +423,45 @@ class SuggestionService:
         if ent:
             payload, ts = ent
             if clock() - ts < SUGGESTION_CACHE_TTL_SECONDS:
+                if "meta" not in payload:
+                    _attach_meta(
+                        payload,
+                        fallback_mode=fallback_mode,
+                        pantry_item_count=len(pantry),
+                        threshold_used=threshold,
+                    )
                 return payload
 
-        candidates = self.fetch_candidate_recipes(
-            user_id, household_id, ingredient_list
-        )
+        try:
+            candidates = self.fetch_candidate_recipes(
+                user_id, household_id, ingredient_list
+            )
+        except AIServiceException as exc:
+            logger.warning("Spoonacular unavailable, attempting fallback: %s", exc)
+            stale = self._result_cache.get(ck)
+            if stale is not None:
+                payload = stale[0]
+                if "meta" not in payload:
+                    _attach_meta(
+                        payload,
+                        fallback_mode=fallback_mode,
+                        pantry_item_count=len(pantry),
+                        threshold_used=threshold,
+                    )
+                return payload
+            if self.pool_store is not None and household_id:
+                fb = _pool_fallback_suggestion_result(
+                    self.pool_store, household_id
+                )
+                if fb is not None:
+                    return _attach_meta(
+                        fb,
+                        fallback_mode=True,
+                        pantry_item_count=len(pantry),
+                        threshold_used=threshold,
+                    )
+            raise
+
         signals = self.supabase.get_ingredient_signal_counts(user_id)
 
         results: Dict[str, List[Dict]] = {
@@ -293,8 +477,8 @@ class SuggestionService:
                 continue
             try:
                 details = self.recipe_service.get_recipe_details(int(rid))
-            except RecipeQuotaException:
-                raise
+            except AIServiceException:
+                break
             except Exception as e:
                 logger.warning("Skipping recipe %s: %s", rid, e)
                 continue
@@ -326,6 +510,36 @@ class SuggestionService:
         for key in results:
             results[key].sort(key=lambda r: float(r.get("score") or 0.0), reverse=True)
 
+        tier_keys = ("use_soon_shelf", "cook_tonight", "probably_have", "check_first")
+        if all(len(results[k]) == 0 for k in tier_keys) and len(pantry) > 0:
+            logger.warning(
+                json.dumps(
+                    {
+                        "event": "sparse_pantry_no_results",
+                        "pantry_item_count": len(pantry),
+                        "ingredient_count": len(ingredient_list),
+                        "fallback_mode": fallback_mode,
+                    }
+                )
+            )
+            if self.pool_store is not None and household_id:
+                fb = _pool_fallback_suggestion_result(
+                    self.pool_store, household_id
+                )
+                if fb is not None:
+                    return _attach_meta(
+                        fb,
+                        fallback_mode=True,
+                        pantry_item_count=len(pantry),
+                        threshold_used=threshold,
+                    )
+
+        _attach_meta(
+            results,
+            fallback_mode=fallback_mode,
+            pantry_item_count=len(pantry),
+            threshold_used=threshold,
+        )
         self._result_cache[ck] = (results, clock())
         return results
 
@@ -474,6 +688,14 @@ class SuggestionService:
             trigger_ingredient = min(required_conf_entries, key=lambda x: x[1])[0]
 
         rid = recipe.get("id")
+        missed_count = len(
+            [
+                f
+                for f in ingredient_flags
+                if f["confidence"] == 0.0
+                and not f.get("is_soft_required", False)
+            ]
+        )
         return {
             "id": str(rid) if rid is not None else "",
             "title": recipe.get("title") or "",
@@ -482,6 +704,7 @@ class SuggestionService:
             "ingredient_flags": ingredient_flags,
             "score": round(final_score, 3),
             "trigger_ingredient": trigger_ingredient,
+            "missed_count": missed_count,
         }
 
     def on_recipe_dismiss(self, user_id: str, recipe_id: int, household_id: Optional[str] = None) -> None:
@@ -512,5 +735,8 @@ def create_suggestion_service(
     pantry_service: PantryService,
     recipe_service: RecipeService,
     config: Config,
+    pool_store: Optional["PoolStoreService"] = None,
 ) -> SuggestionService:
-    return SuggestionService(supabase, pantry_service, recipe_service, config)
+    return SuggestionService(
+        supabase, pantry_service, recipe_service, config, pool_store=pool_store
+    )

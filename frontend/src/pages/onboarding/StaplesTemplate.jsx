@@ -18,6 +18,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useColdStart } from '../../contexts/ColdStartContext'
 import { useOnboarding } from '../../contexts/OnboardingContext'
 import { api } from '../../services/apiClient'
+import { emit, FunnelEvent } from '../../services/funnelTelemetry'
 import ColdStartProgressBar from '../../components/ColdStartProgressBar'
 import PantrySearchOverlay from '../../components/PantrySearchOverlay'
 import VoiceInputSheet from '../../components/voice/VoiceInputSheet'
@@ -275,6 +276,7 @@ export default function StaplesTemplate() {
         ? Array.from(preSelectedDefaults)
         : Array.from(selected)
       const result = await api.confirmStaples(userId, list, opts.skip)
+      void emit(FunnelEvent.STAPLES_CONFIRMED, userId, { staplesCount: list.length })
       await complete()
       setJustUnlocked(true)
       const n = result.receipt_matched ?? 0
@@ -308,7 +310,9 @@ export default function StaplesTemplate() {
     }
     setSubmitting(true)
     try {
-      await api.confirmStaples(userId, Array.from(selected), false)
+      const list = Array.from(selected)
+      await api.confirmStaples(userId, list, false)
+      void emit(FunnelEvent.STAPLES_CONFIRMED, userId, { staplesCount: list.length })
       await complete()
       fireSuggestionPoolWarmup()
       navigate('/', { replace: true })
@@ -521,6 +525,7 @@ export default function StaplesTemplate() {
           if (!userId) return
           const list = Array.from(selected)
           const result = await api.confirmStaples(userId, list, false)
+          void emit(FunnelEvent.STAPLES_CONFIRMED, userId, { staplesCount: list.length })
           await complete()
           fireSuggestionPoolWarmup()
           setJustUnlocked(true)

@@ -222,3 +222,113 @@ def test_connect_costco_from_app_missing_id_token(client):
     assert 'error' in data
     assert 'idToken' in data['error'] or 'id_token' in data['error'].lower()
 
+
+# --- 01c.2: connection-health signal ---
+
+EXPIRED_JWT = (
+    'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.'
+    'eyJzdWIiOiJ0ZXN0IiwiZXhwIjoxfQ.'
+    'x'
+)
+
+
+def test_CONNECT_FROM_APP_EXPIRED_TOKEN_RETURNS_NEEDS_RECONNECT(client, mocker):
+    """Expired JWT returns 401 with standardized reconnect shape."""
+    mock_provider = mocker.MagicMock()
+    mock_provider._decode_jwt_payload.return_value = {'sub': 'test', 'exp': 1}
+    mock_provider._is_token_expired.return_value = True
+    mocker.patch('backend.providers.costco_provider.CostcoProvider', return_value=mock_provider)
+
+    response = client.post(
+        '/api/providers/costco/connect-from-app',
+        data=json.dumps({'user_id': TEST_USER_ID, 'idToken': EXPIRED_JWT}),
+        content_type='application/json',
+    )
+
+    assert response.status_code == 401
+    data = json.loads(response.data)
+    assert data['needs_reconnect'] is True
+    assert data['reason'] == 'expired_credentials'
+    assert data['provider'] == 'costco'
+    assert 'error' in data
+
+
+def test_CONNECT_FROM_APP_AUTH_EXCEPTION_RETURNS_NEEDS_RECONNECT(client, mocker):
+    """AuthenticationException returns 401 with standardized reconnect shape."""
+    from backend.utils.exceptions import AuthenticationException
+
+    mock_provider = mocker.MagicMock()
+    mock_provider._decode_jwt_payload.side_effect = AuthenticationException(
+        'Invalid token format'
+    )
+    mocker.patch('backend.providers.costco_provider.CostcoProvider', return_value=mock_provider)
+
+    response = client.post(
+        '/api/providers/costco/connect-from-app',
+        data=json.dumps({'user_id': TEST_USER_ID, 'idToken': EXPIRED_JWT}),
+        content_type='application/json',
+    )
+
+    assert response.status_code == 401
+    data = json.loads(response.data)
+    assert data['needs_reconnect'] is True
+    assert data['reason'] == 'expired_credentials'
+    assert data['provider'] == 'costco'
+
+
+def test_RECONNECT_RESPONSE_HELPER_UNKNOWN_REASON_RAISES():
+    """_reconnect_response raises ValueError for unknown reason."""
+    from backend.routes.providers import _reconnect_response
+
+    with pytest.raises(ValueError):
+        _reconnect_response('safeway', 'unknown_reason')
+
+
+def test_RECONNECT_RESPONSE_HELPER_VALID_SHAPE(app):
+    """_reconnect_response returns correct JSON shape without legacy key."""
+    from backend.routes.providers import _reconnect_response
+
+    with app.app_context():
+        response, status = _reconnect_response('safeway', 'expired_credentials')
+        data = json.loads(response.data)
+
+    assert status == 401
+    assert data['needs_reconnect'] is True
+    assert data['provider'] == 'safeway'
+    assert data['reason'] == 'expired_credentials'
+    assert 'error' in data
+    assert 'expired_credentials' not in data
+
+
+@pytest.mark.parametrize(
+    'setup_mock',
+    [
+        'expired_token',
+        'auth_exception',
+    ],
+    ids=['expired_token', 'auth_exception'],
+)
+def test_EXPIRED_CREDENTIALS_KEY_ABSENT_FROM_ALL_401_PATHS(client, mocker, setup_mock):
+    """Legacy expired_credentials key must not appear in any 401 reconnect response."""
+    from backend.utils.exceptions import AuthenticationException
+
+    mock_provider = mocker.MagicMock()
+    if setup_mock == 'expired_token':
+        mock_provider._decode_jwt_payload.return_value = {'sub': 'test', 'exp': 1}
+        mock_provider._is_token_expired.return_value = True
+    else:
+        mock_provider._decode_jwt_payload.side_effect = AuthenticationException(
+            'Invalid token format'
+        )
+    mocker.patch('backend.providers.costco_provider.CostcoProvider', return_value=mock_provider)
+
+    response = client.post(
+        '/api/providers/costco/connect-from-app',
+        data=json.dumps({'user_id': TEST_USER_ID, 'idToken': EXPIRED_JWT}),
+        content_type='application/json',
+    )
+
+    assert response.status_code == 401
+    data = json.loads(response.data)
+    assert 'expired_credentials' not in data
+

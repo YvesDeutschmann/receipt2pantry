@@ -1,7 +1,8 @@
 """Recipe service for integrating with Spoonacular API"""
 
+import json
 import time
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional
 import requests
 from backend.services.pantry_service import PantryService
 from backend.services.recipe_meal_filter import spoonacular_type_for_meal
@@ -55,6 +56,46 @@ class RecipeService:
         self._details_cache_ttl = 3600  # 1 hour in seconds
         # complexSearch cache
         self._complex_cache: Dict[str, tuple] = {}
+        self._call_count: int = 0
+        self._period_call_count: int = 0
+        self._period_start: float = 0.0
+        self._call_budget: int = config.SPOONACULAR_CALL_BUDGET
+        self._call_budget_period_s: int = config.SPOONACULAR_CALL_BUDGET_PERIOD_SECONDS
+
+    def _reset_period_if_elapsed(self, now: Optional[float] = None) -> None:
+        now = now if now is not None else time.time()
+        if self._period_start == 0.0 or (now - self._period_start) >= self._call_budget_period_s:
+            self._period_call_count = 0
+            self._period_start = now
+
+    def is_budget_exceeded(self, now: Optional[float] = None) -> bool:
+        self._reset_period_if_elapsed(now)
+        return self._period_call_count >= self._call_budget
+
+    def _record_external_call(self, endpoint: str, now: Optional[float] = None) -> None:
+        self._reset_period_if_elapsed(now)
+        self._call_count += 1
+        self._period_call_count += 1
+        payload = {
+            "event": "spoonacular_external_call",
+            "endpoint": endpoint,
+            "period_count": self._period_call_count,
+            "total_count": self._call_count,
+            "budget": self._call_budget,
+            "over_budget": self._period_call_count > self._call_budget,
+        }
+        logger.info(json.dumps(payload))
+
+    def get_call_stats(self, now: Optional[float] = None) -> Dict[str, Any]:
+        self._reset_period_if_elapsed(now)
+        return {
+            "period_calls": self._period_call_count,
+            "total_calls": self._call_count,
+            "budget": self._call_budget,
+            "budget_period_seconds": self._call_budget_period_s,
+            "period_start_epoch": self._period_start,
+            "budget_remaining": max(0, self._call_budget - self._period_call_count),
+        }
 
     def _get_cache_key(
         self,
@@ -243,6 +284,10 @@ class RecipeService:
                 logger.info(f"Returning cached recipes for {len(ingredients)} ingredients")
                 return cached_entry[0]
 
+            if self.is_budget_exceeded():
+                raise AIServiceException("Spoonacular call budget exceeded for this period")
+            self._record_external_call("findByIngredients")
+
             # Call Spoonacular API
             ingredients_str = ",".join(ingredients)
             url = f"{self.base_url}/recipes/findByIngredients"
@@ -376,6 +421,10 @@ class RecipeService:
             payload, ts = cached
             if time.time() - ts < self._details_cache_ttl:
                 return payload
+
+        if self.is_budget_exceeded():
+            raise AIServiceException("Spoonacular call budget exceeded for this period")
+        self._record_external_call("recipeInformation")
 
         try:
             url = f"{self.base_url}/recipes/{recipe_id}/information"

@@ -1111,7 +1111,7 @@ def test_score_recipe_suppresses_wrong_meal_type(suggestion_svc):
     assert out["tier"] == "suppressed"
 
 
-def test_get_recipe_suggestions_propagates_quota_exception(monkeypatch):
+def test_get_recipe_suggestions_quota_mid_loop_returns_partial(monkeypatch):
     monkeypatch.setattr(
         "backend.services.suggestion_service.compute_confidence", lambda *a, **k: 0.80
     )
@@ -1160,5 +1160,8 @@ def test_get_recipe_suggestions_propagates_quota_exception(monkeypatch):
     config = MagicMock()
     svc = SuggestionService(supabase, pantry_service, recipe_service, config)
 
-    with pytest.raises(RecipeQuotaException):
-        svc.get_recipe_suggestions("user-1", "hh", today=TEST_DATE)
+    out = svc.get_recipe_suggestions("user-1", "hh", today=TEST_DATE)
+    assert out["cook_tonight"] == []
+    assert out["probably_have"] == []
+    assert out["check_first"] == []
+    assert out["use_soon_shelf"] == []

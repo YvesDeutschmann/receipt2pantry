@@ -99,7 +99,11 @@ class PoolGenerator:
         av = self.depletion.available_ingredient_names(simulated)
         candidates: List[Dict] = []
 
-        if len(av) < INGREDIENT_SPARSE_THRESHOLD and meal_type in ("breakfast", "lunch"):
+        if len(av) < INGREDIENT_SPARSE_THRESHOLD and meal_type in (
+            "breakfast",
+            "lunch",
+            "dinner",
+        ):
             import asyncio
 
             try:
@@ -132,7 +136,7 @@ class PoolGenerator:
                 if candidates:
                     break
                 threshold -= 0.1
-            if not candidates and meal_type in ("breakfast", "lunch"):
+            if not candidates and meal_type in ("breakfast", "lunch", "dinner"):
                 import asyncio
 
                 try:

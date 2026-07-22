@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { format, addDays, startOfWeek } from 'date-fns'
 import { api } from '../services/apiClient'
 import RecipeSwipeCard from './RecipeSwipeCard'
@@ -7,7 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion'
 import { itemsForPantryCheck, getPantryCheckSessionDismissals } from '../utils/pantryCheck'
 
 const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) => {
-  const [step, setStep] = useState('setup') // setup | selection | review
+  const [step, setStep] = useState('setup') // setup | selection
   const [sessionId, setSessionId] = useState(null)
   const [mealSlots, setMealSlots] = useState({
     breakfast: false,
@@ -34,8 +34,7 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
   const [isAdjustingThreshold, setIsAdjustingThreshold] = useState(false)
   const [acceptingRecipeId, setAcceptingRecipeId] = useState(null)
   const [pantryCheck, setPantryCheck] = useState(null)
-
-  const closePantryCheck = useCallback(() => setPantryCheck(null), [])
+  const pendingCompleteAfterPantryCheckRef = useRef(false)
 
   // Generate meal slots list
   const generateMealSlots = () => {
@@ -157,28 +156,34 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
       }
 
       const missed = itemsForPantryCheck(recipe.missedIngredients || [])
-      if (missed.length > 0 && getPantryCheckSessionDismissals() < 3 && !isStaple) {
+      const isLastSlot = currentSlot >= mealSlotsList.length - 1
+      const shouldOpenPantryCheck =
+        missed.length > 0 && getPantryCheckSessionDismissals() < 3 && !isStaple
+      if (shouldOpenPantryCheck) {
         setPantryCheck({
           id: recipeId,
           title: recipe.title || 'Recipe',
           missed,
         })
+        if (isLastSlot) {
+          pendingCompleteAfterPantryCheckRef.current = true
+        }
       }
 
       // Clear rejected recipes for next slot (soft rejects are slot-only)
       setRejectedRecipeIds([])
       
       // Move to next slot
-      if (currentSlot < mealSlotsList.length - 1) {
+      if (!isLastSlot) {
         setCurrentSlot(currentSlot + 1)
         setRecipes([])
         // Reset threshold for next slot
         setThreshold(0.9)
         // Load suggestions for next slot
         setTimeout(() => loadSuggestions(), 300)
-      } else {
-        // All slots filled, go to review
-        setStep('review')
+      } else if (!shouldOpenPantryCheck) {
+        // All slots filled — auto-complete immediately
+        await handleComplete()
       }
     } catch (err) {
       setError(err.response?.data?.error || 'Failed to accept recipe')
@@ -273,14 +278,14 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
   }
 
   // Skip meal slot
-  const handleSkipMeal = () => {
+  const handleSkipMeal = async () => {
     if (currentSlot < mealSlotsList.length - 1) {
       setCurrentSlot(currentSlot + 1)
       // Reset threshold for next slot
       setThreshold(0.9)
       setRecipes([])
     } else {
-      setStep('review')
+      await handleComplete()
     }
   }
 
@@ -327,6 +332,14 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
       setLoading(false)
     }
   }
+
+  const closePantryCheck = useCallback(() => {
+    setPantryCheck(null)
+    if (pendingCompleteAfterPantryCheckRef.current) {
+      pendingCompleteAfterPantryCheckRef.current = false
+      handleComplete()
+    }
+  }, [sessionId, onComplete, onClose])
 
   // Load suggestions when slot changes
   useEffect(() => {
@@ -591,40 +604,6 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
                     </AnimatePresence>
                   </div>
                 )}
-              </div>
-            )}
-
-            {step === 'review' && (
-              <div className="space-y-6">
-                <h4 className="text-lg font-display font-semibold text-cream">Meal Plan Summary</h4>
-                <div className="space-y-2">
-                  {plannedMeals.map((meal, index) => (
-                    <div key={index} className="p-3 bg-forest-light rounded-mise-md">
-                      <div className="flex justify-between">
-                        <span className="font-medium text-cream">{meal.recipe_name}</span>
-                        <span className="text-sm text-sage-light">
-                          {format(new Date(meal.meal_date), 'MMM d')} - {meal.meal_type}
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="flex justify-end gap-3">
-                  <button
-                    className="btn btn-ghost"
-                    onClick={() => setStep('selection')}
-                  >
-                    Back
-                  </button>
-                  <button
-                    className="btn btn-primary"
-                    onClick={handleComplete}
-                    disabled={loading}
-                  >
-                    {loading ? 'Completing...' : 'Complete & Generate Shopping List'}
-                  </button>
-                </div>
               </div>
             )}
           </div>
