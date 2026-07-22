@@ -576,6 +576,14 @@ export const api = {
     return response.data
   },
 
+  getIngredientSubstitutions: async (userId, ingredient) => {
+    const response = await apiClient.get('/pantry/ingredient-substitutions', {
+      params: { ingredient },
+      headers: { 'X-User-Id': userId },
+    })
+    return response.data
+  },
+
   // Recipes
   getRecipes: async (userId, householdId = null) => {
     const params = householdId ? { household_id: householdId } : {}

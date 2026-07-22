@@ -16,6 +16,7 @@ export default function PantryCheckSheet({
 }) {
   const [busy, setBusy] = useState(null)
   const [dismissed, setDismissed] = useState(() => new Set())
+  const [substitutions, setSubstitutions] = useState({})
 
   const missed = missedItems || []
 
@@ -40,6 +41,30 @@ export default function PantryCheckSheet({
       handleFinished()
     }
   }, [open, missed.length, visible.length, handleFinished])
+
+  useEffect(() => {
+    if (!open) setSubstitutions({})
+  }, [open])
+
+  useEffect(() => {
+    if (!open || !userId || missed.length === 0) return
+    setSubstitutions({})
+
+    missed.forEach(async (item) => {
+      const key = String(item.name || item.original || '').trim()
+      if (!key) return
+      try {
+        const result = await api.getIngredientSubstitutions(userId, key)
+        const first = result.substitutes?.[0]
+        setSubstitutions((prev) => ({
+          ...prev,
+          [key]: first ? first.substitute : null,
+        }))
+      } catch {
+        // silent
+      }
+    })
+  }, [open, userId, missed.length])
 
   const resolveAndAdd = async (ing) => {
     const q = String(ing.name || ing.original || '').trim()
@@ -108,14 +133,21 @@ export default function PantryCheckSheet({
             <ul className="px-4 py-3 space-y-3">
               {visible.map((ing, idx) => {
                 const label = ing.original || ing.name || 'Ingredient'
+                const itemKey = String(ing.name || ing.original || '').trim()
                 const key = `${idx}-${label}`
-                const isBusy = busy === String(ing.name || ing.original || '').trim()
+                const isBusy = busy === itemKey
+                const sub = substitutions[itemKey]
                 return (
                   <li
                     key={key}
                     className="rounded-mise-md border border-sage/25 bg-forest/40 p-3"
                   >
                     <p className="text-sm text-cream font-medium mb-2 line-clamp-2">{label}</p>
+                    {sub && (
+                      <span className="text-xs text-sage-light block mt-0.5 mb-2">
+                        or: {sub}
+                      </span>
+                    )}
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"

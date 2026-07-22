@@ -1068,6 +1068,47 @@ def test_cache_invalidate_on_dismiss():
     svc.invalidate_suggestion_cache("u1", "hh")
 
 
+def test_dismiss_marks_pool_row_swiped_by_recipe_id():
+    supabase = MagicMock()
+    pantry_service = MagicMock()
+    recipe_service = MagicMock()
+    config = MagicMock()
+    pool_store = MagicMock()
+    svc = SuggestionService(
+        supabase, pantry_service, recipe_service, config, pool_store=pool_store
+    )
+
+    pantry_service._get_household_id_for_user.return_value = "hh"
+    pantry_service._get_pantry_items.return_value = [
+        make_pantry_item(base_ingredient="chicken breast", id="x")
+    ]
+    recipe_service.get_recipe_details.return_value = {
+        "id": 99,
+        "extendedIngredients": [{"name": "chicken breast", "aisle": "Meat"}],
+    }
+
+    svc.on_recipe_dismiss("u1", 99, household_id="hh")
+    pool_store.mark_swiped_by_recipe_id.assert_called_once_with("hh", "99")
+
+
+def test_dismiss_without_pool_store_still_succeeds():
+    supabase = MagicMock()
+    pantry_service = MagicMock()
+    recipe_service = MagicMock()
+    config = MagicMock()
+    svc = SuggestionService(supabase, pantry_service, recipe_service, config)
+
+    pantry_service._get_household_id_for_user.return_value = "hh"
+    pantry_service._get_pantry_items.return_value = []
+    recipe_service.get_recipe_details.return_value = {
+        "id": 99,
+        "extendedIngredients": [],
+    }
+
+    svc.on_recipe_dismiss("u1", 99, household_id="hh")
+    svc.invalidate_suggestion_cache("u1", "hh")
+
+
 def test_score_recipe_suppresses_treat_dish_types(suggestion_svc):
     recipe = {
         "id": 3,

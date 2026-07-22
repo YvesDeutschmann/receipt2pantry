@@ -406,6 +406,35 @@ class PantryService:
             logger.error(f"Failed to check ingredient availability: {e}")
             raise DatabaseException(f"Failed to check ingredient availability: {e}")
 
+    def get_acceptable_substitutes(
+        self, ingredient_name: str
+    ) -> List[Dict]:
+        """
+        Return acceptable substitutes for a canonical ingredient name.
+
+        Exact match only — no substring or LIKE query.
+        Returns only rows where acceptable IS TRUE.
+
+        Args:
+            ingredient_name: Canonical ingredient name (exact, case-preserved).
+
+        Returns:
+            List of dicts with keys: substitute, substitution_type, ratio, notes, confidence.
+            Empty list if no acceptable substitutes exist.
+        """
+        all_subs = self.supabase.get_substitutions_for_ingredient(ingredient_name)
+        return [
+            {
+                "substitute": s["substitute"],
+                "substitution_type": s["substitution_type"],
+                "ratio": s.get("ratio"),
+                "notes": s.get("notes"),
+                "confidence": s.get("confidence"),
+            }
+            for s in all_subs
+            if s.get("acceptable") is True
+        ]
+
     @staticmethod
     def _normalize_base_key(base_ingredient: Optional[str]) -> str:
         return (base_ingredient or "").strip().lower()

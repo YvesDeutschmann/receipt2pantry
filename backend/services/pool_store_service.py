@@ -210,6 +210,18 @@ class PoolStoreService:
         )
         return bool(res.data)
 
+    def mark_swiped_by_recipe_id(self, household_id: str, recipe_id: str) -> bool:
+        client = self._client()
+        res = (
+            client.table("suggestion_pool")
+            .update({"status": "swiped"})
+            .eq("household_id", household_id)
+            .eq("recipe_id", str(recipe_id))
+            .eq("status", "unused")
+            .execute()
+        )
+        return bool(res.data)
+
     def get_suggestion(self, suggestion_id: str, household_id: str) -> Optional[Dict]:
         client = self._client()
         res = (
