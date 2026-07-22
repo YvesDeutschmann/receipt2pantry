@@ -37,7 +37,12 @@ vi.mock('../services/apiClient', () => ({
 }))
 
 vi.mock('../components/PantryCheckSheet', () => ({
-  default: () => null,
+  default: ({ open, onClose }) =>
+    open ? (
+      <button type="button" onClick={onClose}>
+        Dismiss pantry check
+      </button>
+    ) : null,
 }))
 
 const USER_ID = 'user-1'
@@ -382,5 +387,143 @@ describe('MealPlanWizard', () => {
     await user.click(screen.getByRole('button', { name: /accept recipe/i }))
     await waitFor(() => expect(screen.getByText(/cannot accept/i)).toBeInTheDocument())
     expect(screen.getByText(/meal 1 of 7/i)).toBeInTheDocument()
+  })
+
+  /** F — 04.1 wizard auto-complete */
+  async function advanceToLastMealSlot(user) {
+    for (let i = 1; i < 7; i += 1) {
+      await user.click(screen.getByRole('button', { name: /skip this meal/i }))
+      await waitFor(() => {
+        expect(screen.getByText(new RegExp(`meal ${i + 1} of 7`, 'i'))).toBeInTheDocument()
+      })
+    }
+  }
+
+  async function renderWizardAtLastSlot(user, overrides = {}) {
+    const recipeOverrides = overrides.recipeOverrides ?? {}
+    getSuggestions.mockResolvedValue({
+      recipes: [recipe('last', 'Last Slot Meal', recipeOverrides)],
+    })
+    const onComplete = overrides.onComplete ?? vi.fn()
+    const onClose = overrides.onClose ?? vi.fn()
+    render(
+      <MealPlanWizard
+        isOpen
+        onClose={onClose}
+        onComplete={onComplete}
+        userId={USER_ID}
+        householdId={HOUSEHOLD_ID}
+      />
+    )
+    await startPlanningSession(user)
+    await screen.findByRole('heading', { name: 'Last Slot Meal' })
+    await advanceToLastMealSlot(user)
+    await screen.findByRole('heading', { name: 'Last Slot Meal' })
+    return { onComplete, onClose }
+  }
+
+  it('WIZARD_AUTO_COMPLETES_ON_LAST_SLOT_ACCEPT', async () => {
+    const user = userEvent.setup()
+    const { onComplete, onClose } = await renderWizardAtLastSlot(user)
+    await user.click(screen.getByRole('button', { name: /accept recipe/i }))
+    await waitFor(() => {
+      expect(completeWizard).toHaveBeenCalledTimes(1)
+      expect(completeWizard).toHaveBeenCalledWith('sess-1')
+      expect(onComplete).toHaveBeenCalledWith({ ok: true })
+      expect(onClose).toHaveBeenCalled()
+    })
+    expect(screen.queryByText('Meal Plan Summary')).not.toBeInTheDocument()
+  })
+
+  it('WIZARD_REVIEW_STEP_NOT_VISIBLE_AFTER_LAST_ACCEPT', async () => {
+    const user = userEvent.setup()
+    await renderWizardAtLastSlot(user)
+    await user.click(screen.getByRole('button', { name: /accept recipe/i }))
+    await waitFor(() => expect(completeWizard).toHaveBeenCalled())
+    expect(screen.queryByText(/complete & generate shopping list/i)).not.toBeInTheDocument()
+  })
+
+  it('WIZARD_DEFERS_COMPLETE_ON_LAST_SLOT_WHEN_PANTRY_CHECK_OPENS', async () => {
+    const user = userEvent.setup()
+    const { onComplete, onClose } = await renderWizardAtLastSlot(user, {
+      recipeOverrides: {
+        missedIngredients: [{ name: 'Chicken breast' }],
+      },
+    })
+    await user.click(screen.getByRole('button', { name: /accept recipe/i }))
+    expect(completeWizard).not.toHaveBeenCalled()
+    await screen.findByRole('button', { name: /dismiss pantry check/i })
+    await user.click(screen.getByRole('button', { name: /dismiss pantry check/i }))
+    await waitFor(() => {
+      expect(completeWizard).toHaveBeenCalledTimes(1)
+      expect(completeWizard).toHaveBeenCalledWith('sess-1')
+      expect(onComplete).toHaveBeenCalledWith({ ok: true })
+      expect(onClose).toHaveBeenCalled()
+    })
+  })
+
+  it('WIZARD_PARTIAL_COMPLETE_STILL_WORKS', async () => {
+    const user = userEvent.setup()
+    const onComplete = vi.fn()
+    const onClose = vi.fn()
+    getSuggestions.mockResolvedValue({ recipes: [] })
+    render(
+      <MealPlanWizard
+        isOpen
+        onClose={onClose}
+        onComplete={onComplete}
+        userId={USER_ID}
+        householdId={HOUSEHOLD_ID}
+      />
+    )
+    await startPlanningSession(user)
+    await screen.findByText(/no recipes found/i)
+    await user.click(screen.getByRole('button', { name: /complete with current selections/i }))
+    await waitFor(() => {
+      expect(completeWizard).toHaveBeenCalledTimes(1)
+      expect(onComplete).toHaveBeenCalledWith({ ok: true })
+      expect(onClose).toHaveBeenCalled()
+    })
+  })
+
+  it('WIZARD_HANDLES_COMPLETE_ERROR_ON_LAST_SLOT', async () => {
+    const user = userEvent.setup()
+    completeWizard.mockRejectedValueOnce({
+      response: { status: 500, data: { error: 'Complete failed' } },
+    })
+    const onClose = vi.fn()
+    await renderWizardAtLastSlot(user, { onClose })
+    await user.click(screen.getByRole('button', { name: /accept recipe/i }))
+    await waitFor(() => expect(screen.getByText(/complete failed/i)).toBeInTheDocument())
+    expect(onClose).not.toHaveBeenCalled()
+    expect(screen.getByText(/meal 7 of 7/i)).toBeInTheDocument()
+  })
+
+  it('WIZARD_AUTO_COMPLETES_ON_LAST_SLOT_SKIP', async () => {
+    const user = userEvent.setup()
+    const onComplete = vi.fn()
+    const onClose = vi.fn()
+    getSuggestions.mockResolvedValue({
+      recipes: [recipe('last', 'Last Slot Meal')],
+    })
+    render(
+      <MealPlanWizard
+        isOpen
+        onClose={onClose}
+        onComplete={onComplete}
+        userId={USER_ID}
+        householdId={HOUSEHOLD_ID}
+      />
+    )
+    await startPlanningSession(user)
+    await screen.findByRole('heading', { name: 'Last Slot Meal' })
+    await advanceToLastMealSlot(user)
+    await user.click(screen.getByRole('button', { name: /skip this meal/i }))
+    await waitFor(() => {
+      expect(completeWizard).toHaveBeenCalledTimes(1)
+      expect(onComplete).toHaveBeenCalledWith({ ok: true })
+      expect(onClose).toHaveBeenCalled()
+    })
+    expect(screen.queryByText('Meal Plan Summary')).not.toBeInTheDocument()
   })
 })

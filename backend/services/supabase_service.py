@@ -147,17 +147,17 @@ class SupabaseService:
             logger.error(f"Failed to store receipt: {e}")
             raise DatabaseException(f"Failed to store receipt: {e}")
 
-    def store_receipt_with_items(self, receipt_data: Dict, items: List[Dict]) -> str:
+    def store_receipt_with_items(self, receipt_data: Dict, items: List[Dict]) -> Optional[str]:
         """
         Store a receipt and its items in a single transaction.
-        Rolls back entirely if any insert fails (e.g. duplicate order_id).
+        Returns None when the receipt already exists (idempotent duplicate).
 
         Args:
             receipt_data: Receipt row as dict (user_id, provider, order_id, etc.)
             items: List of receipt item dicts (name, category, price, quantity, etc.)
 
         Returns:
-            Receipt ID (UUID string)
+            Receipt ID (UUID string), or None if duplicate (user_id, provider, order_id)
         """
         try:
             client = self.admin_client if self.admin_client else self.client
@@ -166,9 +166,11 @@ class SupabaseService:
                 {"p_receipt": receipt_data, "p_items": items},
             ).execute()
             if response.data is None:
-                raise DatabaseException("RPC store_receipt_with_items returned no data")
+                return None
             # PostgREST may return scalar or single-element array
             raw = response.data[0] if isinstance(response.data, list) and response.data else response.data
+            if raw is None:
+                return None
             receipt_id = str(raw)
             logger.info(f"Stored receipt with items in transaction, ID: {receipt_id}")
             return receipt_id

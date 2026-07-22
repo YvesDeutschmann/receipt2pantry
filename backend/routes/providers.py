@@ -11,6 +11,42 @@ from backend.utils.costco_receipt_types import is_non_grocery_costco_receipt_typ
 logger = get_logger(__name__)
 providers_bp = Blueprint("providers", __name__)
 
+_RECONNECT_REASONS = frozenset({
+    "expired_credentials",
+    "token_refresh_failed",
+    "bot_detection",
+})
+
+_RECONNECT_MESSAGES = {
+    "expired_credentials": "Token has expired. Please sign in again.",
+    "token_refresh_failed": "Unable to refresh credentials. Please sign in again.",
+    "bot_detection": "Connection blocked. Please sign in again.",
+}
+
+
+def _reconnect_response(provider: str, reason: str, detail: str = "") -> tuple:
+    """
+    Build the standardized 401 reconnect response.
+
+    Args:
+        provider: Provider name (e.g. "costco", "safeway")
+        reason: One of expired_credentials, token_refresh_failed, bot_detection
+        detail: Internal log context only; never included in the JSON body
+
+    Returns:
+        (flask Response, 401)
+    """
+    if reason not in _RECONNECT_REASONS:
+        raise ValueError(f"Unknown reconnect reason: {reason}")
+    if detail:
+        logger.info(f"Reconnect required for {provider} ({reason}): {detail}")
+    return jsonify({
+        "error": _RECONNECT_MESSAGES[reason],
+        "needs_reconnect": True,
+        "provider": provider,
+        "reason": reason,
+    }), 401
+
 
 def _is_valid_user_id(user_id: str) -> bool:
     """Return True if user_id is a non-empty, non-anonymous UUID."""
@@ -237,9 +273,7 @@ def connect_costco_from_app():
             username = payload.get("email") or payload.get("preferred_username") or payload.get("sub", "unknown")
 
             if provider._is_token_expired(id_token):
-                return jsonify({
-                    "error": "Token has expired. Please sign in again."
-                }), 400
+                return _reconnect_response("costco", "expired_credentials")
 
             credentials = {"idToken": id_token}
             if data.get("clientId"):
@@ -284,7 +318,7 @@ def connect_costco_from_app():
 
         except AuthenticationException as auth_err:
             logger.error(f"Authentication error: {auth_err}")
-            return jsonify({"error": str(auth_err)}), 401
+            return _reconnect_response("costco", "expired_credentials", str(auth_err))
         except Exception as e:
             logger.error(f"Error connecting Costco account: {e}", exc_info=True)
             return jsonify({"error": f"Failed to connect account: {str(e)}"}), 500

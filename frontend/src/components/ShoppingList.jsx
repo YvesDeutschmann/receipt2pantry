@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { api } from '../services/apiClient'
 
 const ShoppingList = ({ userId, householdId }) => {
@@ -42,6 +42,19 @@ const ShoppingList = ({ userId, householdId }) => {
     setIncludePurchased(false)
   }
 
+  const purchasedItems = items.filter(item => item.is_purchased)
+  const unpurchasedItems = items.filter(item => !item.is_purchased)
+
+  const groupedUnpurchased = useMemo(() => {
+    const map = new Map()
+    for (const item of unpurchasedItems) {
+      const key = item.needed_for_recipe?.trim() || 'General'
+      if (!map.has(key)) map.set(key, [])
+      map.get(key).push(item)
+    }
+    return map
+  }, [unpurchasedItems])
+
   if (!householdId) {
     return (
       <div className="card p-6">
@@ -60,13 +73,17 @@ const ShoppingList = ({ userId, householdId }) => {
     )
   }
 
-  const purchasedItems = items.filter(item => item.is_purchased)
-  const unpurchasedItems = items.filter(item => !item.is_purchased)
-
   return (
     <div className="card p-6">
       <div className="flex justify-between items-center mb-4">
-        <h2 className="text-2xl font-display font-bold text-cream">Shopping List</h2>
+        <div className="flex items-baseline gap-0">
+          <h2 className="text-2xl font-display font-bold text-cream">Shopping List</h2>
+          {unpurchasedItems.length > 0 && (
+            <span className="text-sm text-sage-light ml-2">
+              {unpurchasedItems.length} item{unpurchasedItems.length !== 1 ? 's' : ''} to buy
+            </span>
+          )}
+        </div>
         <div className="flex gap-2">
           <label className="flex items-center text-sm">
             <input
@@ -107,36 +124,38 @@ const ShoppingList = ({ userId, householdId }) => {
           {unpurchasedItems.length > 0 && (
             <div>
               <h3 className="text-lg font-display font-semibold text-cream mb-2">To Buy</h3>
-              <ul className="space-y-2">
-                {unpurchasedItems.map((item) => (
-                  <li
-                    key={item.id}
-                    className="flex items-center justify-between p-3 bg-forest-light rounded-mise-md hover:bg-forest-light/80 transition-colors"
-                  >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={false}
-                          onChange={() => handleMarkPurchased(item.id)}
-                          className="checkbox w-5 h-5"
-                        />
-                        <span className="font-medium text-cream">{item.ingredient_name}</span>
-                        {item.quantity && (
-                          <span className="text-sage-light">
-                            {item.quantity} {item.unit || ''}
-                          </span>
-                        )}
-                      </div>
-                      {item.needed_for_recipe && (
-                        <p className="text-sm text-sage-light mt-1 ml-7">
-                          For: {item.needed_for_recipe}
-                        </p>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
+              {[...groupedUnpurchased.entries()].map(([recipeName, groupItems]) => (
+                <div key={recipeName}>
+                  <h4 className="text-sm font-semibold text-sage-light mb-1 mt-3 first:mt-0">
+                    {recipeName}
+                  </h4>
+                  <ul className="space-y-2">
+                    {groupItems.map((item) => (
+                      <li
+                        key={item.id}
+                        className="flex items-center justify-between p-3 bg-forest-light rounded-mise-md hover:bg-forest-light/80 transition-colors"
+                      >
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="checkbox"
+                              checked={false}
+                              onChange={() => handleMarkPurchased(item.id)}
+                              className="checkbox w-5 h-5"
+                            />
+                            <span className="font-medium text-cream">{item.ingredient_name}</span>
+                            {item.quantity && (
+                              <span className="text-sage-light">
+                                {item.quantity} {item.unit || ''}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </div>
           )}
 

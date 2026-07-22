@@ -56,6 +56,10 @@ class Config:
     SPOONACULAR_API_KEY: Optional[str] = os.getenv("SPOONACULAR_API_KEY")
     SPOONACULAR_BASE_URL: str = os.getenv("SPOONACULAR_BASE_URL", "https://api.spoonacular.com")
     SPOONACULAR_TIMEOUT: int = int(os.getenv("SPOONACULAR_TIMEOUT", "30"))
+    SPOONACULAR_CALL_BUDGET: int = int(os.getenv("SPOONACULAR_CALL_BUDGET", "500"))
+    SPOONACULAR_CALL_BUDGET_PERIOD_SECONDS: int = int(
+        os.getenv("SPOONACULAR_CALL_BUDGET_PERIOD_SECONDS", "3600")
+    )
     
     @classmethod
     def validate(cls) -> None:

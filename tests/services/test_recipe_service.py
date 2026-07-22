@@ -13,11 +13,15 @@ def _make_config(
     api_key="test-spoon-key",
     base_url="https://api.spoonacular.test",
     timeout=30,
+    budget=500,
+    budget_period_s=3600,
 ):
     cfg = Mock()
     cfg.SPOONACULAR_API_KEY = api_key
     cfg.SPOONACULAR_BASE_URL = base_url
     cfg.SPOONACULAR_TIMEOUT = timeout
+    cfg.SPOONACULAR_CALL_BUDGET = budget
+    cfg.SPOONACULAR_CALL_BUDGET_PERIOD_SECONDS = budget_period_s
     return cfg
 
 
@@ -89,7 +93,9 @@ def test_cache_expires_after_ttl_seconds(mock_get):
 
     # Patching time.time on the imported `time` module affects stdlib logging too
     # (same module object); silence this service's logger so only cache paths call time().
-    times = [0.0, 1.0, 3.0, 3.0]
+    # First miss: budget check + record + cache store (3× time.time at t=0).
+    # Second hit: cache valid at t=1. Third miss after TTL: t=3 + budget paths.
+    times = [0.0, 0.0, 0.0, 1.0, 3.0, 3.0, 3.0, 3.0]
     with patch.multiple(
         "backend.services.recipe_service.logger",
         info=Mock(),

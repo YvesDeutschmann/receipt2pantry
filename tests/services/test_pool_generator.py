@@ -86,6 +86,53 @@ def meal_plan_service():
     return ms
 
 
+def _dense_pantry_snapshot():
+    """Four items so dinner still uses complexSearch after one depletion step."""
+    return {
+        "pi1": {
+            "id": "pi1",
+            "base_ingredient": "chicken breast",
+            "quantity": 1.0,
+            "unit": "lb",
+        },
+        "pi2": {
+            "id": "pi2",
+            "base_ingredient": "pasta",
+            "quantity": 1.0,
+            "unit": "lb",
+        },
+        "pi3": {
+            "id": "pi3",
+            "base_ingredient": "rice",
+            "quantity": 1.0,
+            "unit": "lb",
+        },
+        "pi4": {
+            "id": "pi4",
+            "base_ingredient": "onion",
+            "quantity": 1.0,
+            "unit": "each",
+        },
+    }
+
+
+def _wire_depletion_snapshot(depletion, snapshot):
+    depletion.snapshot_pantry.return_value = snapshot
+
+    def avail(sim):
+        from backend.services.depletion_engine import DepletionEngine
+
+        return DepletionEngine(MagicMock()).available_ingredient_names(sim)
+
+    depletion.available_ingredient_names.side_effect = avail
+    from backend.services.depletion_engine import DepletionEngine
+
+    real_de = DepletionEngine(MagicMock())
+    depletion.deplete_from_extended_ingredients.side_effect = (
+        real_de.deplete_from_extended_ingredients
+    )
+
+
 def _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service):
     gen = create_pool_generator(pool_store, depletion, recipe_service, meal_plan_service)
     rc = MagicMock()
@@ -204,6 +251,7 @@ def test_generate_pool_calls_complete_generation_with_completed_on_happy_path(
 def test_generate_pool_marks_partial_on_ai_service_exception_mid_run(
     pool_store, depletion, recipe_service, meal_plan_service
 ):
+    _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
     recipe_service.search_recipes_complex.side_effect = AIServiceException("quota")
     gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
 
@@ -232,6 +280,7 @@ def test_generate_pool_marks_failed_on_unexpected_exception(
 def test_clear_unused_not_called_when_status_partial(
     pool_store, depletion, recipe_service, meal_plan_service
 ):
+    _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
     recipe_service.search_recipes_complex.side_effect = AIServiceException("quota")
     gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
 
@@ -261,6 +310,7 @@ def test_threshold_walks_from_point_nine_to_point_seven(
     meal_plan_service,
 ):
     """Recipe match 0.7 — filter must be tried at 0.9, 0.8, 0.7 before candidates exist."""
+    _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
     gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
     thresholds_seen = []
     real_filter = gen._filter_recipes
@@ -303,6 +353,7 @@ def test_threshold_walk_stops_at_first_non_empty_set(
     recipe_service,
     meal_plan_service,
 ):
+    _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
     gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
     thresholds_seen = []
     real_filter = gen._filter_recipes
@@ -366,7 +417,7 @@ def test_sparse_pantry_triggers_staple_fallback_for_breakfast_and_lunch_only(
     recipe_service.search_recipes_complex.assert_not_called()
 
 
-def test_dinner_never_uses_staple_fallback(pool_store, recipe_service, meal_plan_service):
+def test_dinner_sparse_uses_staple_fallback(pool_store, recipe_service, meal_plan_service):
     d = MagicMock()
     d.snapshot_pantry.return_value = {
         "a": {
@@ -393,7 +444,7 @@ def test_dinner_never_uses_staple_fallback(pool_store, recipe_service, meal_plan
 
     gen.generate_pool("hh", "user", "x", ["dinner"])
 
-    meal_plan_service.suggest_staple_meals.assert_not_called()
+    meal_plan_service.suggest_staple_meals.assert_called()
 
 
 def test_staple_recipe_bypasses_threshold_gate(generator):
@@ -455,6 +506,7 @@ def test_filter_excludes_recipes_already_added_in_run(generator):
 def test_top_candidate_depletes_simulated_pantry_before_next_step(
     pool_store, depletion, recipe_service, meal_plan_service
 ):
+    _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
     av_seen = []
 
     def recipes_by_pantry(hid, uid, av, meal_type, number=5):
@@ -503,6 +555,7 @@ def test_top_candidate_depletes_simulated_pantry_before_next_step(
 def test_depletion_failure_is_warned_and_run_continues(
     pool_store, depletion, recipe_service, meal_plan_service
 ):
+    _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
     recipe_service.search_recipes_complex.return_value = [
         {
             "id": 701,
@@ -620,6 +673,7 @@ def test_pool_generator_never_invokes_cook_event_pipeline():
 def test_partial_after_first_success_does_not_clear_pool(
     pool_store, depletion, recipe_service, meal_plan_service
 ):
+    _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
     calls = {"n": 0}
 
     def by_pantry(*_a, **_k):
@@ -653,6 +707,7 @@ def test_partial_after_first_success_does_not_clear_pool(
 def test_recipes_for_step_passes_meal_type_to_complex_search(
     pool_store, depletion, recipe_service, meal_plan_service
 ):
+    _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
     gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
     recipe_service.search_recipes_complex.return_value = [
         {
@@ -675,6 +730,7 @@ def test_recipes_for_step_passes_meal_type_to_complex_search(
 def test_recipes_for_step_uses_inline_extended_ingredients_for_depletion(
     pool_store, depletion, recipe_service, meal_plan_service
 ):
+    _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
     gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
     recipe_service.search_recipes_complex.return_value = [
         {
