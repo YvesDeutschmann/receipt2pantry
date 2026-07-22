@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { api } from '../services/apiClient'
 import { useAuth } from '../contexts/AuthContext'
+import { emit, FunnelEvent } from '../services/funnelTelemetry'
 import HealthCard from '../components/HealthCard'
 import SuggestionDetailModal from '../components/SuggestionDetailModal'
 import SuggestionRecipeCard from '../components/SuggestionRecipeCard'
@@ -113,6 +114,8 @@ function Recipes() {
 
   const initialLoadDoneRef = useRef(false)
   const lowWatermarkInFlightRef = useRef(false)
+  const firstSuggestionEmitted = useRef(false)
+  const firstCookEmitted = useRef(false)
 
   const fetchPantry = useCallback(async () => {
     if (!userId) return
@@ -173,6 +176,15 @@ function Recipes() {
       initialLoadDoneRef.current = true
       setUsingPool(fromPool)
       setSuggestions(next)
+      const hasAnySuggestion =
+        (next.use_soon_shelf?.length > 0) ||
+        (next.cook_tonight?.length > 0) ||
+        (next.probably_have?.length > 0) ||
+        (next.check_first?.length > 0)
+      if (hasAnySuggestion && userId && !firstSuggestionEmitted.current) {
+        firstSuggestionEmitted.current = true
+        void emit(FunnelEvent.FIRST_SUGGESTION_VIEWED, userId)
+      }
     } catch (err) {
       console.error('Failed to load suggestions:', err)
       const status = err.response?.status
@@ -226,6 +238,10 @@ function Recipes() {
         ingredients,
         householdId,
       })
+      if (!firstCookEmitted.current) {
+        firstCookEmitted.current = true
+        void emit(FunnelEvent.FIRST_COOK_LOGGED, userId)
+      }
       setCookedConfirmation('Nice! Pantry updated.')
       setTimeout(() => setCookedConfirmation(null), 2500)
       const { usingPool: fromPool, suggestions: updated } = await fetchSuggestionsPayload(
