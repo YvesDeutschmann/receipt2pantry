@@ -293,18 +293,28 @@ class SuggestionService:
                     household_id, status="unused"
                 )
                 result = _pool_grouped_to_suggestion_result(grouped)
-                pantry_count = len(
-                    self._load_active_pantry(user_id, household_id)
+                has_cards = any(
+                    result[k]
+                    for k in (
+                        "use_soon_shelf",
+                        "cook_tonight",
+                        "probably_have",
+                        "check_first",
+                    )
                 )
-                pool_threshold = _confidence_threshold_for_pantry_size(
-                    pantry_count
-                )
-                return _attach_meta(
-                    result,
-                    fallback_mode=pool_threshold < 0.50,
-                    pantry_item_count=pantry_count,
-                    threshold_used=pool_threshold,
-                )
+                if has_cards:
+                    pantry_count = len(
+                        self._load_active_pantry(user_id, household_id)
+                    )
+                    pool_threshold = _confidence_threshold_for_pantry_size(
+                        pantry_count
+                    )
+                    return _attach_meta(
+                        result,
+                        fallback_mode=pool_threshold < 0.50,
+                        pantry_item_count=pantry_count,
+                        threshold_used=pool_threshold,
+                    )
 
         pantry = self._load_active_pantry(user_id, household_id)
         threshold = _confidence_threshold_for_pantry_size(len(pantry))
@@ -423,14 +433,12 @@ class SuggestionService:
         if ent:
             payload, ts = ent
             if clock() - ts < SUGGESTION_CACHE_TTL_SECONDS:
-                if "meta" not in payload:
-                    _attach_meta(
-                        payload,
-                        fallback_mode=fallback_mode,
-                        pantry_item_count=len(pantry),
-                        threshold_used=threshold,
-                    )
-                return payload
+                return _attach_meta(
+                    payload,
+                    fallback_mode=fallback_mode,
+                    pantry_item_count=len(pantry),
+                    threshold_used=threshold,
+                )
 
         try:
             candidates = self.fetch_candidate_recipes(
@@ -441,14 +449,12 @@ class SuggestionService:
             stale = self._result_cache.get(ck)
             if stale is not None:
                 payload = stale[0]
-                if "meta" not in payload:
-                    _attach_meta(
-                        payload,
-                        fallback_mode=fallback_mode,
-                        pantry_item_count=len(pantry),
-                        threshold_used=threshold,
-                    )
-                return payload
+                return _attach_meta(
+                    payload,
+                    fallback_mode=fallback_mode,
+                    pantry_item_count=len(pantry),
+                    threshold_used=threshold,
+                )
             if self.pool_store is not None and household_id:
                 fb = _pool_fallback_suggestion_result(
                     self.pool_store, household_id
@@ -727,6 +733,8 @@ class SuggestionService:
                     names.append(k)
         if names:
             self.supabase.increment_ingredient_dismiss_counts(user_id, names)
+        if self.pool_store is not None and household_id:
+            self.pool_store.mark_swiped_by_recipe_id(household_id, str(recipe_id))
         self.invalidate_suggestion_cache(user_id, household_id)
 
 

@@ -1296,3 +1296,37 @@ def check_recipe_availability():
     except Exception as e:
         logger.error(f"Error checking recipe: {e}")
         return jsonify({"error": str(e)}), 500
+
+
+@pantry_bp.route("/pantry/ingredient-substitutions", methods=["GET"])
+def get_ingredient_substitutions():
+    """
+    Get acceptable substitutes for a single ingredient name.
+
+    Query params:
+        ingredient (required): Exact canonical ingredient name.
+
+    Returns:
+        { "ingredient": str, "substitutes": [...] }
+    """
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    ingredient = request.args.get("ingredient", "").strip()
+    if not ingredient:
+        return jsonify({"error": "ingredient query parameter is required"}), 400
+
+    service = get_pantry_service()
+    if not service:
+        return jsonify({"error": "Pantry service not available"}), 503
+
+    try:
+        substitutes = service.get_acceptable_substitutes(ingredient)
+        return jsonify({"ingredient": ingredient, "substitutes": substitutes})
+    except DatabaseException as e:
+        logger.error(f"Database error getting substitutes: {e}")
+        return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        logger.error(f"Error getting substitutes: {e}")
+        return jsonify({"error": str(e)}), 500

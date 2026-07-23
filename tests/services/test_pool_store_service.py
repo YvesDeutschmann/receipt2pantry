@@ -271,6 +271,28 @@ def test_update_status_filters_by_household_id(mocker):
     assert chain_calls_eq(admin.chains, "household_id", "hh-other")
 
 
+def test_mark_swiped_by_recipe_id_updates_unused_row(mocker):
+    pool_store, admin = _pool_store_with_admin(mocker)
+    admin.queue_response([{"id": "sug-1", "recipe_id": "99", "status": "swiped"}])
+
+    ok = pool_store.mark_swiped_by_recipe_id("hh-1", "99")
+
+    assert ok is True
+    assert chain_calls_eq(admin.chains, "household_id", "hh-1")
+    assert chain_calls_eq(admin.chains, "recipe_id", "99")
+    assert chain_calls_eq(admin.chains, "status", "unused")
+    assert _update_payload(admin.chains[0]) == {"status": "swiped"}
+
+
+def test_mark_swiped_by_recipe_id_returns_false_when_missing(mocker):
+    pool_store, admin = _pool_store_with_admin(mocker)
+    admin.queue_response([])
+
+    ok = pool_store.mark_swiped_by_recipe_id("hh-1", "missing")
+
+    assert ok is False
+
+
 def test_get_suggestion_returns_none_when_suggestion_belongs_to_other_household(mocker):
     pool_store, admin = _pool_store_with_admin(mocker)
     admin.set_default_response_data([])

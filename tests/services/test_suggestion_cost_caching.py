@@ -495,6 +495,25 @@ def test_suggestion_pool_empty_falls_through_to_spoonacular(monkeypatch):
     recipe_service.get_recipes_by_pantry.assert_called_once()
 
 
+def test_suggestion_pool_depth_without_convertible_cards_falls_through(monkeypatch):
+    _patch_suggestion_compute(monkeypatch)
+    supabase, pantry_service, _ = _suggestion_pantry_setup()
+    recipe_service = MagicMock()
+    recipe_service.get_recipes_by_pantry.return_value = []
+    pool_store = MagicMock()
+    pool_store.get_pool_depth.return_value = {"breakfast": 1, "lunch": 0, "dinner": 0}
+    pool_store.get_pool_grouped_by_meal.return_value = {
+        "breakfast": [{"recipe_id": None, "match_score": 0.95}],
+        "lunch": [],
+        "dinner": [],
+    }
+    svc = SuggestionService(
+        supabase, pantry_service, recipe_service, MagicMock(), pool_store=pool_store
+    )
+    svc.get_recipe_suggestions("user-1", "hh", today=TEST_DATE)
+    recipe_service.get_recipes_by_pantry.assert_called_once()
+
+
 def test_suggestion_no_pool_store_falls_through_to_spoonacular(monkeypatch):
     _patch_suggestion_compute(monkeypatch)
     supabase, pantry_service, _ = _suggestion_pantry_setup()

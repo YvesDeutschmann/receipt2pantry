@@ -34,6 +34,7 @@ function RecipeDetailModal({
   onPantryUpdated,
 }) {
   const [undo, setUndo] = useState(null)
+  const [substitutions, setSubstitutions] = useState({})
 
   const resetUndo = useCallback(() => setUndo(null), [])
 
@@ -54,6 +55,34 @@ function RecipeDetailModal({
   useEffect(() => {
     if (!isOpen) resetUndo()
   }, [isOpen, resetUndo])
+
+  useEffect(() => {
+    if (!isOpen) setSubstitutions({})
+  }, [isOpen])
+
+  useEffect(() => {
+    if (!isOpen || !recipe?.extendedIngredients || !userId || !pantryData) return
+    setSubstitutions({})
+
+    const unmatchedIngredients = recipe.extendedIngredients.filter(
+      (ing) => findPantryVariantForIngredient(pantryData, ing) === null
+    )
+
+    unmatchedIngredients.forEach(async (ing) => {
+      const name = String(ing.name || '').trim()
+      if (!name) return
+      try {
+        const result = await api.getIngredientSubstitutions(userId, name)
+        const first = result.substitutes?.[0]
+        setSubstitutions((prev) => ({
+          ...prev,
+          [name.toLowerCase()]: first ? first.substitute : null,
+        }))
+      } catch {
+        // silent — hints are best-effort
+      }
+    })
+  }, [isOpen, recipe, userId, pantryData])
 
   const handleImOut = async (variant) => {
     if (!userId || !variant?.id) return
@@ -151,7 +180,19 @@ function RecipeDetailModal({
                       >
                         <span className="text-sage-light flex items-start gap-2 min-w-0">
                           <span className="text-terra mt-1 shrink-0">•</span>
-                          <span>{ingredient.original || ingredient.name}</span>
+                          <span>
+                            {ingredient.original || ingredient.name}
+                            {(() => {
+                              const name = String(ingredient.name || '').trim().toLowerCase()
+                              const sub = substitutions[name]
+                              if (!sub || variant) return null
+                              return (
+                                <span className="text-xs text-sage-light ml-1 shrink-0">
+                                  (swap: {sub})
+                                </span>
+                              )
+                            })()}
+                          </span>
                         </span>
                         {variant && userId && (
                           <button

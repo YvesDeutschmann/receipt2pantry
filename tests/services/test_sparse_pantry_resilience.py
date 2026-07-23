@@ -487,6 +487,64 @@ def test_meta_backfilled_on_cache_hit_without_meta(monkeypatch):
     assert "meta" in out
 
 
+def test_meta_refreshed_on_cache_hit_with_existing_meta(monkeypatch):
+    pantry_small = _make_pantry_items(1, base_prefix="chicken breast")
+    pantry_large = _make_pantry_items(10, base_prefix="chicken breast")
+    monkeypatch.setattr(
+        "backend.services.suggestion_service.compute_confidence", lambda *a, **k: 0.80
+    )
+    monkeypatch.setattr(
+        "backend.services.suggestion_service.get_calibrated_days_supply",
+        lambda *a, **k: 45,
+    )
+    monkeypatch.setattr(
+        "backend.services.suggestion_service.get_engagement_multiplier",
+        lambda *a, **k: 1.0,
+    )
+    supabase = MagicMock()
+    supabase.get_user_preferences.return_value = None
+    supabase.get_item_classifications_by_names.return_value = {
+        "chicken breast": {
+            "item_name": "chicken breast",
+            "default_days_supply": 45,
+            "is_soft_required": False,
+        }
+    }
+    supabase.get_ingredient_signal_counts.return_value = {}
+    pantry_service = MagicMock()
+    pantry_service._get_household_id_for_user.return_value = "hh"
+    pantry_service._get_pantry_items.side_effect = [pantry_small, pantry_large]
+    recipe_service = MagicMock()
+    svc = SuggestionService(
+        supabase, pantry_service, recipe_service, MagicMock(), pool_store=None
+    )
+    pool_store = MagicMock()
+    pool_store.get_pool_depth.return_value = {"breakfast": 0, "lunch": 0, "dinner": 0}
+    svc.pool_store = pool_store
+    stale_payload = _empty_suggestion_tiers()
+    stale_payload["meta"] = {
+        "fallback_mode": True,
+        "pantry_item_count": 1,
+        "threshold_used": 0.0,
+    }
+    svc._result_cache["user-1:hh:fake"] = (stale_payload, 1000.0)
+    clock = iter([2000.0, 2000.0, 2000.0, 2000.0])
+
+    def now():
+        return next(clock)
+
+    with patch.object(
+        svc, "_build_suggestion_cache_key", return_value="fake"
+    ):
+        svc.get_recipe_suggestions("user-1", "hh", today=TEST_DATE, now=now)
+        out = svc.get_recipe_suggestions(
+            "user-1", "hh", today=TEST_DATE, now=now
+        )
+    assert out["meta"]["pantry_item_count"] == 10
+    assert out["meta"]["threshold_used"] == 0.50
+    assert out["meta"]["fallback_mode"] is False
+
+
 def test_exception_path_tries_swiped_before_reraise(monkeypatch):
     pantry = _make_pantry_items(3)
     recipe_service = MagicMock()
@@ -857,8 +915,14 @@ def test_static_dinner_in_both_sparse_guards():
     assert dinner_guards >= 2
 
 
-def test_static_swiped_fallback_does_not_mutate_status():
-    text = SUGGESTION_SERVICE_PATH.read_text()
-    assert 'status="swiped"' in text
-    assert "mark_swiped" not in text
-    assert "status = \"unused\"" not in text
+def test_pool_fallback_does_not_mutate_status():
+    source = SUGGESTION_SERVICE_PATH.read_text()
+    tree = ast.parse(source)
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef) and node.name == "_pool_fallback_suggestion_result":
+            fn_text = ast.get_source_segment(source, node) or ""
+            assert 'status="swiped"' in fn_text
+            assert "update_status" not in fn_text
+            assert "mark_swiped" not in fn_text
+            return
+    pytest.fail("_pool_fallback_suggestion_result not found")
