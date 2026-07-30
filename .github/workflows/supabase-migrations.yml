@@ -1,0 +1,41 @@
+name: Supabase migrations
+
+on:
+  push:
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/ci/**'
+      - '.github/workflows/supabase-migrations.yml'
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/ci/**'
+      - '.github/workflows/supabase-migrations.yml'
+
+jobs:
+  validate-migrations:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate migration chain
+        env:
+          PGHOST: localhost
+          PGPORT: 5432
+          PGUSER: postgres
+        run: |
+          chmod +x scripts/ci/validate_supabase_migrations.sh
+          scripts/ci/validate_supabase_migrations.sh r2p_migrations_ci
