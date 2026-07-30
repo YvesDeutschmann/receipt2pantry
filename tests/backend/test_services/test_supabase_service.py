@@ -57,10 +57,10 @@ def test_get_user_receipts_with_mock(mocker):
 
 
 def test_upsert_pantry_item_household_conflict_target(mocker):
-    """upsert_pantry_item uses household_id conflict when household_id is set."""
+    """upsert_pantry_item calls upsert_pantry_item RPC via service-role client."""
     anon = PostgrestClientStub()
     admin = PostgrestClientStub()
-    admin.set_default_response_data([{"id": "pantry-1"}])
+    admin.set_default_response_data("pantry-1")
     service = install_supabase_service_with_clients(mocker, anon, admin)
 
     item_data = {
@@ -74,21 +74,19 @@ def test_upsert_pantry_item_household_conflict_target(mocker):
     result = service.upsert_pantry_item(item_data)
 
     assert result == "pantry-1"
-    upsert_steps = [
-        step for chain in admin.chains for step in chain if step[0] == "upsert"
+    rpc_steps = [
+        step for chain in admin.chains for step in chain if step[0] == "rpc"
     ]
-    assert upsert_steps[0][1][0] == item_data
-    assert (
-        upsert_steps[0][2]["on_conflict"]
-        == "household_id,base_ingredient,variant,unit"
-    )
+    assert rpc_steps[0][1][0] == "upsert_pantry_item"
+    assert rpc_steps[0][1][1] == {"p_item": item_data}
+    assert len(anon.chains) == 0
 
 
 def test_upsert_pantry_item_null_household_conflict_target(mocker):
-    """upsert_pantry_item uses user_id conflict when household_id is None (legacy)."""
+    """upsert_pantry_item RPC handles legacy null-household rows."""
     anon = PostgrestClientStub()
     admin = PostgrestClientStub()
-    admin.set_default_response_data([{"id": "pantry-2"}])
+    admin.set_default_response_data("pantry-2")
     service = install_supabase_service_with_clients(mocker, anon, admin)
 
     item_data = {
@@ -102,13 +100,26 @@ def test_upsert_pantry_item_null_household_conflict_target(mocker):
     result = service.upsert_pantry_item(item_data)
 
     assert result == "pantry-2"
-    upsert_steps = [
-        step for chain in admin.chains for step in chain if step[0] == "upsert"
+    rpc_steps = [
+        step for chain in admin.chains for step in chain if step[0] == "rpc"
     ]
-    assert (
-        upsert_steps[0][2]["on_conflict"]
-        == "user_id,base_ingredient,variant,unit"
-    )
+    assert rpc_steps[0][1][0] == "upsert_pantry_item"
+    assert rpc_steps[0][1][1] == {"p_item": item_data}
+
+
+def test_upsert_pantry_item_requires_service_role(mocker):
+    """upsert_pantry_item fails fast without SUPABASE_SERVICE_ROLE_KEY."""
+    anon = PostgrestClientStub()
+    service = install_supabase_service_with_clients(mocker, anon, admin=None)
+
+    with pytest.raises(DatabaseException, match="SUPABASE_SERVICE_ROLE_KEY"):
+        service.upsert_pantry_item(
+            {
+                "user_id": "user-1",
+                "base_ingredient": "salt",
+                "normalized_name": "salt",
+            }
+        )
 
 
 # --- Group A — client selection ---

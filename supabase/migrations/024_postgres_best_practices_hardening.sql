@@ -404,6 +404,8 @@ CREATE POLICY "Household members can insert receipts"
 -- receipt_items: align with household-scoped receipts
 DROP POLICY IF EXISTS "Users can view their own receipt items" ON receipt_items;
 DROP POLICY IF EXISTS "Users can insert their own receipt items" ON receipt_items;
+DROP POLICY IF EXISTS "Household members can view receipt items" ON receipt_items;
+DROP POLICY IF EXISTS "Household members can insert receipt items" ON receipt_items;
 
 CREATE POLICY "Household members can view receipt items"
     ON receipt_items FOR SELECT

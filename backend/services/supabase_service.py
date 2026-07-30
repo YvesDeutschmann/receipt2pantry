@@ -27,10 +27,23 @@ class SupabaseService:
                 self.admin_client: Client = create_client(url, service_role_key)
             else:
                 self.admin_client = None
+                logger.error(
+                    "SUPABASE_SERVICE_ROLE_KEY is not configured; "
+                    "server-side RPCs (receipt import, pantry upsert, soft-delete) "
+                    "will fail until it is set"
+                )
             logger.info("Supabase client initialized successfully")
         except Exception as e:
             logger.error(f"Failed to initialize Supabase client: {e}")
             raise DatabaseException(f"Supabase initialization failed: {e}")
+
+    def _require_admin_client(self) -> Client:
+        """Return the service-role client or raise if server writes are unavailable."""
+        if not self.admin_client:
+            raise DatabaseException(
+                "SUPABASE_SERVICE_ROLE_KEY is required for this operation"
+            )
+        return self.admin_client
     
     def get_user_receipts(self, user_id: str, limit: int = 50) -> List[Dict]:
         """
@@ -160,7 +173,7 @@ class SupabaseService:
             Receipt ID (UUID string), or None if duplicate (user_id, provider, order_id)
         """
         try:
-            client = self.admin_client if self.admin_client else self.client
+            client = self._require_admin_client()
             response = client.rpc(
                 "store_receipt_with_items",
                 {"p_receipt": receipt_data, "p_items": items},
@@ -607,39 +620,36 @@ class SupabaseService:
     
     def upsert_pantry_item(self, item_data: Dict) -> str:
         """
-        Insert or update a pantry item
-        
-        Uses the appropriate conflict target:
-        - household_id set: unique_household_ingredient_variant (005)
-          ON (household_id, base_ingredient, variant, unit) WHERE household_id IS NOT NULL
-        - household_id NULL: unique_user_ingredient_variant_null_household (008)
-          ON (user_id, base_ingredient, variant, unit) WHERE household_id IS NULL
-        
+        Insert or update a pantry item via `upsert_pantry_item` RPC.
+
+        PostgREST cannot target the partial unique indexes on pantry_items, so the
+        upsert runs in Postgres with an explicit index predicate (migration 025).
+
         Args:
             item_data: Pantry item dictionary (must include user_id when household_id is None)
-        
+
         Returns:
             Item ID
         """
         try:
-            # Use admin_client to bypass RLS for backend operations
-            client = self.admin_client if self.admin_client else self.client
-            if item_data.get("household_id") is not None:
-                on_conflict = "household_id,base_ingredient,variant,unit"
-            else:
-                on_conflict = "user_id,base_ingredient,variant,unit"
-            response = (
-                client.table("pantry_items")
-                .upsert(item_data, on_conflict=on_conflict)
-                .execute()
-            )
-            
-            if response.data and len(response.data) > 0:
-                item_id = response.data[0]["id"]
-                logger.info(f"Upserted pantry item: {item_data.get('normalized_name')}")
-                return item_id
-            else:
+            client = self._require_admin_client()
+            response = client.rpc(
+                "upsert_pantry_item",
+                {"p_item": item_data},
+            ).execute()
+
+            if response.data is None:
                 raise DatabaseException("No data returned after upsert")
+            raw = (
+                response.data[0]
+                if isinstance(response.data, list) and response.data
+                else response.data
+            )
+            item_id = str(raw)
+            logger.info(f"Upserted pantry item: {item_data.get('normalized_name')}")
+            return item_id
+        except DatabaseException:
+            raise
         except Exception as e:
             logger.error(f"Failed to upsert pantry item: {e}")
             raise DatabaseException(f"Failed to upsert pantry item: {e}")
