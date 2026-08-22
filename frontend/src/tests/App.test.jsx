@@ -50,6 +50,7 @@ vi.mock('../services/apiClient', () => ({
     getHousehold,
     getPantry,
   },
+  postDevLog: vi.fn(),
 }))
 
 vi.mock('../services/supabaseClient', () => ({

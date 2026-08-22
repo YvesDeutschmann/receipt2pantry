@@ -17,6 +17,7 @@ import HouseholdSize from './pages/onboarding/HouseholdSize'
 import DietaryRestrictions from './pages/onboarding/DietaryRestrictions'
 import BridgeScreen from './pages/onboarding/BridgeScreen'
 import StaplesTemplate from './pages/onboarding/StaplesTemplate'
+import FunnelTelemetryOverlay from './components/FunnelTelemetryOverlay'
 
 function AppRoutes() {
   const { user } = useAuth()
@@ -57,6 +58,7 @@ function App() {
       <ColdStartProvider>
         <Router>
           <AppRoutes />
+          <FunnelTelemetryOverlay />
         </Router>
       </ColdStartProvider>
     </AuthProvider>

@@ -10,6 +10,7 @@ import {
   initApiBaseUrl,
   refreshSyncedApiBaseUrl,
 } from './services/apiClient'
+import { startFunnelTelemetryExport } from './services/funnelTelemetryExport'
 
 // Configure status bar on native platforms
 if (isNative()) {
@@ -21,6 +22,7 @@ if (isNative()) {
 async function bootstrap() {
   await initApiBaseUrl()
   await refreshSyncedApiBaseUrl()
+  startFunnelTelemetryExport()
   if (isNative()) {
     void CapApp.addListener('appStateChange', ({ isActive }) => {
       if (isActive) {

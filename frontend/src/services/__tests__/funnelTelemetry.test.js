@@ -29,6 +29,7 @@ describe('funnelTelemetry', () => {
   let dump
   let reset
   let getSessionId
+  let subscribe
   let FunnelEvent
   /** @type {Map<string, string>} */
   let lsStore
@@ -52,7 +53,7 @@ describe('funnelTelemetry', () => {
     vi.resetModules()
     telemStore.clear()
     delete window.__funnelTelemetry
-    ;({ emit, dump, reset, getSessionId, FunnelEvent } = await loadModule())
+    ;({ emit, dump, reset, getSessionId, subscribe, FunnelEvent } = await loadModule())
   })
 
   afterEach(() => {
@@ -183,6 +184,36 @@ describe('funnelTelemetry', () => {
 
   it('DEV_PANEL_NOT_EXPOSED_BY_DEFAULT', async () => {
     expect(window.__funnelTelemetry).toBeUndefined()
+  })
+
+  it('SUBSCRIBE_FIRES_AFTER_NEW_EVENT', async () => {
+    const listener = vi.fn()
+    const unsubscribe = subscribe(listener)
+    await emit(FunnelEvent.SIGN_IN, 'user-uuid-1', {}, { now: 1000 })
+    expect(listener).toHaveBeenCalledTimes(1)
+    expect(listener.mock.calls[0][0]).toMatchObject({
+      event: 'funnel_sign_in',
+      userId: 'user-uuid-1',
+      timestamp: 1000,
+    })
+    expect(listener.mock.calls[0][1]).toHaveLength(1)
+    unsubscribe()
+  })
+
+  it('SUBSCRIBE_DOES_NOT_FIRE_ON_IDEMPOTENT_EMIT', async () => {
+    const listener = vi.fn()
+    subscribe(listener)
+    await emit(FunnelEvent.SIGN_IN, 'user-uuid-1', {}, { now: 1000 })
+    await emit(FunnelEvent.SIGN_IN, 'user-uuid-1', {}, { now: 2000 })
+    expect(listener).toHaveBeenCalledTimes(1)
+  })
+
+  it('SUBSCRIBE_UNSUBSCRIBE_STOPS_NOTIFICATIONS', async () => {
+    const listener = vi.fn()
+    const unsubscribe = subscribe(listener)
+    unsubscribe()
+    await emit(FunnelEvent.SIGN_IN, 'user-uuid-1', {}, { now: 1000 })
+    expect(listener).not.toHaveBeenCalled()
   })
 
   it('DEV_PANEL_EXPOSED_WHEN_FLAG_SET', async () => {

@@ -18,6 +18,9 @@ export const FunnelEvent = {
 
 const sessionId = crypto.randomUUID();
 
+/** @type {Set<(entry: object, all: object[]) => void>} */
+const listeners = new Set();
+
 /** @type {boolean | null} */
 let _preferencesAvailableCache = null;
 
@@ -124,8 +127,32 @@ export async function emit(event, userId, metadata = {}, options = {}) {
     }
 
     await saveEvents(stored);
+    notifyListeners(entry, stored);
   } catch (e) {
     console.warn('[FunnelTelemetry] storage error:', e);
+  }
+}
+
+/**
+ * Subscribe to newly persisted funnel events. Listener errors are swallowed.
+ * @param {(entry: object, all: object[]) => void} listener
+ * @returns {() => void} unsubscribe
+ */
+export function subscribe(listener) {
+  if (typeof listener !== 'function') return () => {};
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function notifyListeners(entry, all) {
+  for (const listener of listeners) {
+    try {
+      listener(entry, all);
+    } catch {
+      /* never throw to emit */
+    }
   }
 }
 

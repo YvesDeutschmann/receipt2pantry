@@ -260,12 +260,14 @@ All tests live in `frontend/src/services/__tests__/funnelTelemetry.test.js` and 
 - [ ] `frontend/src/services/funnelTelemetry.js` exists and exports `emit`, `dump`, `reset`, `getSessionId`, `FunnelEvent`.
 - [ ] All six emit points (E1–E6) wired; each is a non-blocking `void emit(...)` call with no try/catch in the host component (errors are swallowed inside `funnelTelemetry`).
 - [ ] All vitest cases in `funnelTelemetry.test.js` pass (`npm test` in `frontend/`).
-- [ ] `rg 'funnelTelemetry' frontend/src` matches only: the new service file, the six host files, and test files. No other production callers.
+- [ ] `rg 'funnelTelemetry' frontend/src` matches the service, export, overlay, six host files, App/Auth/main wiring, and tests. No other production callers.
 - [ ] `rg 'email\|\.email\|user\.email' frontend/src/services/funnelTelemetry.js` — zero matches.
 - [ ] Manual on-device smoke (iOS Simulator or TestFlight build):
-  - Set `localStorage.FUNNEL_TELEMETRY_DEV_PANEL = '1'` in Safari Web Inspector.
+  - Enable dump export **before** starting the timed arc (no DevTools required): five taps on the Auth screen "Meald" title, or set `FUNNEL_TELEMETRY_DEV_PANEL=1` / `VITE_ENABLE_DEV_SETTINGS=1`.
+  - Stay on the device through store login + receipt fetch. Each funnel emit POSTs to `/api/dev/log` (`funnelTelemetry` summary + `funnelTelemetryDump`). Watch backend logs on a laptop in parallel — do not attach Chrome DevTools during the WebView.
+  - After the WebView closes, the on-device overlay pill should read `Receipts synced` with `matchCount`. Expand it or confirm the `receipts_synced` line in `/api/dev/log`.
   - Walk the full cold-start arc (sign in → connect Safeway or Costco → wait for sync → confirm staples → view Recipes → tap "I cooked this").
-  - Run `window.__funnelTelemetry.dump()` in console — all six events present in order, all with the same `sessionId`, `userId` is a UUID (not an email), timestamps are monotonically increasing.
+  - Confirm all six events in the overlay or log dump, same `sessionId`, `userId` is a UUID (not an email), timestamps monotonically increasing.
   - `Δt = FIRST_SUGGESTION_VIEWED.timestamp - SIGN_IN.timestamp < 180000` (< 3 min) for a successful cold-start.
 - [ ] No new ESLint errors in touched files.
 - [ ] Existing vitest and pytest suites still pass.

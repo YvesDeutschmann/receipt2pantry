@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { Capacitor } from '@capacitor/core'
 import { useAuth } from '../contexts/AuthContext'
+import { enableFunnelTelemetryExport } from '../services/funnelTelemetryExport'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MIN_PASSWORD_LENGTH = 8
@@ -20,6 +21,20 @@ function Auth() {
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const [passwordErrorShown, setPasswordErrorShown] = useState(false)
+  const titleTaps = useRef({ count: 0, lastAt: 0 })
+
+  const handleTitleTap = () => {
+    const now = Date.now()
+    if (now - titleTaps.current.lastAt > 1500) {
+      titleTaps.current.count = 0
+    }
+    titleTaps.current.lastAt = now
+    titleTaps.current.count += 1
+    if (titleTaps.current.count >= 5) {
+      titleTaps.current.count = 0
+      enableFunnelTelemetryExport()
+    }
+  }
 
   const handleSSO = async (provider) => {
     setError('')
@@ -109,7 +124,12 @@ function Auth() {
     <div className="min-h-screen bg-forest flex flex-col items-center justify-center px-4 py-8">
       <div className="w-full max-w-sm card">
         <div className="text-center mb-8">
-          <h1 className="text-hero font-display font-bold text-cream">Meald</h1>
+          <h1
+            className="text-hero font-display font-bold text-cream"
+            onClick={handleTitleTap}
+          >
+            Meald
+          </h1>
           <p className="text-subhead mt-2">
             Sign in to get started
           </p>
