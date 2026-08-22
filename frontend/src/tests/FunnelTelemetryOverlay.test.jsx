@@ -29,6 +29,7 @@ vi.mock('../services/funnelTelemetry', () => ({
 }))
 
 vi.mock('../services/funnelTelemetryExport', () => ({
+  FUNNEL_TELEMETRY_EXPORT_CHANGED: 'funnel-telemetry-export-changed',
   isFunnelTelemetryExportEnabled: () => isEnabled.current,
   enableFunnelTelemetryExport: (...args) => enableMock(...args),
   exportDumpToDevLog: (...args) => exportDumpToDevLogMock(...args),
@@ -87,8 +88,8 @@ describe('FunnelTelemetryOverlay', () => {
     render(<FunnelTelemetryOverlay />)
     expect(await screen.findByTestId('funnel-telemetry-overlay')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /expand funnel dump/i }))
-    expect(await screen.findByText(/receipts synced/i)).toBeInTheDocument()
-    expect(screen.getByText(/matchCount:\s*5/i)).toBeInTheDocument()
+    expect(await screen.findByText(/matchCount:\s*5/i)).toBeInTheDocument()
+    expect(screen.getAllByText(/receipts synced/i).length).toBeGreaterThan(0)
   })
 
   it('SEND_DUMP_BUTTON_POSTS_TO_DEV_LOG', async () => {
