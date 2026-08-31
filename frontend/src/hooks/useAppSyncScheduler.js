@@ -7,8 +7,18 @@ import * as safewayBridge from '../services/safewayWebViewBridge';
 import * as costcoBridge from '../services/costcoWebViewBridge';
 import { fetchSafewayReceipts } from '../services/safewayWebViewBridge';
 import { parseSafewayReceipt } from '../services/safewayReceiptParser';
-import { submitToBackend } from '../services/costcoNativeSync';
+import { submitSilentReceipts } from '../services/costcoSilentIngest';
 import { api } from '../services/apiClient';
+import { logPhase, reportAnomaly, SyncPhase } from '../services/syncEventLog';
+import {
+  classifyCostcoSilentResult,
+  isTerminalSilentReconnectResult,
+} from '../services/costcoSilentSyncOutcome';
+import {
+  isCostcoReconnectCooldownActive,
+  setCostcoReconnectCooldown,
+  clearCostcoReconnectCooldown,
+} from '../services/costcoWebViewBridge';
 
 // [CHANGED from Phase 4] Default is always-on; SYNC_AUTO_ENABLED='0' is the kill-switch.
 const AUTO_SYNC_KILL_SWITCH = '0';
@@ -88,18 +98,35 @@ async function adaptSafewaySilentSync(userId) {
 
 // TODO: replace with runCostcoSilentSync once silent_sync Phase 3 is merged
 async function adaptCostcoSilentSync(userId) {
+  if (await isCostcoReconnectCooldownActive()) {
+    return { outcome: 'skipped', reason: 'reconnect_cooldown' };
+  }
+
   const result = await costcoBridge.startSilentSync();
-  if (result?._skipped) {
+  const kind = classifyCostcoSilentResult(result);
+
+  if (kind === 'skipped') {
     return { outcome: 'skipped' };
   }
-  if (!result) {
-    return { outcome: 'needs_reconnect' };
+  if (kind === 'timeout') {
+    return { outcome: 'error', message: 'silent_timeout' };
+  }
+  if (kind === 'needs_reconnect') {
+    if (isTerminalSilentReconnectResult(result)) {
+      await setCostcoReconnectCooldown();
+    }
+    return { outcome: 'needs_reconnect', message: result?.reason || 'needs_reconnect' };
+  }
+  if (kind === 'tokens_only') {
+    return { outcome: 'error', message: 'tokens_only' };
   }
 
   try {
     const receipts = result.receipts ?? [];
     if (receipts.length > 0) {
-      const finalBackend = await submitToBackend(receipts, userId);
+      const finalBackend = await submitSilentReceipts(receipts, userId, {
+        getCurrentUserId: () => userId,
+      });
       const itemsAdded = finalBackend.items_added_to_pantry ?? 0;
       if (itemsAdded > 3) {
         void api.suggestions
@@ -109,6 +136,7 @@ async function adaptCostcoSilentSync(userId) {
       if (result.idToken || result.accessToken) {
         try {
           await api.connectCostcoFromApp(userId, result);
+          await clearCostcoReconnectCooldown();
         } catch (connectErr) {
           console.warn(
             '[AppSyncScheduler] costco connect-from-app failed:',
@@ -127,8 +155,9 @@ async function adaptCostcoSilentSync(userId) {
     return { outcome: 'synced', tier: 'silent', receipts_stored: 0, items_added: 0 };
   } catch (err) {
     const msg = err?.message || String(err);
-    const isTokenError = /token.*invalid|token.*expired|401|403|65535|in-webview fetch/i.test(msg);
+    const isTokenError = /token.*invalid|token.*expired|65535|in-webview fetch/i.test(msg);
     if (isTokenError) {
+      await setCostcoReconnectCooldown();
       return { outcome: 'needs_reconnect' };
     }
     return { outcome: 'error', message: msg };
@@ -163,19 +192,43 @@ async function dispatchOutcomeEvent(provider, result) {
         receipts_stored: result.receipts_stored,
         items_added: result.items_added,
       });
+      void logPhase(provider, SyncPhase.SYNC_SUCCEEDED, {
+        mode: 'silent',
+        metadata: {
+          tier: result.tier,
+          receipts_stored: result.receipts_stored ?? 0,
+          items_added: result.items_added ?? 0,
+        },
+      });
       await Preferences.set({ key: `sync_lastRun_${provider}`, value: String(Date.now()) });
       break;
     case 'skipped':
       dispatchEvent(provider, 'skipped');
+      void logPhase(provider, SyncPhase.SYNC_SKIPPED, {
+        mode: 'silent',
+        reason: result.reason || 'skipped',
+      });
       break;
     case 'needs_reconnect':
       dispatchEvent(provider, 'needs-reconnect');
+      void reportAnomaly(provider, SyncPhase.NEEDS_RECONNECT, {
+        mode: 'silent',
+        reason: result.message || 'needs_reconnect',
+      });
       break;
     case 'error':
       dispatchEvent(provider, 'error', { message: result.message });
+      void reportAnomaly(provider, SyncPhase.SYNC_FAILED, {
+        mode: 'silent',
+        reason: result.message || 'error',
+      });
       break;
     default:
       dispatchEvent(provider, 'error', { message: 'Unknown sync outcome' });
+      void reportAnomaly(provider, SyncPhase.SYNC_FAILED, {
+        mode: 'silent',
+        reason: 'unknown_outcome',
+      });
       break;
   }
 }
@@ -231,7 +284,16 @@ export function useAppSyncScheduler({ userId }) {
           const result = await p.run(uid);
           await dispatchOutcomeEvent(p.name, result);
         } catch (err) {
-          dispatchEvent(p.name, 'error', { message: err?.message });
+          const msg = err?.message || String(err);
+          void logPhase(p.name, SyncPhase.SYNC_FAILED, {
+            mode: 'silent',
+            reason: msg.slice(0, 500),
+          });
+          void reportAnomaly(p.name, SyncPhase.SYNC_FAILED, {
+            mode: 'silent',
+            reason: msg.slice(0, 500),
+          });
+          dispatchEvent(p.name, 'error', { message: msg });
         } finally {
           syncingRef.current[p.name] = false;
         }

@@ -6,9 +6,9 @@
 
 Manual checks and follow-ups referenced by the Costco InAppBrowser flow.
 
-## Current model (post–Option A, 2026-05)
+## Current model (post–Option A, 2026-05; updated 2026-07)
 
-**No preemptive session wipe.** Costco `startLogin()` opens the InAppBrowser without calling `clearAllCookies` / `clearCache` first, and `[webViewBridge.js](../frontend/src/services/webViewBridge.js)` no longer injects an Akamai/MSAL localStorage wipe on navigation.
+**Pre-login session clear (Costco only).** Costco `startLogin()` sets `clearSessionBeforeLogin: true` in [costcoWebViewBridge.js](../frontend/src/services/costcoWebViewBridge.js), so [webViewBridge.js](../frontend/src/services/webViewBridge.js) calls Capgo `clearAllCookies` and `clearCache` before opening the InAppBrowser. This clears cookies and HTTP cache but **does not** wipe `www.costco.com` `localStorage` (Web Storage survives on Android). That gap is under active investigation — see [costco-login-postmortem.md](costco-login-postmortem.md) bug #4.
 
 We previously patched `@capgo/inappbrowser` so `clearAllCookies` wiped **all** website data (including main-app WebView storage) and paired it with a JS wipe — that caused MSAL token loss and Supabase session loss. Both the patch script and the JS wipe were **removed**. `cap:patch` now only runs `[patch-capacitor-proguard.js](../frontend/scripts/patch-capacitor-proguard.js)`.
 

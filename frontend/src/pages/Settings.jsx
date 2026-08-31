@@ -12,6 +12,11 @@ import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 import HouseholdModal from '../components/HouseholdModal'
 import PageHeader from '../components/PageHeader'
+import {
+  isCostcoDiagnosticPurgeEnabled,
+  setCostcoDiagnosticPurgeEnabled,
+} from '../services/costcoDiagnosticSettings'
+import { clearCostcoInAppBrowserSession } from '../services/costcoWebViewBridge'
 
 function Settings() {
   const [household, setHousehold] = useState(null)
@@ -25,6 +30,11 @@ function Settings() {
   const [devApiInput, setDevApiInput] = useState('')
   const [devApiMessage, setDevApiMessage] = useState(null)
   const [devApiBusy, setDevApiBusy] = useState(false)
+  const [webviewCloseMessage, setWebviewCloseMessage] = useState(null)
+  const [webviewCloseBusy, setWebviewCloseBusy] = useState(false)
+  const [costcoPurgeExpired, setCostcoPurgeExpired] = useState(() =>
+    isCostcoDiagnosticPurgeEnabled()
+  )
 
   const showDevTools =
     import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_SETTINGS === '1'
@@ -399,6 +409,66 @@ function Settings() {
               {devApiMessage ? (
                 <p className="text-xs text-sage-light wrap-break-word" role="status">
                   {devApiMessage}
+                </p>
+              ) : null}
+            </div>
+            <div className="mb-6 p-3 rounded-mise-md bg-forest-light/50 space-y-2 w-full max-w-xl">
+              <h3 className="text-sm font-medium text-cream">Dev: Costco token diagnostics</h3>
+              <p className="text-xs text-sage-light">
+                Auto-captures MSAL census checkpoints and <code>/token</code> exchange metadata
+                during Costco sync (no Chrome DevTools). Login timeout is 15 minutes in dev builds.
+              </p>
+              <label className="flex items-start gap-2 text-xs text-sage-light cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-0.5"
+                  checked={costcoPurgeExpired}
+                  onChange={(e) => {
+                    const next = e.target.checked
+                    setCostcoPurgeExpired(next)
+                    setCostcoDiagnosticPurgeEnabled(next)
+                  }}
+                />
+                <span>
+                  Run B: purge expired IdToken/AccessToken before sign-in (never RefreshToken).
+                  Arm before B3 only; leave off for Run A and B1.
+                </span>
+              </label>
+            </div>
+            <div className="mb-6 p-3 rounded-mise-md bg-forest-light/50 space-y-2 w-full max-w-xl">
+              <h3 className="text-sm font-medium text-cream">Dev: WebView cleanup</h3>
+              <p className="text-xs text-sage-light">
+                Force-close tracked InAppBrowser instances (orphan cleanup). Last resort on device:{' '}
+                <code className="text-cream">adb shell am force-stop com.meald.app</code>
+              </p>
+              <button
+                type="button"
+                className="btn btn-ghost text-sm py-1.5 px-3"
+                disabled={webviewCloseBusy}
+                onClick={async () => {
+                  setWebviewCloseBusy(true)
+                  setWebviewCloseMessage(null)
+                  try {
+                    await clearCostcoInAppBrowserSession()
+                    const listed =
+                      typeof window !== 'undefined' && window.__mealdWebViews?.list
+                        ? window.__mealdWebViews.list()
+                        : []
+                    setWebviewCloseMessage(
+                      `WebView cleanup done. Tracked instances: ${listed.length}.`
+                    )
+                  } catch (e) {
+                    setWebviewCloseMessage(e?.message || String(e))
+                  } finally {
+                    setWebviewCloseBusy(false)
+                  }
+                }}
+              >
+                Force close WebViews
+              </button>
+              {webviewCloseMessage ? (
+                <p className="text-xs text-sage-light wrap-break-word" role="status">
+                  {webviewCloseMessage}
                 </p>
               ) : null}
             </div>

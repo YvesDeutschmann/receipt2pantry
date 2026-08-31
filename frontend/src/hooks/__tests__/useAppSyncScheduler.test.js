@@ -9,9 +9,11 @@ const {
   preferencesSetMock,
   readFlagsMock,
   runSafewaySilentSyncMock,
-  runCostcoSilentSyncMock,
+  startCostcoSilentSyncMock,
   hasSafewayTokensMock,
   hasCostcoTokensMock,
+  isCostcoCooldownMock,
+  setCostcoCooldownMock,
 } = vi.hoisted(() => ({
   isNativePlatformMock: vi.fn(() => true),
   addListenerMock: vi.fn(),
@@ -20,9 +22,11 @@ const {
   preferencesSetMock: vi.fn(() => Promise.resolve()),
   readFlagsMock: vi.fn(() => ({ minResyncMsOverride: null })),
   runSafewaySilentSyncMock: vi.fn(),
-  runCostcoSilentSyncMock: vi.fn(),
+  startCostcoSilentSyncMock: vi.fn(),
   hasSafewayTokensMock: vi.fn(() => Promise.resolve(true)),
   hasCostcoTokensMock: vi.fn(() => Promise.resolve(true)),
+  isCostcoCooldownMock: vi.fn(() => Promise.resolve(false)),
+  setCostcoCooldownMock: vi.fn(() => Promise.resolve()),
 }));
 
 let appStateHandler = null;
@@ -58,18 +62,33 @@ vi.mock('../../services/safewayWebViewBridge', () => ({
   fetchSafewayReceipts: vi.fn(),
 }));
 
-vi.mock('../../services/costcoWebViewBridge', () => ({
-  runCostcoSilentSync: (...args) => runCostcoSilentSyncMock(...args),
-  hasStoredTokens: (...args) => hasCostcoTokensMock(...args),
-  startSilentSync: vi.fn(),
-}));
+vi.mock('../../services/costcoWebViewBridge', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    runCostcoSilentSync: undefined,
+    hasStoredTokens: (...args) => hasCostcoTokensMock(...args),
+    startSilentSync: (...args) => startCostcoSilentSyncMock(...args),
+    isCostcoReconnectCooldownActive: (...args) => isCostcoCooldownMock(...args),
+    setCostcoReconnectCooldown: (...args) => setCostcoCooldownMock(...args),
+    clearCostcoReconnectCooldown: vi.fn(() => Promise.resolve()),
+  };
+});
 
 vi.mock('../../services/safewayReceiptParser', () => ({
   parseSafewayReceipt: (r) => r,
 }));
 
 vi.mock('../../services/costcoNativeSync', () => ({
-  submitToBackend: vi.fn(),
+  submitToBackend: vi.fn(() =>
+    Promise.resolve({ receipts_stored: 1, items_added_to_pantry: 0, errors: [] })
+  ),
+}));
+
+vi.mock('../../services/costcoSilentIngest', () => ({
+  submitSilentReceipts: vi.fn(() =>
+    Promise.resolve({ receipts_stored: 1, items_added_to_pantry: 0, errors: [] })
+  ),
 }));
 
 vi.mock('../../services/apiClient', () => ({
@@ -79,6 +98,12 @@ vi.mock('../../services/apiClient', () => ({
     connectCostcoFromApp: vi.fn(),
     suggestions: { triggerGeneration: vi.fn(() => Promise.resolve()) },
   },
+}));
+
+vi.mock('../../services/syncEventLog', () => ({
+  logPhase: vi.fn(() => Promise.resolve()),
+  reportAnomaly: vi.fn(() => Promise.resolve()),
+  SyncPhase: {},
 }));
 
 import { useAppSyncScheduler } from '../useAppSyncScheduler';
@@ -149,11 +174,10 @@ describe('useAppSyncScheduler', () => {
       receipts_stored: 1,
       items_added: 0,
     });
-    runCostcoSilentSyncMock.mockResolvedValue({
-      outcome: 'synced',
-      tier: 'silent',
-      receipts_stored: 0,
-      items_added: 0,
+    startCostcoSilentSyncMock.mockResolvedValue({
+      receipts: [{ order_id: 'c1' }],
+      idToken: 'costco-id',
+      _fromWebView: true,
     });
     setupListenerCapture();
   });
@@ -194,7 +218,7 @@ describe('useAppSyncScheduler', () => {
     renderHook(() => useAppSyncScheduler({ userId: null }));
     await flushMountAndDebounce();
     expect(runSafewaySilentSyncMock).not.toHaveBeenCalled();
-    expect(runCostcoSilentSyncMock).not.toHaveBeenCalled();
+    expect(startCostcoSilentSyncMock).not.toHaveBeenCalled();
   });
 
   it('RUNS_ON_MOUNT_AFTER_AUTH_SETTLED — runSafewaySilentSync once after MOUNT_DELAY_MS', async () => {
@@ -215,7 +239,7 @@ describe('useAppSyncScheduler', () => {
   it('RUNS_ON_APP_STATE_ACTIVE_TRUE — provider run triggered', async () => {
     renderHook(() => useAppSyncScheduler({ userId }));
     runSafewaySilentSyncMock.mockClear();
-    runCostcoSilentSyncMock.mockClear();
+    startCostcoSilentSyncMock.mockClear();
     await simulateAppActive();
     expect(runSafewaySilentSyncMock).toHaveBeenCalled();
   });
@@ -265,7 +289,7 @@ describe('useAppSyncScheduler', () => {
     renderHook(() => useAppSyncScheduler({ userId }));
     await flushMountAndDebounce();
     expect(runSafewaySilentSyncMock).not.toHaveBeenCalled();
-    expect(runCostcoSilentSyncMock).toHaveBeenCalled();
+    expect(startCostcoSilentSyncMock).toHaveBeenCalled();
   });
 
   it('MIN_RESYNC_OVERRIDE_ZERO_ALWAYS_RUNS — run still triggers', async () => {
@@ -281,7 +305,7 @@ describe('useAppSyncScheduler', () => {
     renderHook(() => useAppSyncScheduler({ userId }));
     await flushMountAndDebounce();
     expect(runSafewaySilentSyncMock).not.toHaveBeenCalled();
-    expect(runCostcoSilentSyncMock).toHaveBeenCalled();
+    expect(startCostcoSilentSyncMock).toHaveBeenCalled();
   });
 
   it('WRITES_SYNC_LAST_RUN_ON_SYNCED_OUTCOME', async () => {
@@ -368,7 +392,7 @@ describe('useAppSyncScheduler', () => {
 
   it('COSTCO_SKIPPED_NOT_NEEDS_RECONNECT — skipped event only, no lastRun write', async () => {
     hasSafewayTokensMock.mockResolvedValue(false);
-    runCostcoSilentSyncMock.mockResolvedValue({ outcome: 'skipped' });
+    startCostcoSilentSyncMock.mockResolvedValue({ _skipped: true, reason: 'webview_busy' });
     const skippedListener = vi.fn();
     const reconnectListener = vi.fn();
     window.addEventListener('costco-sync-skipped', skippedListener);
@@ -384,6 +408,56 @@ describe('useAppSyncScheduler', () => {
     window.removeEventListener('costco-sync-needs-reconnect', reconnectListener);
   });
 
+  it('COSTCO_NEEDS_RECONNECT_SETS_COOLDOWN_WITHOUT_LAST_RUN', async () => {
+    hasSafewayTokensMock.mockResolvedValue(false);
+    startCostcoSilentSyncMock.mockResolvedValue({
+      needs_reconnect: true,
+      reason: 'refresh_invalid_grant',
+    });
+    const reconnectListener = vi.fn();
+    window.addEventListener('costco-sync-needs-reconnect', reconnectListener);
+    renderHook(() => useAppSyncScheduler({ userId }));
+    await flushMountAndDebounce();
+    expect(reconnectListener).toHaveBeenCalled();
+    expect(setCostcoCooldownMock).toHaveBeenCalled();
+    expect(preferencesSetMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'sync_lastRun_costco' })
+    );
+    window.removeEventListener('costco-sync-needs-reconnect', reconnectListener);
+  });
+
+  it('COSTCO_TIMEOUT_NOT_RECONNECT_OR_COOLDOWN', async () => {
+    hasSafewayTokensMock.mockResolvedValue(false);
+    startCostcoSilentSyncMock.mockResolvedValue(null);
+    const reconnectListener = vi.fn();
+    const errorListener = vi.fn();
+    window.addEventListener('costco-sync-needs-reconnect', reconnectListener);
+    window.addEventListener('costco-sync-error', errorListener);
+    renderHook(() => useAppSyncScheduler({ userId }));
+    await flushMountAndDebounce();
+    expect(reconnectListener).not.toHaveBeenCalled();
+    expect(setCostcoCooldownMock).not.toHaveBeenCalled();
+    expect(errorListener).toHaveBeenCalled();
+    window.removeEventListener('costco-sync-needs-reconnect', reconnectListener);
+    window.removeEventListener('costco-sync-error', errorListener);
+  });
+
+  it('COSTCO_TOKENS_ONLY_NOT_COOLDOWN', async () => {
+    hasSafewayTokensMock.mockResolvedValue(false);
+    startCostcoSilentSyncMock.mockResolvedValue({ idToken: 'x', _tokensOnly: true });
+    const reconnectListener = vi.fn();
+    const errorListener = vi.fn();
+    window.addEventListener('costco-sync-needs-reconnect', reconnectListener);
+    window.addEventListener('costco-sync-error', errorListener);
+    renderHook(() => useAppSyncScheduler({ userId }));
+    await flushMountAndDebounce();
+    expect(reconnectListener).not.toHaveBeenCalled();
+    expect(setCostcoCooldownMock).not.toHaveBeenCalled();
+    expect(errorListener).toHaveBeenCalled();
+    window.removeEventListener('costco-sync-needs-reconnect', reconnectListener);
+    window.removeEventListener('costco-sync-error', errorListener);
+  });
+
   it('SEQUENTIAL_NOT_PARALLEL — costco starts after safeway resolves', async () => {
     const order = [];
     runSafewaySilentSyncMock.mockImplementation(async () => {
@@ -392,9 +466,13 @@ describe('useAppSyncScheduler', () => {
       order.push('safeway-end');
       return { outcome: 'synced', tier: 'silent', receipts_stored: 0, items_added: 0 };
     });
-    runCostcoSilentSyncMock.mockImplementation(async () => {
+    startCostcoSilentSyncMock.mockImplementation(async () => {
       order.push('costco-start');
-      return { outcome: 'synced', tier: 'silent', receipts_stored: 0, items_added: 0 };
+      return {
+        receipts: [{ order_id: 'c1' }],
+        idToken: 'costco-id',
+        _fromWebView: true,
+      };
     });
     renderHook(() => useAppSyncScheduler({ userId }));
     await flushMountAndDebounce();

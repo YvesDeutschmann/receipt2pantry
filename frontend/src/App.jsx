@@ -18,6 +18,7 @@ import HouseholdSize from './pages/onboarding/HouseholdSize'
 import DietaryRestrictions from './pages/onboarding/DietaryRestrictions'
 import BridgeScreen from './pages/onboarding/BridgeScreen'
 import StaplesTemplate from './pages/onboarding/StaplesTemplate'
+import CostcoDiagnosticOverlay from './components/CostcoDiagnosticOverlay'
 
 function AppRoutes() {
   const { user } = useAuth()
@@ -60,6 +61,7 @@ function App() {
       <ColdStartProvider>
         <Router>
           <AppRoutes />
+          <CostcoDiagnosticOverlay />
         </Router>
       </ColdStartProvider>
     </AuthProvider>

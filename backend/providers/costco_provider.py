@@ -3,6 +3,7 @@
 import base64
 import hashlib
 import json
+import re
 import requests
 from datetime import datetime, timedelta
 from typing import Any, Dict, List, Optional
@@ -86,10 +87,19 @@ def _mfa_payload_from_graphql_errors(errors: List[Any]) -> Optional[Dict[str, An
 
 
 # Azure AD B2C Configuration for Costco
-COSTCO_B2C_TENANT = "bfc5f2e2-aea6-44ef-abc2-f0c95c397145"
-COSTCO_B2C_POLICY = "b2c_1a_sso_wcs_signup_signin_180"
+COSTCO_B2C_TENANT = "e0714dd4-784d-46d6-a278-3e29553483eb"
+COSTCO_B2C_POLICY_FALLBACK = "b2c_1a_sso_wcs_signup_signin_209"
 COSTCO_B2C_CLIENT_ID = "a3a5186b-7c89-4b4c-93a8-dd604e930757"
-COSTCO_B2C_TOKEN_ENDPOINT = f"https://signin.costco.com/{COSTCO_B2C_TENANT}/oauth2/v2.0/token"
+_B2C_POLICY_RE = re.compile(r"^[a-z0-9_-]{1,128}$")
+
+
+def _b2c_policy_from_payload(payload: Dict[str, Any]) -> str:
+    """Resolve B2C user-flow policy from JWT claims (tfp, then acr), with safe fallback."""
+    raw = payload.get("tfp") or payload.get("acr") or COSTCO_B2C_POLICY_FALLBACK
+    policy = str(raw).strip().lower()
+    if _B2C_POLICY_RE.fullmatch(policy):
+        return policy
+    return COSTCO_B2C_POLICY_FALLBACK
 
 # GraphQL query for warehouse receipts with item details
 RECEIPTS_QUERY = """query receiptsWithCounts($startDate: String!, $endDate: String!,$documentType:String!,$documentSubType:String!) {
@@ -201,23 +211,24 @@ class CostcoProvider(BaseProvider):
         """
         payload = self._decode_jwt_payload(id_token)
         issuer = payload.get('iss', '')
+        policy = _b2c_policy_from_payload(payload)
 
         logger.debug(f"Extracting token endpoint from issuer: {issuer}")
 
         if 'signin.costco.com' in issuer:
             parts = issuer.rstrip('/').split('/')
             tenant = parts[-2] if len(parts) > 1 and parts[-1] == 'v2.0' else parts[-1]
-            endpoint = f"https://signin.costco.com/{tenant}/{COSTCO_B2C_POLICY}/oauth2/v2.0/token"
+            endpoint = f"https://signin.costco.com/{tenant}/{policy}/oauth2/v2.0/token"
             logger.debug(f"Built custom domain endpoint: {endpoint}")
             return endpoint
         elif 'b2clogin.com' in issuer:
             parts = issuer.rstrip('/').split('/')
             tenant = parts[-2] if len(parts) > 1 and parts[-1] == 'v2.0' else parts[-1]
-            endpoint = f"https://{tenant}.b2clogin.com/{tenant}/{COSTCO_B2C_POLICY}/oauth2/v2.0/token"
+            endpoint = f"https://{tenant}.b2clogin.com/{tenant}/{policy}/oauth2/v2.0/token"
             logger.debug(f"Built standard B2C endpoint: {endpoint}")
             return endpoint
 
-        endpoint = f"https://signin.costco.com/{COSTCO_B2C_TENANT}/{COSTCO_B2C_POLICY}/oauth2/v2.0/token"
+        endpoint = f"https://signin.costco.com/{COSTCO_B2C_TENANT}/{policy}/oauth2/v2.0/token"
         logger.warning(f"Could not parse issuer {issuer}, using fallback endpoint: {endpoint}")
         return endpoint
 
