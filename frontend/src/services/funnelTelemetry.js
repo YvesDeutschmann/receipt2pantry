@@ -1,7 +1,10 @@
 /**
  * Client-only activation funnel telemetry (Preferences + localStorage fallback).
- * Fire-and-forget; no network calls.
+ * Offline-first queue with optional server flush via POST /api/telemetry/funnel.
  */
+
+import { supabase } from './supabaseClient'
+import { getEffectiveApiBaseUrl, initApiBaseUrl } from './apiClient'
 
 const STORAGE_KEY = 'funnel_telemetry';
 const MAX_EVENTS = 200;
@@ -93,6 +96,66 @@ async function saveEvents(events) {
 }
 
 /**
+ * POST unsent funnel events to the backend analytics sink.
+ * Silent on failure; retries on next flush.
+ * @returns {Promise<{ sent: number, skipped: number }>}
+ */
+export async function flush() {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!session?.access_token) {
+    return { sent: 0, skipped: 0 };
+  }
+
+  const stored = await loadEvents();
+  const pending = stored.filter((entry) => !entry.sent);
+  if (pending.length === 0) {
+    return { sent: 0, skipped: 0 };
+  }
+
+  await initApiBaseUrl();
+  const base = getEffectiveApiBaseUrl().url.replace(/\/+$/, '');
+  const url = `${base}/telemetry/funnel`;
+
+  const body = {
+    events: pending.map((entry) => ({
+      event: entry.event,
+      timestamp: entry.timestamp,
+      sessionId: entry.sessionId,
+      metadata: entry.metadata || {},
+    })),
+  };
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${session.access_token}`,
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (!response.ok) {
+      return { sent: 0, skipped: 0 };
+    }
+
+    const pendingKeys = new Set(pending.map((e) => `${e.event}:${e.userId}`));
+    let sent = 0;
+    for (const entry of stored) {
+      if (pendingKeys.has(`${entry.event}:${entry.userId}`)) {
+        entry.sent = true;
+        sent += 1;
+      }
+    }
+    await saveEvents(stored);
+    return { sent, skipped: 0 };
+  } catch (e) {
+    console.warn('[FunnelTelemetry] flush failed:', e);
+    return { sent: 0, skipped: 0 };
+  }
+}
+
+/**
  * Record a funnel event. Idempotent: if this event has already been recorded
  * for this userId, the call is a silent no-op.
  * @param {FunnelEvent} event
@@ -116,6 +179,7 @@ export async function emit(event, userId, metadata = {}, options = {}) {
       timestamp: options.now ?? Date.now(),
       sessionId,
       metadata: sanitizeMetadata(metadata),
+      sent: false,
     };
 
     stored.push(entry);
@@ -124,6 +188,7 @@ export async function emit(event, userId, metadata = {}, options = {}) {
     }
 
     await saveEvents(stored);
+    void flush();
   } catch (e) {
     console.warn('[FunnelTelemetry] storage error:', e);
   }
@@ -183,5 +248,5 @@ function isDevPanelEnabled() {
 }
 
 if (isDevPanelEnabled()) {
-  window.__funnelTelemetry = { dump, reset, getSessionId };
+  window.__funnelTelemetry = { dump, reset, getSessionId, flush };
 }

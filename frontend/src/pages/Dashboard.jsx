@@ -61,30 +61,34 @@ function Dashboard() {
 
       <NeedsAttentionSection />
 
-      {whatsForDinnerUnlocked && (
-        <div className="mb-8 p-5 rounded-mise-lg border border-[var(--color-terra)]/35 bg-forest-light">
-          <p className="text-cream font-display font-semibold mb-1">You&apos;re all set</p>
-          <p className="text-sage-light text-sm mb-4">
-            Your pantry baseline is saved — see what you can cook tonight.
-          </p>
-          <Link
-            to="/recipes"
-            className="btn btn-primary inline-flex items-center justify-center animate-pulse"
-          >
-            What&apos;s for Dinner
-          </Link>
-          <button
-            type="button"
-            onClick={() => {
-              loadPantryBases()
-              setSearchOpen(true)
-            }}
-            className="block w-full text-center text-sm text-sage-light hover:text-terra-light mt-4 underline underline-offset-2"
-          >
-            Missing something? Add it to your pantry →
-          </button>
-        </div>
-      )}
+      <div className="mb-8 p-5 rounded-mise-lg border border-[var(--color-terra)]/35 bg-forest-light">
+        <p className="text-cream font-display font-semibold mb-1">
+          {whatsForDinnerUnlocked ? "You're all set" : "What's for Dinner"}
+        </p>
+        <p className="text-sage-light text-sm mb-4">
+          {whatsForDinnerUnlocked
+            ? 'Your pantry baseline is saved — see what you can cook tonight.'
+            : 'See what you can cook with what you have in your pantry.'}
+        </p>
+        <Link
+          to="/recipes"
+          className={`btn btn-primary inline-flex items-center justify-center${
+            whatsForDinnerUnlocked ? ' animate-pulse' : ''
+          }`}
+        >
+          What&apos;s for Dinner
+        </Link>
+        <button
+          type="button"
+          onClick={() => {
+            loadPantryBases()
+            setSearchOpen(true)
+          }}
+          className="block w-full text-center text-sm text-sage-light hover:text-terra-light mt-4 underline underline-offset-2"
+        >
+          Missing something? Add it to your pantry →
+        </button>
+      </div>
 
       <PantrySearchOverlay
         isOpen={searchOpen}

@@ -1,12 +1,47 @@
 """Configuration management for Meald backend"""
 
 import os
+import re
 from typing import Optional
+from urllib.parse import urlparse
 from dotenv import load_dotenv
 from backend.utils.exceptions import ConfigurationException
 
 # Load environment variables from .env file
 load_dotenv()
+
+# Capacitor / Ionic WebView origins are production-safe despite containing "localhost".
+_CAPACITOR_SAFE_ORIGINS = frozenset({"capacitor://localhost", "ionic://localhost"})
+
+# Private IPv4 ranges (RFC1918) for production CORS guard.
+_PRIVATE_LAN_RE = re.compile(
+    r"^(?:"
+    r"192\.168\.\d{1,3}\.\d{1,3}"
+    r"|10\.\d{1,3}\.\d{1,3}\.\d{1,3}"
+    r"|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}"
+    r")$"
+)
+
+
+def is_unsafe_production_cors_origin(origin: str) -> bool:
+    """Return True if origin must not appear in production CORS_ORIGINS."""
+    origin = origin.strip()
+    if not origin:
+        return True
+    if origin in _CAPACITOR_SAFE_ORIGINS:
+        return False
+
+    parsed = urlparse(origin)
+    scheme = (parsed.scheme or "").lower()
+    host = (parsed.hostname or "").lower()
+
+    if scheme in ("http", "https"):
+        if host in ("localhost", "127.0.0.1", "::1"):
+            return True
+        if host and _PRIVATE_LAN_RE.match(host):
+            return True
+
+    return False
 
 
 class Config:
@@ -14,6 +49,9 @@ class Config:
     
     # Flask
     FLASK_ENV: str = os.getenv("FLASK_ENV", "development")
+    # Unused today: not mapped to Flask's SECRET_KEY, and auth uses Supabase JWTs
+    # (backend/utils/auth.py), not flask.session. Kept for ProductionConfig hygiene /
+    # future cookie sessions; empty or any non-default value is fine.
     FLASK_SECRET_KEY: str = os.getenv("FLASK_SECRET_KEY", "dev-secret-key-change-in-production")
     FLASK_PORT: int = int(os.getenv("FLASK_PORT", "5000"))
     
@@ -25,13 +63,14 @@ class Config:
     _service_role_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
     SUPABASE_SERVICE_ROLE_KEY: Optional[str] = _service_role_key if _service_role_key is not None else os.getenv("SUPABASE_SECRET_KEY")
     
-    # AWS Secrets Manager
-    AWS_REGION: str = os.getenv("AWS_REGION", "us-west-2")
-    AWS_ACCESS_KEY_ID: Optional[str] = os.getenv("AWS_ACCESS_KEY_ID")
-    AWS_SECRET_ACCESS_KEY: Optional[str] = os.getenv("AWS_SECRET_ACCESS_KEY")
-    
     # Logging
     LOG_LEVEL: str = os.getenv("LOG_LEVEL", "INFO")
+
+    # Monitoring (GlitchTip / Sentry-wire-compatible)
+    SENTRY_DSN: Optional[str] = os.getenv("SENTRY_DSN")
+    SENTRY_ENVIRONMENT: str = os.getenv("SENTRY_ENVIRONMENT") or os.getenv("FLASK_ENV", "development")
+    SENTRY_TRACES_SAMPLE_RATE: float = float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0.05"))
+    SENTRY_RELEASE: Optional[str] = os.getenv("SENTRY_RELEASE")
     
     # CORS
     CORS_ORIGINS: str = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000")
@@ -60,6 +99,10 @@ class Config:
     SPOONACULAR_CALL_BUDGET_PERIOD_SECONDS: int = int(
         os.getenv("SPOONACULAR_CALL_BUDGET_PERIOD_SECONDS", "3600")
     )
+
+    # Feature flags (default off; set to 1 or true to enable)
+    FEATURE_MEAL_PLANNER: bool = os.getenv("FEATURE_MEAL_PLANNER", "0") in ("1", "true", "True")
+    DEV_LOG_ENABLED: bool = os.getenv("DEV_LOG_ENABLED", "0") in ("1", "true", "True")
     
     @classmethod
     def validate(cls) -> None:
@@ -82,8 +125,11 @@ class Config:
     
     @classmethod
     def get_cors_origins(cls) -> list[str]:
-        """Get CORS origins as a list"""
-        return [origin.strip() for origin in cls.CORS_ORIGINS.split(",")]
+        """Get CORS origins as a list (reads CORS_ORIGINS from env at call time)."""
+        raw = os.getenv("CORS_ORIGINS")
+        if raw is None:
+            raw = cls.CORS_ORIGINS
+        return [origin.strip() for origin in raw.split(",") if origin.strip()]
 
 
 class DevelopmentConfig(Config):
@@ -103,6 +149,26 @@ class ProductionConfig(Config):
         if cls.FLASK_SECRET_KEY == "dev-secret-key-change-in-production":
             raise ConfigurationException(
                 "FLASK_SECRET_KEY must be changed in production"
+            )
+
+        if not os.getenv("SUPABASE_JWT_SECRET"):
+            raise ConfigurationException(
+                "SUPABASE_JWT_SECRET is required in production"
+            )
+
+        unsafe_origins = [
+            origin for origin in cls.get_cors_origins()
+            if is_unsafe_production_cors_origin(origin)
+        ]
+        if unsafe_origins:
+            raise ConfigurationException(
+                "CORS_ORIGINS must not include localhost or LAN origins in production "
+                f"(unsafe: {', '.join(unsafe_origins)})"
+            )
+
+        if not os.getenv("SENTRY_DSN"):
+            raise ConfigurationException(
+                "SENTRY_DSN is required in production (GlitchTip or Sentry-compatible DSN)"
             )
 
 

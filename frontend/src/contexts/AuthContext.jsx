@@ -3,6 +3,7 @@ import { Capacitor } from '@capacitor/core'
 import { supabase } from '../services/supabaseClient'
 import { SignInWithApple } from '../native/signInWithApple'
 import { emit, FunnelEvent } from '../services/funnelTelemetry'
+import { setMonitoringUser } from '../services/monitoring'
 
 const AuthContext = createContext(null)
 
@@ -34,6 +35,7 @@ export function AuthProvider({ children }) {
     supabase.auth.getSession().then(({ data: { session: sess } }) => {
       setSession(sess)
       setUser(sess?.user ?? null)
+      setMonitoringUser(sess?.user?.id ?? null)
       setLoading(false)
     })
 
@@ -42,9 +44,13 @@ export function AuthProvider({ children }) {
     } = supabase.auth.onAuthStateChange((_event, sess) => {
       setSession(sess)
       setUser(sess?.user ?? null)
+      setMonitoringUser(sess?.user?.id ?? null)
       setLoading(false)
       if (_event === 'SIGNED_IN' && sess?.user?.id) {
         void emit(FunnelEvent.SIGN_IN, sess.user.id)
+      }
+      if (_event === 'SIGNED_OUT') {
+        setMonitoringUser(null)
       }
     })
 

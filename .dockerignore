@@ -1,0 +1,39 @@
+# Secrets and local env
+.env
+.env.*
+!.env.example
+
+# Git and editor
+.git
+.gitignore
+.cursor
+.vscode
+
+# Frontend (not needed in backend image)
+frontend/
+
+# Docs, tests, ops (not needed at runtime)
+docs/
+tests/
+ops/
+supabase/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+
+# Node / mobile artifacts
+node_modules/
+*.aab
+*.apk
+*.ipa
+
+# OS junk
+.DS_Store
+Thumbs.db

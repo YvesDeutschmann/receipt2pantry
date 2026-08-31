@@ -1,21 +1,21 @@
 # Meald — MVP Scope, Coverage Analysis & Roadmap
 
 **Document type:** Product scope + gap analysis
-**Status:** Draft for review
-**Last updated:** 2026-06-13
+**Status:** Draft for review — **M6 in progress (NO-GO)**; Areas 1–4 live-verified; signed prod builds done; Area 5 checklist open
+**Last updated:** 2026-07-28
 **Inputs:** `docs/PRODUCT_BRIEF.md`, current codebase (`backend/`, `frontend/`, `supabase/migrations/`), existing implementation briefs.
 
 ---
 
 ## 🚨 Must-fix before release (security/config blockers)
 
-Surfaced during the gap-closure brief authoring (see [`docs/implementation_briefs/mvp_gaps/06-launch-readiness.md`](implementation_briefs/mvp_gaps/06-launch-readiness.md)). These are **launch-blocking** and independent of feature scope — none should ship to an external build until fixed and verified.
+Surfaced during the gap-closure brief authoring (see [`docs/implementation_briefs/mvp_gaps/06-launch-readiness.md`](implementation_briefs/mvp_gaps/06-launch-readiness.md)). Track live status in [`06-launch-readiness-findings.md`](implementation_briefs/mvp_gaps/06-launch-readiness-findings.md).
 
-1. **Committed LAN IP in `frontend/android/app/src/main/res/xml/network_security_config.xml`** — the file (currently showing as modified in git) hardcodes `192.168.50.57` with cleartext HTTP permitted. A release AAB/APK built from this tree would ship it. **Fix:** remove the dev entry and commit the clean prod config before cutting any release build.
-2. **`SUPABASE_JWT_SECRET` not validated at startup (auth-bypass risk)** — `backend/utils/auth.py` silently falls back to trusting the raw `X-User-Id` request header when the JWT secret is absent. If the prod deploy omits the var, every endpoint accepts an unauthenticated identity. **Fix:** require it in `ProductionConfig.validate()` (`backend/config.py`); fail closed.
-3. **`MockSecretsService` can activate in production** — the secrets fallback waterfall in `backend/app.py` reaches the mock if neither AWS keys nor a Supabase admin client are configured, silently storing real credentials in process memory (lost on restart). **Fix:** add a startup assertion that prod never uses the mock, plus a guard test.
+1. ~~**Committed LAN IP in `network_security_config.xml`**~~ **FIXED** — only `localhost` / `10.0.2.2`; verify still absent in release AAB.
+2. ~~**`SUPABASE_JWT_SECRET` not validated at startup**~~ **FIXED** — `ProductionConfig.validate()` + set on Fly.
+3. ~~**`MockSecretsService` in production**~~ **FIXED / Area 2 closed (2026-07-25).**
 
-> These are tracked as the security/secrets items in milestone **M6 (Launch readiness)** below, but are pulled to the top because they are easy to miss and high-severity.
+**Still open for friends beta:** Area 5 device QA checklist on signed prod builds; privacy/terms + delete-account; spend caps/backups; commit/merge of launch-readiness work. ~~Apple agreements + signed iOS/Android against `api.meald.app`~~ **DONE**.
 
 ---
 
@@ -56,15 +56,16 @@ Legend: **MUST** = in MVP · **STUB** = ship a deliberately limited/mocked versi
 | 3 | Pantry / digital inventory | **MUST** | The core asset; suggestions are worthless without it. | "Show me what I have." | Done; needs polish + confidence trust. |
 | 4 | Cold-start staples onboarding | **MUST** | Determines activation rate. | Setup must feel like *picking*, not *typing*. | Built; protect the <2-min target. |
 | 5 | Recipe matching / suggestions | **MUST** | The payoff that justifies the data work. | "Tell me what I can make tonight." | Built (Spoonacular + pool); needs cost control + caching. |
-| 6 | Meal-planning assistant (weekly) | **MUST (lite)** | Drives weekly retention cadence. | "Plan my week so I stop deciding daily." | Wizard exists; ship it but keep the flow short. |
-| 7 | Leftover tracking | **MUST (lite)** | Reduces waste = stated value prop. | "Remind me I have leftovers." | Built into meal plan; keep manual-mark, defer auto-detect. |
+| 6 | Meal-planning assistant (weekly) | **DEFER** | Drives weekly retention cadence. | "Plan my week so I stop deciding daily." | Built but hidden behind `FEATURE_MEAL_PLANNER` / `VITE_FEATURE_MEAL_PLANNER`; ship What's for Dinner only. |
+| 7 | Leftover tracking | **DEFER** | Reduces waste = stated value prop. | "Remind me I have leftovers." | Built into meal plan; deferred with meal planner. |
 | 8 | Smart substitutions | **STUB** | Nice-to-have, not a reason to adopt. | "Out of X? tell me what swaps." | Data model + availability check exist; surface read-only, don't build a full engine. |
-| 9 | Shopping list generation | **MUST (lite)** | Closes the loop back to the store. | "Tell me what to buy for the plan." | Service exists; ship basic list, defer store ordering. |
+| 9 | Shopping list generation | **DEFER** | Closes the loop back to the store. | "Tell me what to buy for the plan." | Service exists; deferred with meal planner. |
 | 10 | Household sharing | **STUB → MUST-keep** | Multiplies value but adds support cost. | "My partner adds stuff too." | Fully built already; keep but don't expand (no roles/perms work). |
 | 11 | Hands-free / voice-guided cooking | **DEFER** | Cool demo, weak retention driver, build cost high. | Marginal at MVP; nice later. | **Not built** (voice *input* for pantry exists; voice-*guided cooking* does not). Cut cleanly. |
 | 12 | Multi-chain (QFC/Kroger, Walmart) | **DEFER** | Each chain = recurring ToS/maintenance tax. | One store is enough to get value. | **Not built.** Ship 2 chains; architecture already supports adding more. |
 | 13 | Silent / automatic background sync | **MUST (foreground, on by default)** | Huge UX win but fragile (cookie/token expiry) — now a launch-gating reliability item. | "I never want to think about syncing." | Owner decision: **on for everyone**. Ship foreground-triggered auto-sync default-on; OS background tasks still deferred. Silent failure must surface a visible reconnect prompt. |
-| 14 | Secure credential storage | **MUST** | Table stakes; breach = company over. | Implicit trust requirement. | Built (Supabase Vault / AWS Secrets Manager). |
+| 14 | Secure credential storage | **MUST** | Table stakes; breach = company over. | Implicit trust requirement. | Built (Supabase Vault). |
+| 15 | Email/password sign-up & sign-in | **DEFER** | SMTP/confirmation delivery is an ops tax at beta scale. | OAuth is enough to get started. | Built in `Auth.jsx`; hidden via `VITE_FEATURE_EMAIL_AUTH` (default off). Re-enable when custom SMTP is configured. |
 
 ### What the personas explicitly agreed to cut for MVP
 - **Voice-guided hands-free cooking** (feature 11) — defer entirely.
@@ -79,7 +80,8 @@ Legend: **MUST** = in MVP · **STUB** = ship a deliberately limited/mocked versi
 ### 3.1 MUST-HAVE
 
 **A. Authentication & onboarding**
-- Email + Apple/Google sign-in; protected routes; onboarding gate.
+- Apple/Google sign-in at launch (OAuth-only beta); email/password form built but hidden behind `VITE_FEATURE_EMAIL_AUTH` (default off) to avoid Supabase built-in SMTP delivery failures.
+- Protected routes; onboarding gate.
 - Onboarding arc: household size → dietary restrictions → connect store → staples template → first "What's for Dinner."
 - Cold-start completion target: **< 3 minutes** to first suggestion.
 
@@ -103,13 +105,17 @@ Legend: **MUST** = in MVP · **STUB** = ship a deliberately limited/mocked versi
 - Pantry-aware ranked suggestions (Spoonacular + pre-generated pool).
 - Recipe detail with ingredients matched against pantry.
 - Cost guardrail: cache + pool to bound Spoonacular calls.
+- Primary post-onboarding entry point (Dashboard CTA + nav tab).
 
-**F. Weekly meal plan (lite)**
-- Wizard: pick meal slots → accept/soft-reject/ban suggestions → build week.
-- Calendar view, swap/delete meals, manual leftover marking.
-- Generate a basic shopping list of missing ingredients; mark purchased.
+**F. Weekly meal plan (DEFER — hidden at launch)**
+- Wizard, calendar, shopping list, and leftover marking are built but gated off.
+- Re-enable with `VITE_FEATURE_MEAL_PLANNER=1` (frontend) and `FEATURE_MEAL_PLANNER=1` (backend).
 
-**G. Cook → pantry depletion**
+**G. Email/password auth (DEFER — hidden at launch)**
+- Email sign-up, sign-in, and dev test-user fill are built but gated off for OAuth-only beta.
+- Re-enable with `VITE_FEATURE_EMAIL_AUTH=1` (frontend build) after custom SMTP is configured in Supabase.
+
+**H. Cook → pantry depletion**
 - "I cooked this" consumes ingredients and updates pantry confidence.
 
 ### 3.2 STUB (ship limited)
@@ -119,7 +125,7 @@ Legend: **MUST** = in MVP · **STUB** = ship a deliberately limited/mocked versi
 > **Note:** Auto-sync was moved to MUST-HAVE (item B below) per the owner decision to ship it on-by-default. It is no longer a flag-gated stub.
 
 ### 3.3 DEFER (explicitly out)
-- Voice-guided cooking · QFC/Kroger · Walmart · OS background sync · spend analytics dashboards · in-app grocery ordering · web (desktop) marketing parity beyond the app.
+- Weekly meal planner, shopping list, leftover tracking (built; hidden via feature flags) · Email/password auth (built; hidden via `VITE_FEATURE_EMAIL_AUTH`) · Voice-guided cooking · QFC/Kroger · Walmart · OS background sync · spend analytics dashboards · in-app grocery ordering · web (desktop) marketing parity beyond the app.
 
 ---
 
@@ -129,7 +135,7 @@ Assessment scale: ✅ Done (shippable, polish only) · 🟡 Partial (works, gaps
 
 | Capability | State | Evidence in repo | Gap to MVP |
 |---|---|---|---|
-| Auth + protected routes + onboarding flow | ✅ | `frontend/src/contexts/AuthContext.jsx`, `OnboardingRoute.jsx`, `pages/onboarding/*`, `native/signInWithApple.js` | Polish, error states |
+| Auth + protected routes + onboarding flow | ✅ | `frontend/src/contexts/AuthContext.jsx`, `OnboardingRoute.jsx`, `pages/onboarding/*`, `native/signInWithApple.js` | **DEFER:** email form hidden via `VITE_FEATURE_EMAIL_AUTH` (default off); OAuth-only at launch |
 | Cold-start staples template + progress bar | ✅ | `pages/onboarding/StaplesTemplate.jsx`, `ColdStartContext.jsx`, `routes/pantry.py` (`/pantry/staples-template`, `/confirm-staples`) | QA the <2-min target |
 | Safeway connection (native WebView) | 🟡 | `services/safeway*` , `hooks/useSafewaySync.js`, `routes/receipts.py` `/receipts/ingest` | Reliability, reconnect UX |
 | Costco connection (token / One-Tap) | 🟡 | `providers/costco_provider.py`, `CostcoOneTapSync.jsx`, `routes/providers.py` (`/costco/connect-from-app`, token refresh) | Token-expiry/bot-detection edge cases |
@@ -138,12 +144,12 @@ Assessment scale: ✅ Done (shippable, polish only) · 🟡 Partial (works, gaps
 | Pantry corrections + graveyard + put-back | ✅ | `routes/pantry.py` (`/correction`, `/graveyard`, `/put-back`), `GraveyardSection.jsx` | — |
 | Recipe matching (Spoonacular) | 🟡 | `services/recipe_service.py`, `routes/recipes.py`, `pages/Recipes.jsx` | Requires `SPOONACULAR_API_KEY`; cost/caching guardrails |
 | Tiered suggestions + pre-gen pool | ✅ | `services/{suggestion_service,pool_generator,pool_store_service}.py`, `routes/pool.py`, migration `016` | Tuning |
-| Meal-plan wizard + calendar | ✅ | `services/meal_plan_service.py`, `routes/meal_plan.py`, `MealPlanWizard.jsx`, migration `009` | Flow-length QA |
-| Shopping list | 🟡 | `services/shopping_list_service.py`, `routes/meal_plan.py`, `ShoppingList.jsx` | Basic only; fine for MVP |
-| Leftover tracking | 🟡 | meal-plan `mark-leftover`, `update_meal(is_leftover)` | Manual only; auto-detect deferred |
+| Meal-plan wizard + calendar | 🟡 | `services/meal_plan_service.py`, `routes/meal_plan.py`, `MealPlanWizard.jsx`, migration `009` | **DEFER:** hidden via `FEATURE_MEAL_PLANNER` / `VITE_FEATURE_MEAL_PLANNER` (default off) |
+| Shopping list | 🟡 | `services/shopping_list_service.py`, `routes/meal_plan.py`, `ShoppingList.jsx` | **DEFER:** gated with meal planner |
+| Leftover tracking | 🟡 | meal-plan `mark-leftover`, `update_meal(is_leftover)` | **DEFER:** gated with meal planner |
 | Cook → depletion | ✅ | `routes/pantry.py` `/pantry/cook`, `/consume`, `confidence_engine.process_cook_event` | — |
 | Household sharing | ✅ | `services/household_service.py`, `routes/households.py`, `HouseholdModal.jsx`, migration `005` | Freeze scope |
-| Secure credential storage | ✅ | `services/secrets_service.py` (AWS + Supabase Vault), RLS migrations `022` | Prod config |
+| Secure credential storage | ✅ | `services/secrets_service.py` (Supabase Vault + dev mock), migration `20260725140329`, RLS migrations `022` | Prod: service role + Vault RPCs |
 | Smart substitutions | 🟡→🔴 | sub table in migration `003`, `scripts/populate_ingredient_substitutions.py`, `check_ingredient_availability` | No surfaced UX / engine → ship as STUB |
 | Voice input (pantry add) | ✅ | `routes/pantry.py` `/voice-transcribe` `/voice-confirm`, `components/voice/*`, `useVoiceRecorder.js` | Pantry-only (not cooking) |
 | Voice-guided **cooking** | 🔴 | none | DEFER |
@@ -174,7 +180,7 @@ Assessment scale: ✅ Done (shippable, polish only) · 🟡 Partial (works, gaps
 
 **Cleanup (cut or hide):**
 8. Remove/feature-flag deprecated Safeway Playwright paths and dev-only debug logging (e.g. `pool.py` agent-debug block, `debug-ef2920.log`).
-9. Hide unfinished surfaces (multi-chain provider cards beyond Safeway/Costco; any voice-cooking entry points).
+9. Hide unfinished surfaces (multi-chain provider cards beyond Safeway/Costco; any voice-cooking entry points; meal planner — `FEATURE_MEAL_PLANNER` / `VITE_FEATURE_MEAL_PLANNER` default off; email auth — `VITE_FEATURE_EMAIL_AUTH` default off).
 
 ---
 
@@ -204,28 +210,46 @@ Phased to the repo's "1-Brief-1-Build" convention. Each milestone has an exit ga
 - Funnel telemetry: connect → sync complete → staples confirmed → first suggestion → first cook.
 - **Exit:** ≥ X% of internal testers reach first suggestion in < 3 min (set baseline target during M3).
 
-### M4 — Weekly loop polish (≈ 1 week)
-- Meal-plan wizard flow-length trim; shopping list basics; manual leftover marking.
+### M4 — Cook loop polish (≈ 0.5 week)
 - Cook → depletion confidence sanity pass.
-- **Exit:** A tester can plan a week, generate a shopping list, cook a meal, and see the pantry update correctly.
+- **Exit:** A tester can cook a meal from "What's for Dinner" and see the pantry update correctly.
+
+*(Meal-plan wizard, shopping list, and leftover marking moved to post-MVP — code remains, hidden behind feature flags.)*
 
 ### M5 — Stubs (≈ 0.5 week, parallelizable)
 - Substitution read-only surface only. (Auto-sync moved to M1 as MUST per owner decision.)
 - **Exit:** Stubs behave predictably and never block the core loop.
 
-### M6 — Launch readiness (≈ 0.5–1 week)
-- Security/RLS review, prod secrets config, crash/error monitoring, support runbook for "reconnect" issues.
-- **Exit:** TestFlight → limited external beta.
+### M6 — Launch readiness (≈ 0.5–1 week) — **IN PROGRESS (NO-GO)**
+
+Status as of **2026-07-28** (see [`06-launch-readiness-findings.md`](implementation_briefs/mvp_gaps/06-launch-readiness-findings.md)):
+
+| Gate | Status |
+|---|---|
+| Security / RLS live audit | Done |
+| Prod secrets (Vault) | Done |
+| Prod API (`https://api.meald.app` on Fly) | Done |
+| Crash/error monitoring (GlitchTip Cloud) + uptime | Done |
+| Reconnect support runbook | Done |
+| OAuth-only auth (`VITE_FEATURE_EMAIL_AUTH` off) | Done (working tree) |
+| Apple agreements + signed iOS/Android against `api.meald.app` | Done |
+| Dual-platform Area 5 checklist (cold-start / reconnect) | **Open** |
+| Privacy/terms + delete-account + spend caps/backups | **Open** |
+| Commit/merge launch-readiness tree | **Open** |
+
+- **Exit:** TestFlight / Play **internal** friends beta (not open testing) after Area 5 + remaining ops above.
 
 **Indicative total: ~6.5–7.5 weeks of focused work**, dominated by M1 (reliability + on-by-default auto-sync) and the iOS+Android dual-platform QA in M3/M6. No large greenfield builds are on the MVP critical path.
 
 ### Post-MVP backlog (deferred, in priority order)
-1. OS-level background sync tasks (iOS BGAppRefresh / Android WorkManager). *(Foreground auto-sync ships in MVP per owner decision.)*
-2. QFC/Kroger provider, then Walmart.
-3. Real substitution recommendation engine (learning from accept/reject).
-4. Auto leftover detection.
-5. Spend/waste analytics.
-6. Voice-guided hands-free cooking.
+1. Weekly meal planner UX polish and re-enable (`FEATURE_MEAL_PLANNER` / `VITE_FEATURE_MEAL_PLANNER`).
+2. Email/password auth re-enable (`VITE_FEATURE_EMAIL_AUTH`) after custom SMTP in Supabase.
+3. OS-level background sync tasks (iOS BGAppRefresh / Android WorkManager). *(Foreground auto-sync ships in MVP per owner decision.)*
+4. QFC/Kroger provider, then Walmart.
+5. Real substitution recommendation engine (learning from accept/reject).
+6. Auto leftover detection.
+7. Spend/waste analytics.
+8. Voice-guided hands-free cooking.
 
 ---
 
@@ -242,6 +266,8 @@ Phased to the repo's "1-Brief-1-Build" convention. Each milestone has an exit ga
 2. **Stores at launch:** ✅ **Safeway + Costco.** → Costco bot-detection/token-expiry risk is accepted; M1 reconnect UX is mandatory, not optional.
 3. **Substitutions:** ✅ **Read-only stub** using existing data; no engine in MVP.
 4. **Auto-sync:** ✅ **On for everyone at launch.** → This promotes auto-sync from a default-off stub to an MVP-critical path. See updated M1/M5 below — foreground auto-sync reliability now gates launch, and silent failures must degrade gracefully to a visible "reconnect" prompt.
+5. **Meal planner:** ✅ **Defer from MVP (2026-07-27).** → Weekly meal plan, shopping list, and leftover UI are built but hidden. Ship **"What's for Dinner"** as the sole recipe entry point. Re-enable with `FEATURE_MEAL_PLANNER=1` (backend) and `VITE_FEATURE_MEAL_PLANNER=1` (frontend build).
+6. **Email auth:** ✅ **Defer from MVP (OAuth-only beta).** → Email sign-up/sign-in UI is built but hidden to avoid Supabase built-in SMTP delivery failures. Re-enable with `VITE_FEATURE_EMAIL_AUTH=1` after custom SMTP is configured.
 
 ---
 

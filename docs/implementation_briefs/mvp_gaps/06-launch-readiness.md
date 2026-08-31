@@ -3,6 +3,10 @@
 > **Prerequisite:** Briefs 00–05 are fully merged and green. All M0–M5 exit gates are met. The
 > activation-funnel telemetry from brief 03 is instrumented and confirmed flowing in staging.
 >
+> **Live status:** Track evidence and GO/NO-GO in
+> [`06-launch-readiness-findings.md`](06-launch-readiness-findings.md) (refreshed **2026-07-28**).
+> This brief is the contract; the findings doc is the scorecard.
+>
 > **Scope:** Security/RLS review; production secrets configuration; minimal crash/error monitoring
 > wired; reconnect support runbook; iOS + Android dual-platform release QA gate. This brief is the
 > **launch go/no-go document**. Every checkbox below must be ticked before submitting to TestFlight
@@ -108,18 +112,15 @@ cold-start arc is verified on real iOS and Android devices.
 
 **2a. Secrets backend selection**
 
-- `backend/app.py` lines 177–214 implement a waterfall: AWS Secrets Manager (if
-  `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` are set) → Supabase Vault (if
-  `admin_client` is available) → `MockSecretsService` (fallback).
-- **Exactly one** of AWS Secrets Manager or Supabase Vault must be configured for production.
-  `MockSecretsService` must never be reached in production. Add a startup assertion in
-  `ProductionConfig.validate()`:
-  ```python
-  # Verify a real secrets backend is reachable at startup
-  # (checked by the app factory; ensure MOCK log line never appears in prod)
-  ```
-  Alternatively: verify the production start-up log contains either `"AWS Secrets Manager
-  initialized"` or `"Using Supabase Vault Service"` and never `"Using mock Secrets Service"`.
+- `backend/app.py` selects **Supabase Vault** when `admin_client` is available (requires
+  `SUPABASE_SERVICE_ROLE_KEY`), otherwise **`MockSecretsService`** in development only.
+- **Production must never use mock:** if `ProductionConfig` is active and Vault is unavailable,
+  startup raises `ConfigurationException` (`"Supabase Vault is required in production"`).
+- Verify production startup log contains `"Using Supabase Vault Service"` and never
+  `"Using mock Secrets Service"`.
+- Vault RPC wrappers live in migration `20260725140329_vault_secrets_rpc_wrappers.sql`
+  (`vault_create_secret`, `vault_get_secret_by_name`, `vault_update_secret_by_name`,
+  `vault_delete_secret_by_name`); executable by `service_role` only.
 
 **2b. No secrets in git or committed .env**
 
@@ -144,12 +145,12 @@ Confirm the following environment variables are non-empty in the production depl
 - `SUPABASE_SERVICE_ROLE_KEY` (or `SUPABASE_SECRET_KEY`)
 - `SUPABASE_JWT_SECRET`
 - `FLASK_SECRET_KEY` (must not equal `"dev-secret-key-change-in-production"` — enforced by
-  `ProductionConfig.validate()` in `backend/config.py` lines 108–111)
+  `ProductionConfig.validate()`). **Unused at runtime today** (not mapped to Flask
+  `SECRET_KEY`; auth is Supabase JWT). Empty is acceptable; only the default literal is rejected.
 - `SPOONACULAR_API_KEY`
 - `OPENAI_API_KEY`
-- Either `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY`, or confirm Supabase Vault RPCs are
-  reachable (`vault_create_secret`, `vault_get_secret_by_name`) via `backend/services/secrets_service.py`
-  `SupabaseVaultService`.
+- Supabase Vault RPCs reachable via `SupabaseVaultService` (migration
+  `20260725140329_vault_secrets_rpc_wrappers.sql`; smoke: store/retrieve/delete a test secret).
 
 **2d. Android `network_security_config.xml` set for production**
 
@@ -180,98 +181,88 @@ Confirm the following environment variables are non-empty in the production depl
 
 ### Area 3 — Crash / Error Monitoring
 
-**3a. Backend: Sentry for Flask**
+**Decision (beta):** **GlitchTip Cloud** hosted free tier at [app.glitchtip.com](https://app.glitchtip.com) (org `meald_team`). Official `sentry-sdk` / `@sentry/react` SDKs point at GlitchTip DSNs — not sentry.io. Self-host compose in `ops/monitoring/` is **deferred until after beta**. Monitoring is **required in production** (`SENTRY_DSN` hard-fail in `ProductionConfig.validate()`).
 
-- Install: `uv add sentry-sdk[flask]`
-- Initialize in `backend/app.py` `create_app()`, immediately after `app = Flask(__name__)` and
-  before any route registration:
-  ```python
-  import sentry_sdk
-  from sentry_sdk.integrations.flask import FlaskIntegration
-  if config.SENTRY_DSN:
-      sentry_sdk.init(
-          dsn=config.SENTRY_DSN,
-          integrations=[FlaskIntegration()],
-          environment=config.FLASK_ENV,
-          traces_sample_rate=0.05,
-          send_default_pii=False,   # PII guard — see Logic Guardrails
-      )
-  ```
-- Add `SENTRY_DSN: Optional[str] = os.getenv("SENTRY_DSN")` to `backend/config.py` `Config`.
-- `send_default_pii=False` is non-negotiable (see Logic Guardrails).
+**3a. Backend: GlitchTip for Flask**
 
-**3b. Frontend: Sentry for React / Capacitor**
+- Install: `uv add "sentry-sdk[flask]"`
+- Initialize via `backend/utils/monitoring.py` `init_monitoring(config)` in `create_app()` after config load.
+- Add to `backend/config.py` `Config`: `SENTRY_DSN`, `SENTRY_ENVIRONMENT`, `SENTRY_TRACES_SAMPLE_RATE`, `SENTRY_RELEASE`.
+- `ProductionConfig.validate()` requires `SENTRY_DSN` in production.
+- `send_default_pii=False`, `max_request_body_size="never"`, and `before_send` PII scrubber are non-negotiable.
+- Correlation: `X-Request-Id` middleware; echoed in error JSON as `request_id`.
+- Test event: `uv run python backend/scripts/send_test_event.py`
 
-- Install: `npm install @sentry/capacitor @sentry/react`
-- Initialize in `frontend/src/main.jsx` `bootstrap()`, before `ReactDOM.createRoot(...)`:
-  ```js
-  import * as Sentry from "@sentry/capacitor";
-  if (import.meta.env.VITE_SENTRY_DSN) {
-    Sentry.init({
-      dsn: import.meta.env.VITE_SENTRY_DSN,
-      environment: import.meta.env.MODE,
-      // No user PII — see Logic Guardrails
-    });
-  }
-  ```
-- Add `VITE_SENTRY_DSN` to the production environment / CI build secrets. Do not commit the value.
-- Monitoring is optional at launch (feature-flagged via DSN presence) but strongly recommended.
+**3b. Frontend: GlitchTip for React (Capacitor WebView)**
+
+- Install: `npm install @sentry/react` (not `@sentry/capacitor` — native symbolication unsupported by GlitchTip)
+- Initialize in `frontend/src/main.jsx` via `initMonitoring()` before `bootstrap()`.
+- Wrap `<App />` in `AppErrorBoundary`.
+- Add `VITE_SENTRY_DSN` to production build secrets. `VITE_APP_RELEASE` injected from git SHA in `vite.config.js`.
+- Upload source maps: `npm run monitoring:upload-sourcemaps` (requires `@sentry/cli` + GlitchTip auth token).
+
+**Infra:** GlitchTip Cloud for beta. Self-host option (`ops/monitoring/docker-compose.glitchtip.yml`) documented as deferred in `ops/monitoring/README.md`.
 
 **3c. Activation-funnel telemetry (from brief 03)**
 
-- Confirm the funnel events instrumented in brief 03 are flowing to the analytics endpoint in
-  staging: connect → sync complete → staples confirmed → first suggestion → first cook.
-- Run `backend/scripts/test_rls_endpoints.py` in staging; confirm no funnel events include raw
-  tokens or user-identifiable content beyond a hashed/opaque user ID.
+- Migration `20260725150000_funnel_events.sql` creates `funnel_events` + `funnel_conversion` view.
+- `POST /api/telemetry/funnel` ingests batched events; identity from JWT only.
+- Client: `funnelTelemetry.js` offline-first queue with `flush()` on emit + app foreground.
+- Verify in staging: emit all six funnel events, then `SELECT * FROM funnel_conversion;` — no PII columns.
 
 ---
 
 ### Area 4 — Reconnect Support Runbook
 
+**Canonical runbook:** [`docs/runbooks/reconnect.md`](../../runbooks/reconnect.md) (repo home of record; optional Notion paste).
+
 **4a. Symptom identification**
 
 A user reports: "my pantry isn't updating" or "the app says I need to reconnect my store."
 
-Backend indicators:
-- `grocery_accounts.connection_status` (schema: `001_initial_schema`) contains `needs_reconnect`
-  for the user's provider row.
-- The `needs_reconnect` signal is set by the idempotency/health logic from brief 01c
-  (`backend/routes/providers.py`, `/api/providers/<name>/status`).
-- Server logs show `expired_credentials` or HTTP 401/403 from the provider API for that user.
+- **Meald auth** (Supabase) is usually still valid; the **store** session expired.
+- **Frontend indicators:** amber **Reconnect {Store}** banner on `/providers`, edge toast
+  (`SyncToastHost`), or dashboard **Needs attention** (`NeedsAttentionSection`).
+- **Backend indicators (engineering only):** logs show `expired_credentials`, `Reconnect required
+  for {provider}`, or HTTP 401/403 from the provider API. Costco `connect-from-app` may return
+  401 JSON with `needs_reconnect: true` via `_reconnect_response()` in
+  `backend/routes/providers.py`.
 
-Frontend indicators:
-- `frontend/src/contexts/AuthContext.jsx`: user session still valid (Supabase auth is fine).
-- The reconnect UX from brief 01a is visible: a banner or modal on the home/sync screen indicating
-  the specific provider needs attention.
+**Do not** query `grocery_accounts.connection_status` — that column does not exist (brief 01c).
 
 **4b. Standardized `needs_reconnect` signal**
 
-The signal originates in `backend/routes/providers.py` `/api/providers/<provider>/status` and is
-set in `grocery_accounts.connection_status` by the sync health logic (brief 01c). The frontend
-reads this on app foreground via the auto-sync scheduler (brief 01b) and surfaces the reconnect
-prompt from brief 01a.
+Reconnect is **transient**, not persisted in Postgres (brief 01c):
+
+- **Client path (primary):** foreground auto-sync scheduler (`useAppSyncScheduler.js`) detects auth
+  failure → dispatches `<provider>-sync-needs-reconnect` → brief 01a UI surfaces reconnect.
+  Attention may persist on-device in Capacitor Preferences (`sync_attention`), not in the database.
+- **Server path (Costco only today):** `_reconnect_response()` returns 401 JSON:
+  `{ "error", "needs_reconnect": true, "provider", "reason" }` with
+  `reason` ∈ `expired_credentials` | `token_refresh_failed` | `bot_detection`.
+- **`GET /api/providers/<name>/status`** returns `configured` / `active` only — not a reconnect flag.
 
 **4c. Operator resolution steps**
 
 1. Ask the user: which store? (Safeway or Costco)
 2. Confirm the user can reach the store's website from a browser (rules out network/geo block).
-3. Direct the user to: **Settings → Connected Stores → [Store Name] → Reconnect**.
-4. The reconnect flow re-authenticates via the native WebView bridge and writes new
-   credentials/tokens to `grocery_accounts` and the secrets vault
+3. Direct the user to **`/providers`** via either:
+   - **Dashboard** → **Needs attention** → **Reconnect**, or
+   - **Settings** → **Connected Stores** → **Manage**
+4. On Providers: tap **Reconnect {Store}** (banner) or Connect/Sync → complete WebView sign-in.
+   New credentials/tokens go to `grocery_accounts` and Supabase Vault
    (`backend/services/secrets_service.py`).
-5. After reconnect, trigger a manual "Sync Now" from the same screen.
-6. If the error recurs within 24 hours, escalate — the store may have changed its auth flow
-   (bot-detection regression). Check backend logs for HTTP 403 from the provider and open a
-   provider-maintenance issue.
+5. After reconnect, trigger **Sync Now** from the same screen if pantry is still stale.
+6. If banner was dismissed but pantry is stale, still send user to `/providers` → Reconnect/Sync.
+7. If the error recurs within 24 hours, escalate — open a provider-maintenance issue; see runbook.
 
 **4d. Safeway vs. Costco reconnect differences**
 
-- **Safeway**: WebView bridge login — user re-enters Safeway credentials. Session cookie is
-  refreshed and stored in the secrets vault.
-- **Costco**: One-Tap token refresh — user re-authenticates via the Costco One-Tap WebView.
-  Token stored in `grocery_accounts` and the secrets vault via `SupabaseVaultService` or AWS.
-  Check `providers/costco_provider.py` token-refresh logic and `backend/routes/providers.py`
-  `/api/providers/costco/connect-from-app` if the automatic refresh path failed.
+- **Safeway**: WebView bridge login — user re-enters Safeway credentials. Session cookie stored in
+  Supabase Vault. Auth failures detected client-side by silent sync heuristics.
+- **Costco**: One-Tap WebView — user re-authenticates via Costco One-Tap. Token stored in vault via
+  `POST /api/providers/costco/connect-from-app`. Check `_reconnect_response()` reasons and
+  `providers/costco_provider.py` token-refresh logic if automatic refresh failed.
 
 ---
 
@@ -429,16 +420,16 @@ def test_mock_secrets_service_not_used_in_production(caplog):
 
 ### Manual device smoke checklist (iOS + Android)
 
-Run on a **physical device** (not simulator) for each platform before submitting builds:
+Run on a **physical device** (not simulator) for each platform before submitting builds.
+**Target API for friends-beta builds:** `https://api.meald.app` (see `frontend/.env.production`).
 
 - [ ] Fresh install completes cold-start arc in < 3 minutes.
 - [ ] No crash or native exception in Xcode Organizer (iOS) / Android Logcat during cold-start.
-- [ ] Sentry receives a test event (`sentry_sdk.capture_message("launch-readiness-smoke-test")`
-      on backend; `Sentry.captureMessage(...)` on frontend) — confirms DSN is live.
+- [x] GlitchTip receives a test event (backend + frontend) — Cloud smoke 2026-07-28; operator confirmed
 - [ ] App foreground auto-sync fires; no "reconnect" prompt appears on a freshly-connected account.
-- [ ] Forced reconnect scenario (manually set `grocery_accounts.connection_status = 'needs_reconnect'`
-      in Supabase): foreground app, confirm reconnect banner appears, tap it, complete reconnect,
-      confirm banner dismisses and sync succeeds.
+- [ ] Forced reconnect scenario (clear/expire provider tokens on device → foreground app; see
+      [`docs/runbooks/reconnect.md`](../../runbooks/reconnect.md)): confirm reconnect banner appears,
+      tap Reconnect, complete WebView login, confirm banner dismisses and sync succeeds.
 - [ ] `network_security_config.xml` LAN IP absent from release build (Android).
 - [ ] Recipe suggestions load in < 2 seconds from warm pool.
 - [ ] "I cooked this" depletes pantry correctly.
@@ -450,54 +441,60 @@ Run on a **physical device** (not simulator) for each platform before submitting
 
 ## Definition of Done
 
+> **Operator scorecard:** checked items reflect evidence in
+> [`06-launch-readiness-findings.md`](06-launch-readiness-findings.md) as of **2026-07-28**.
+> Unchecked items still block GO.
+
 ### Security / RLS
 
-- [ ] SQL audit query returns zero tables with `rls_enabled = false`.
-- [ ] `RLS_CROSS_USER_PANTRY_ISOLATION` test passes.
-- [ ] `RLS_CROSS_USER_GROCERY_ACCOUNTS_ISOLATION` test passes.
-- [ ] `RLS_ANON_ROLE_BLOCKED` test passes.
-- [ ] `JWT_SECRET_REQUIRED_IN_PRODUCTION` test passes (startup fails without `SUPABASE_JWT_SECRET`).
-- [ ] `DEPRECATED_SAFEWAY_ROUTES_RETURN_410` test passes.
-- [ ] `CORS_LOCALHOST_BLOCKED_IN_PRODUCTION` test passes.
+- [x] SQL audit query returns zero tables with `rls_enabled = false`.
+- [x] `RLS_CROSS_USER_PANTRY_ISOLATION` test passes. *(live SQL + audit script 2026-07-24)*
+- [x] `RLS_CROSS_USER_GROCERY_ACCOUNTS_ISOLATION` test passes.
+- [x] `RLS_ANON_ROLE_BLOCKED` test passes.
+- [x] `JWT_SECRET_REQUIRED_IN_PRODUCTION` test passes (startup fails without `SUPABASE_JWT_SECRET`).
+- [x] Deprecated Safeway Playwright routes unavailable (404 after brief 00a; former 410 expectation superseded).
+- [x] `CORS_LOCALHOST_BLOCKED_IN_PRODUCTION` test passes; prod `CORS_ORIGINS=capacitor://localhost`.
 
 ### Secrets
 
 - [ ] `NO_SECRETS_IN_BUNDLE` CI grep returns zero matches.
-- [ ] No `.env` file with real secrets is tracked by git (`git check-ignore` confirms).
-- [ ] Production startup log contains `"AWS Secrets Manager initialized"` OR `"Using Supabase Vault Service"` — never `"Using mock Secrets Service"`.
-- [ ] `MOCK_SECRETS_BLOCKED_IN_PRODUCTION` test passes.
-- [ ] All required env vars in Area 2c are confirmed non-empty in the production deploy.
-- [ ] `network_security_config.xml` LAN IP `192.168.50.57` removed; file committed clean.
-- [ ] iOS `Info.plist` contains no `NSAllowsArbitraryLoads = YES` in the release build.
+- [x] No `.env` file with real secrets is tracked by git (`git check-ignore` confirms).
+- [x] Production readiness: Vault in use (`/api/health/ready` → `secrets_backend: ok` on Fly 2026-07-28).
+- [x] `MOCK_SECRETS_BLOCKED_IN_PRODUCTION` test passes.
+- [x] All required env vars in Area 2c are confirmed non-empty in the production deploy (shared DEV=PROD + Fly secrets).
+- [x] `network_security_config.xml` LAN IP `192.168.50.57` removed; file committed clean.
+- [x] iOS `Info.plist` contains no `NSAllowsArbitraryLoads = YES` in the release build.
 
 ### Monitoring
 
-- [ ] Sentry backend DSN set; test event received in Sentry project.
-- [ ] Sentry frontend DSN set; test event received in Sentry project.
-- [ ] `send_default_pii=False` confirmed in backend Sentry init.
-- [ ] Activation-funnel telemetry (brief 03) confirmed flowing in staging with no PII in payloads.
+- [x] GlitchTip backend DSN set; test event received (`meald-backend` / 26280).
+- [x] GlitchTip frontend DSN set; test event received (`meald-frontend` / 26281).
+- [x] `send_default_pii=False` confirmed in backend + frontend init.
+- [ ] Activation-funnel telemetry (brief 03) confirmed flowing in prod (`SELECT * FROM funnel_conversion`).
+- [x] UptimeRobot on `https://api.meald.app/api/health` (2026-07-28).
 
 ### Reconnect Runbook
 
-- [ ] This brief's Area 4 runbook is accessible to the support team (linked from internal ops wiki
-      or Notion).
-- [ ] Forced-reconnect smoke test passes on both iOS and Android (manual checklist item).
+- [x] [`docs/runbooks/reconnect.md`](../../runbooks/reconnect.md) published and accessible to support
+      (repo home of record; optional Notion/wiki paste).
+- [ ] Forced-reconnect smoke test passes on both iOS and Android (manual checklist item; primary path:
+      token expiry on device per runbook).
 
 ### Dual-Platform QA
 
-- [ ] Cold-start arc verified on physical iOS device (TestFlight internal).
-- [ ] Cold-start arc verified on physical Android device (internal track).
+- [ ] Cold-start arc verified on physical iOS device (TestFlight internal) **against prod API**.
+- [ ] Cold-start arc verified on physical Android device (internal track) **against prod API**.
 - [ ] Auto-sync on-by-default verified on both platforms (fires on foreground, no silent failure).
 - [ ] Forced-reconnect scenario verified on both platforms.
 - [ ] No crashes in Xcode Organizer or Android Logcat during full smoke session.
 
 ### Logic Audit
 
-- [ ] **RLS deny-by-default:** confirmed via `pg_class` query — zero tables without RLS in public schema.
-- [ ] **No PII in monitoring:** Sentry `send_default_pii=False`; grep of Sentry test events confirms no email/name/token fields.
+- [x] **RLS deny-by-default:** confirmed via `pg_class` query — zero tables without RLS in public schema.
+- [x] **No PII in monitoring:** `send_default_pii=False`; scrubbers tested.
 - [ ] **No secrets in client bundle:** `NO_SECRETS_IN_BUNDLE` grep passes on release build artifacts.
-- [ ] **JWT enforced in production:** `JWT_SECRET_REQUIRED_IN_PRODUCTION` test passes; `X-User-Id` header fallback unreachable in production env.
-- [ ] **Mock secrets blocked:** `MOCK_SECRETS_BLOCKED_IN_PRODUCTION` test passes; production log confirms.
-- [ ] **Auto-sync failures are never silent:** code review of brief 01b sync scheduler confirms all exception paths either surface a user prompt or call `Sentry.captureException`.
-- [ ] **Deprecated routes stay at 410:** `DEPRECATED_SAFEWAY_ROUTES_RETURN_410` passes; `rg "providers/safeway/(test|fetch-receipts|login)" frontend/src/` returns zero matches.
-- [ ] **`anon` role has zero grants:** `\dp` output for all public tables shows no `anon` permission entries.
+- [x] **JWT enforced in production:** assert + Fly secret; unauthenticated receipts → 401.
+- [x] **Mock secrets blocked:** test + live readiness.
+- [ ] **Auto-sync failures are never silent:** device-verify Area 5 (code paths report errors / reconnect).
+- [x] **Deprecated routes stay gone:** 404 after 00a; no client calls to removed Safeway Playwright paths.
+- [x] **`anon` role has zero grants on sensitive tables:** post-025; `app_config` SELECT exception accepted.

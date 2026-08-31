@@ -6,6 +6,8 @@ import sys
 from datetime import datetime
 from typing import Any, Dict
 
+from backend.utils.request_context import RequestIdLogFilter
+
 
 class JSONFormatter(logging.Formatter):
     """Format logs as JSON for structured logging"""
@@ -56,6 +58,7 @@ def setup_logger(name: str, level: str = "INFO") -> logging.Logger:
     # Console handler with JSON formatting
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JSONFormatter())
+    handler.addFilter(RequestIdLogFilter())
     logger.addHandler(handler)
     
     # Prevent propagation to root logger
@@ -81,6 +84,7 @@ def get_logger(name: str) -> logging.Logger:
         # Add console handler with JSON formatting
         handler = logging.StreamHandler(sys.stdout)
         handler.setFormatter(JSONFormatter())
+        handler.addFilter(RequestIdLogFilter())
         logger.addHandler(handler)
         
         # Don't propagate to avoid duplicate logs

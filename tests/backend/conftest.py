@@ -18,8 +18,6 @@ class TestConfig(Config):
     SUPABASE_URL = None
     SUPABASE_KEY = None
     SUPABASE_SERVICE_ROLE_KEY = None
-    AWS_ACCESS_KEY_ID = None
-    AWS_SECRET_ACCESS_KEY = None
     OPENAI_API_KEY = None
     OPENAI_MODEL = "gpt-4o-mini"
     OPENAI_BATCH_SIZE = 20

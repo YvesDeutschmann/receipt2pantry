@@ -197,4 +197,45 @@ describe('funnelTelemetry', () => {
     expect(typeof window.__funnelTelemetry.getSessionId).toBe('function')
     expect(mod.getSessionId()).toBe(window.__funnelTelemetry.getSessionId())
   })
+
+  it('FLUSH_SKIPS_WITHOUT_SESSION', async () => {
+    vi.doMock('../supabaseClient.js', () => ({
+      supabase: {
+        auth: {
+          getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
+        },
+      },
+    }))
+    vi.resetModules()
+    const { emit, flush, FunnelEvent } = await import('../funnelTelemetry.js')
+    await emit(FunnelEvent.SIGN_IN, 'user-uuid-1', {}, { now: 1000 })
+    const result = await flush()
+    expect(result).toEqual({ sent: 0, skipped: 0 })
+  })
+
+  it('FLUSH_MARKS_EVENTS_SENT_ON_SUCCESS', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200 })
+    vi.stubGlobal('fetch', fetchMock)
+    vi.doMock('../supabaseClient.js', () => ({
+      supabase: {
+        auth: {
+          getSession: vi.fn().mockResolvedValue({
+            data: { session: { access_token: 'token-abc' } },
+          }),
+        },
+      },
+    }))
+    vi.doMock('../apiClient.js', () => ({
+      initApiBaseUrl: vi.fn().mockResolvedValue(undefined),
+      getEffectiveApiBaseUrl: vi.fn().mockReturnValue({ url: 'http://localhost:5000/api' }),
+    }))
+    vi.resetModules()
+    const { emit, flush, dump, FunnelEvent } = await import('../funnelTelemetry.js')
+    await emit(FunnelEvent.SIGN_IN, 'user-uuid-1', {}, { now: 1000 })
+    const result = await flush()
+    expect(result.sent).toBe(1)
+    const events = await dump()
+    expect(events[0].sent).toBe(true)
+    expect(fetchMock).toHaveBeenCalled()
+  })
 })

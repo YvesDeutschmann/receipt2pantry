@@ -22,9 +22,13 @@ def get_receipts():
         limit: Maximum number of receipts (default 50)
     """
     try:
-        user_id = request.args.get("user_id")
+        user_id = get_user_id_from_request()
         if not user_id:
-            return jsonify({"error": "user_id is required"}), 400
+            return jsonify({"error": "User ID required"}), 401
+        try:
+            uuid.UUID(user_id)
+        except (ValueError, TypeError):
+            return jsonify({"error": "User ID required"}), 401
         
         # Validate and constrain limit parameter
         try:
@@ -110,16 +114,16 @@ def ingest_receipts():
         data = request.get_json() or {}
         provider = data.get("provider")
         receipts = data.get("receipts") or data.get("receipt_data") or []
-        user_id = data.get("user_id") or data.get("userId")
+        user_id = get_user_id_from_request()
 
         if not provider or provider not in ("safeway", "costco"):
             return jsonify({"error": "provider is required and must be 'safeway' or 'costco'"}), 400
-        if not user_id or user_id.strip() in ("", "anonymous"):
-            return jsonify({"error": "user_id is required and must be a valid UUID"}), 400
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 401
         try:
             uuid.UUID(user_id)
         except (ValueError, TypeError):
-            return jsonify({"error": "user_id is required and must be a valid UUID"}), 400
+            return jsonify({"error": "User ID required"}), 401
         if not isinstance(receipts, list):
             return jsonify({"error": "receipts must be an array"}), 400
 

@@ -9,8 +9,7 @@ Before you begin, make sure you have:
 - **Python 3.11+** installed
 - **Node.js 18+** and npm installed
 - **uv** package manager installed (`pip install uv`)
-- A **Supabase** account (optional for development, required for production)
-- An **AWS** account (optional for development, required for production)
+- A **Supabase** account (required for database and credential vault)
 
 ## Step 1: Clone and Install Dependencies
 
@@ -35,7 +34,7 @@ cd ..
 cp .env.example .env
 
 # Edit .env with your configuration
-# For development, you can leave AWS credentials empty (will use mock service)
+# Set SUPABASE_SERVICE_ROLE_KEY to use Supabase Vault; without it, dev uses an in-memory mock
 ```
 
 **Minimum configuration for local development:**
@@ -44,14 +43,10 @@ FLASK_ENV=development
 FLASK_SECRET_KEY=your-development-secret-key
 FLASK_PORT=5000
 
-# Leave Supabase empty for testing without database
+# Set all three Supabase keys to enable Vault; omit service role for mock-only dev
 SUPABASE_URL=
 SUPABASE_KEY=
 SUPABASE_SERVICE_ROLE_KEY=
-
-# Leave AWS empty for mock credentials service
-AWS_ACCESS_KEY_ID=
-AWS_SECRET_ACCESS_KEY=
 
 LOG_LEVEL=DEBUG
 ```
@@ -154,17 +149,23 @@ Expected response:
 
 ## Production Deployment
 
-For production deployment:
+Production runs on **Fly.io** at `https://api.meald.app` (live since 2026-07-28).
 
-1. Set `FLASK_ENV=production`
-2. Generate a strong `FLASK_SECRET_KEY`
-3. Configure proper Supabase production database
-4. Set up AWS Secrets Manager for credential storage
-5. Enable HTTPS
-7. Configure proper CORS origins
-8. Set up monitoring and logging
+See the full runbook: **[docs/runbooks/deploy.md](docs/runbooks/deploy.md)** — Dockerfile, gunicorn, `fly secrets`, custom domain (Namecheap DNS), redeploy, rollback, and smoke checklist.
 
-See the main README for more details on production deployment.
+Related ops docs:
+
+- Monitoring (GlitchTip + UptimeRobot): [docs/runbooks/monitoring.md](docs/runbooks/monitoring.md)
+- Reconnect support: [docs/runbooks/reconnect.md](docs/runbooks/reconnect.md)
+- Launch status: [docs/implementation_briefs/mvp_gaps/06-launch-readiness-findings.md](docs/implementation_briefs/mvp_gaps/06-launch-readiness-findings.md)
+
+Quick summary:
+
+1. `FLASK_ENV=production` with all required secrets (`SUPABASE_JWT_SECRET`, `SENTRY_DSN`, Supabase keys, `FLASK_SECRET_KEY`)
+2. `CORS_ORIGINS=capacitor://localhost` (no localhost/LAN origins)
+3. `fly deploy` from repo root
+4. Release mobile builds with `VITE_API_BASE_URL=https://api.meald.app/api` (baked via `frontend/.env.production`)
+5. Feature flags default off for MVP: meal planner (`FEATURE_MEAL_PLANNER` / `VITE_FEATURE_MEAL_PLANNER`), email auth (`VITE_FEATURE_EMAIL_AUTH`)
 
 ## Getting Help
 
