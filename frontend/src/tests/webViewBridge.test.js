@@ -1075,7 +1075,7 @@ describe('webViewBridge contract', () => {
         data: {
           fired: true,
           status: 400,
-          policy: 'b2c_1a_sso_wcs_signup_signin_209',
+          policy: 'b2c_1a_test_policy',
           error: 'invalid_grant',
           errorDescription: 'expired token',
           source: 'fetch',
@@ -1084,7 +1084,7 @@ describe('webViewBridge contract', () => {
       expect(flat).toMatchObject({
         tokenFired: true,
         tokenStatus: 400,
-        tokenPolicy: 'b2c_1a_sso_wcs_signup_signin_209',
+        tokenPolicy: 'b2c_1a_test_policy',
         tokenError: 'invalid_grant',
       })
     })
