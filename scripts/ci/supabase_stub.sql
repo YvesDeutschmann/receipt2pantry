@@ -70,6 +70,67 @@ GRANT USAGE ON SCHEMA auth TO anon, authenticated, service_role;
 GRANT SELECT ON auth.users TO anon, authenticated, service_role;
 GRANT USAGE ON SCHEMA public TO anon, authenticated, service_role;
 
+-- supabase_vault is not packaged on vanilla Postgres. Stub the schema the
+-- vault RPC migration wraps so CI can apply it without the real extension.
+CREATE SCHEMA IF NOT EXISTS vault;
+
+CREATE TABLE IF NOT EXISTS vault.secrets (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  name text UNIQUE,
+  description text,
+  secret text,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
+
+CREATE OR REPLACE VIEW vault.decrypted_secrets AS
+SELECT id, name, description, secret AS decrypted_secret, created_at, updated_at
+FROM vault.secrets;
+
+CREATE OR REPLACE FUNCTION vault.create_secret(
+  new_secret text,
+  new_name text DEFAULT NULL,
+  new_description text DEFAULT NULL,
+  new_key_id uuid DEFAULT NULL
+)
+RETURNS uuid
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  new_id uuid;
+BEGIN
+  INSERT INTO vault.secrets (name, description, secret)
+  VALUES (new_name, new_description, new_secret)
+  RETURNING id INTO new_id;
+  RETURN new_id;
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION vault.update_secret(
+  secret_id uuid,
+  new_secret text DEFAULT NULL,
+  new_name text DEFAULT NULL,
+  new_description text DEFAULT NULL,
+  new_key_id uuid DEFAULT NULL
+)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  UPDATE vault.secrets s
+  SET
+    secret = COALESCE(new_secret, s.secret),
+    name = COALESCE(new_name, s.name),
+    description = COALESCE(new_description, s.description),
+    updated_at = now()
+  WHERE s.id = secret_id;
+END;
+$$;
+
+GRANT USAGE ON SCHEMA vault TO service_role;
+GRANT SELECT, INSERT, UPDATE, DELETE ON vault.secrets TO service_role;
+GRANT SELECT ON vault.decrypted_secrets TO service_role;
+
 -- Supabase default privileges for objects created by postgres in public
 ALTER DEFAULT PRIVILEGES IN SCHEMA public
   GRANT ALL ON TABLES TO postgres, anon, authenticated, service_role;

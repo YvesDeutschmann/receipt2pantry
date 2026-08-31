@@ -1,7 +1,17 @@
 -- Supabase Vault RPC wrappers for backend grocery credential storage.
 -- Callable only via service_role (admin_client). Matches SupabaseVaultService in secrets_service.py.
 
-create extension if not exists supabase_vault with schema vault;
+-- Real Supabase has supabase_vault. CI applies scripts/ci/supabase_stub.sql
+-- (vault schema + functions) on vanilla Postgres, where the extension is absent.
+do $$
+begin
+  if exists (select 1 from pg_available_extensions where name = 'supabase_vault') then
+    execute 'create extension if not exists supabase_vault with schema vault';
+  elsif not exists (select 1 from pg_namespace where nspname = 'vault') then
+    raise exception 'supabase_vault is not installed; enable Vault in the Supabase dashboard';
+  end if;
+end
+$$;
 
 -- Replace any prior versions (signatures/return types may differ).
 drop function if exists public.vault_create_secret(text, text, text);
