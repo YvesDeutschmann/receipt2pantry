@@ -82,7 +82,9 @@ This endpoint is implemented in `backend/routes/providers.py` and calls `_store_
 ## Risk notes
 
 - **Akamai**: Fetching from device with real browser cookies should avoid bot detection; rapid polling of localStorage could be tuned if needed.
-- **Token refresh**: B2C `client_id` and policy are hardcoded; works with Costco's current config.
+- **Token refresh**: B2C `client_id` is fixed; user-flow **policy** is read from the idToken JWT
+  (`tfp`, falling back to `acr`; last-resort `b2c_1a_sso_wcs_signup_signin_209`) in
+  `CostcoProvider._get_b2c_token_endpoint`.
 - **Hidden WebView**: 1x1 off-screen WebView may behave differently on iOS vs Android; validate per platform.
 - **Cookie persistence**: WebView cookie jar should persist "Remember Me"; verify across app restarts.
 

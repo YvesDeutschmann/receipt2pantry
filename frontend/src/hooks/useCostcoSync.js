@@ -5,10 +5,22 @@
 
 import { useState, useCallback } from 'react';
 import { Capacitor } from '@capacitor/core';
-import { hasStoredTokens, startLogin, startSilentSync, clearStoredTokens, clearCostcoInAppBrowserSession } from '../services/costcoWebViewBridge';
+import { hasStoredTokens, startLogin, startSilentSync, clearStoredTokens, clearCostcoInAppBrowserSession, clearCostcoReconnectCooldown } from '../services/costcoWebViewBridge';
 import { submitToBackend } from '../services/costcoNativeSync';
+import { submitSilentReceipts } from '../services/costcoSilentIngest';
 import { api } from '../services/apiClient';
 import { dispatchProviderSyncCompleted } from '../services/providerSyncEvents';
+import {
+  COSTCO_RECONNECT_MESSAGE,
+  COSTCO_FETCH_MISS_MESSAGE,
+  classifyCostcoSilentResult,
+  isTransientCostcoFailure,
+} from '../services/costcoSilentSyncOutcome';
+import {
+  logPhase,
+  reportAnomaly,
+  SyncPhase,
+} from '../services/syncEventLog';
 
 const LOG_PREFIX = '[CostcoSync]';
 const STATUS = {
@@ -72,7 +84,17 @@ export function useCostcoSync(userId) {
       }
 
       setStatus(STATUS.SUBMITTING);
-      const finalBackend = await submitToBackend(receipts, userId);
+      void logPhase('costco', SyncPhase.INGEST_STARTED, { mode: 'login' });
+      let finalBackend;
+      try {
+        finalBackend = await submitToBackend(receipts, userId);
+      } catch (ingestErr) {
+        void reportAnomaly('costco', SyncPhase.INGEST_FAILED, {
+          mode: 'login',
+          reason: ingestErr?.message || String(ingestErr),
+        });
+        throw ingestErr;
+      }
       const itemsAddedCostco = finalBackend.items_added_to_pantry ?? 0;
       if (itemsAddedCostco > 3) {
         void api.suggestions
@@ -82,6 +104,7 @@ export function useCostcoSync(userId) {
       if (userId && tokens) {
         try {
           await api.connectCostcoFromApp(userId, tokens);
+          await clearCostcoReconnectCooldown();
         } catch (connectErr) {
           console.warn(`${LOG_PREFIX} connect-from-app failed (tokens not stored on backend):`, connectErr?.message || connectErr);
         }
@@ -98,6 +121,13 @@ export function useCostcoSync(userId) {
         receipts_stored: finalBackend.receipts_stored ?? receipts.length,
         items_added: itemsAddedCostco,
       });
+      void logPhase('costco', SyncPhase.SYNC_SUCCEEDED, {
+        mode: 'login',
+        metadata: {
+          receipts_stored: finalBackend.receipts_stored ?? receipts.length,
+          items_added: itemsAddedCostco,
+        },
+      });
       setStatus(STATUS.SUCCESS);
       setHasStoredTokensState(true);
     } catch (err) {
@@ -105,6 +135,10 @@ export function useCostcoSync(userId) {
       const isTokenError = /token.*invalid|token.*expired|401|403|65535|in-webview fetch/i.test(msg);
       const isLoopError = /redirect loop|stuck in a redirect loop|finish connecting your account/i.test(msg);
       console.error(`${LOG_PREFIX} startSync failed`, err?.message || err, err);
+      void reportAnomaly('costco', SyncPhase.SYNC_FAILED, {
+        mode: 'login',
+        reason: msg,
+      });
       if (isTokenError || isLoopError) {
         await clearStoredTokens();
         await clearCostcoInAppBrowserSession().catch(() => {});
@@ -133,8 +167,31 @@ export function useCostcoSync(userId) {
     try {
       setStatus(STATUS.FETCHING);
       const result = await startSilentSync();
-      if (!result) {
+      const outcome = classifyCostcoSilentResult(result);
+
+      if (outcome === 'skipped') {
+        setStatus(STATUS.IDLE);
+        return;
+      }
+
+      if (outcome === 'timeout') {
         setError('Sync timed out. Check your connection and try again.');
+        setStatus(STATUS.ERROR);
+        return;
+      }
+
+      if (outcome === 'needs_reconnect') {
+        await clearStoredTokens();
+        await clearCostcoInAppBrowserSession().catch(() => {});
+        setHasStoredTokensState(false);
+        setError(COSTCO_RECONNECT_MESSAGE);
+        setStatus(STATUS.ERROR);
+        window.dispatchEvent(new CustomEvent('costco-sync-needs-reconnect'));
+        return;
+      }
+
+      if (outcome === 'tokens_only') {
+        setError(COSTCO_FETCH_MISS_MESSAGE);
         setStatus(STATUS.ERROR);
         return;
       }
@@ -142,7 +199,19 @@ export function useCostcoSync(userId) {
       const receipts = result.receipts ?? [];
       if (receipts.length > 0) {
         setStatus(STATUS.SUBMITTING);
-        const finalBackend = await submitToBackend(receipts, userId);
+        void logPhase('costco', SyncPhase.INGEST_STARTED, { mode: 'silent' });
+        let finalBackend;
+        try {
+          finalBackend = await submitSilentReceipts(receipts, userId, {
+            getCurrentUserId: () => userId,
+          });
+        } catch (ingestErr) {
+          void reportAnomaly('costco', SyncPhase.INGEST_FAILED, {
+            mode: 'silent',
+            reason: ingestErr?.message || String(ingestErr),
+          });
+          throw ingestErr;
+        }
         const itemsAddedSilent = finalBackend.items_added_to_pantry ?? 0;
         if (itemsAddedSilent > 3) {
           void api.suggestions
@@ -152,6 +221,7 @@ export function useCostcoSync(userId) {
         if (result.idToken || result.accessToken) {
           try {
             await api.connectCostcoFromApp(userId, result);
+            await clearCostcoReconnectCooldown();
           } catch (connectErr) {
             console.warn(`${LOG_PREFIX} connect-from-app failed (silent sync):`, connectErr?.message || connectErr);
           }
@@ -168,28 +238,31 @@ export function useCostcoSync(userId) {
           receipts_stored: finalBackend.receipts_stored ?? receipts.length,
           items_added: itemsAddedSilent,
         });
+        void logPhase('costco', SyncPhase.SYNC_SUCCEEDED, {
+          mode: 'silent',
+          metadata: {
+            receipts_stored: finalBackend.receipts_stored ?? receipts.length,
+            items_added: itemsAddedSilent,
+          },
+        });
+        setStatus(STATUS.SUCCESS);
+        setHasStoredTokensState(true);
       } else {
-        setResult({
-          receipts: [],
-          count: 0,
-          receipts_stored: 0,
-          items_added_to_pantry: 0,
-          errors: [],
-        });
-        dispatchProviderSyncCompleted('costco', {
-          tier: 'silent',
-          receipts_stored: 0,
-          items_added: 0,
-        });
+        setError('No new Costco receipts found.');
+        setStatus(STATUS.ERROR);
       }
-      setStatus(STATUS.SUCCESS);
-      setHasStoredTokensState(true);
     } catch (err) {
       const msg = err?.message || String(err);
       console.error(`${LOG_PREFIX} startSilent failed`, msg);
-      await clearStoredTokens();
-      await clearCostcoInAppBrowserSession().catch(() => {});
-      setHasStoredTokensState(false);
+      void reportAnomaly('costco', SyncPhase.SYNC_FAILED, {
+        mode: 'silent',
+        reason: msg,
+      });
+      if (!isTransientCostcoFailure(err)) {
+        await clearStoredTokens();
+        await clearCostcoInAppBrowserSession().catch(() => {});
+        setHasStoredTokensState(false);
+      }
       setError(msg || 'Failed to fetch receipts.');
       setStatus(STATUS.ERROR);
     }

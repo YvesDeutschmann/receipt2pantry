@@ -1,13 +1,18 @@
 """Tests for Costco provider"""
 
+import base64
+import json
 import pytest
 from unittest.mock import MagicMock, patch
 
 import requests
 
 from backend.providers.costco_provider import (
+    COSTCO_B2C_POLICY_FALLBACK,
+    COSTCO_B2C_TENANT,
     COSTCO_CLIENT_IDENTIFIER,
     CostcoProvider,
+    _b2c_policy_from_payload,
     verify_costco_client_identifier,
 )
 from backend.providers.provider_registry import ProviderRegistry
@@ -83,6 +88,70 @@ def test_costco_provider_cleanup():
     """Test provider cleanup is a no-op"""
     provider = CostcoProvider()
     provider.cleanup()
+
+
+def _unsigned_jwt(payload: dict) -> str:
+    """Build a minimal unsigned JWT for claim/issuer tests."""
+    header = base64.urlsafe_b64encode(json.dumps({"alg": "none"}).encode()).decode().rstrip("=")
+    body = base64.urlsafe_b64encode(json.dumps(payload).encode()).decode().rstrip("=")
+    return f"{header}.{body}.sig"
+
+
+# --- Group F: B2C policy from JWT claims ---
+
+
+def test_b2c_policy_from_payload_uses_tfp_lowercased():
+    policy = _b2c_policy_from_payload({"tfp": "B2C_1A_SSO_WCS_signup_signin_209"})
+    assert policy == "b2c_1a_sso_wcs_signup_signin_209"
+
+
+def test_b2c_policy_from_payload_falls_back_to_acr():
+    policy = _b2c_policy_from_payload({"acr": "b2c_1a_sso_wcs_signup_signin_209"})
+    assert policy == "b2c_1a_sso_wcs_signup_signin_209"
+
+
+def test_b2c_policy_from_payload_uses_fallback_when_claims_missing():
+    assert _b2c_policy_from_payload({}) == COSTCO_B2C_POLICY_FALLBACK
+
+
+def test_b2c_policy_from_payload_rejects_unsafe_tfp():
+    policy = _b2c_policy_from_payload({"tfp": "../evil?x=1"})
+    assert policy == COSTCO_B2C_POLICY_FALLBACK
+
+
+def test_get_b2c_token_endpoint_signin_costco_uses_tfp_from_jwt():
+    provider = CostcoProvider()
+    tenant = COSTCO_B2C_TENANT
+    token = _unsigned_jwt({
+        "iss": f"https://signin.costco.com/{tenant}/v2.0",
+        "tfp": "B2C_1A_SSO_WCS_signup_signin_209",
+    })
+    endpoint = provider._get_b2c_token_endpoint(token)
+    assert "b2c_1a_sso_wcs_signup_signin_209" in endpoint
+    assert "signin_180" not in endpoint
+    assert endpoint == f"https://signin.costco.com/{tenant}/b2c_1a_sso_wcs_signup_signin_209/oauth2/v2.0/token"
+
+
+def test_get_b2c_token_endpoint_b2clogin_uses_acr_from_jwt():
+    provider = CostcoProvider()
+    tenant = COSTCO_B2C_TENANT
+    token = _unsigned_jwt({
+        "iss": f"https://{tenant}.b2clogin.com/{tenant}/v2.0",
+        "acr": "b2c_1a_sso_wcs_signup_signin_209",
+    })
+    endpoint = provider._get_b2c_token_endpoint(token)
+    assert endpoint == (
+        f"https://{tenant}.b2clogin.com/{tenant}/"
+        f"b2c_1a_sso_wcs_signup_signin_209/oauth2/v2.0/token"
+    )
+
+
+def test_get_b2c_token_endpoint_unknown_issuer_uses_fallback_policy():
+    provider = CostcoProvider()
+    token = _unsigned_jwt({"iss": "https://unknown.example.com/"})
+    endpoint = provider._get_b2c_token_endpoint(token)
+    assert COSTCO_B2C_POLICY_FALLBACK in endpoint
+    assert "signin_180" not in endpoint
 
 
 # --- Group A: client-identifier verification (Contentstack mocked) ---

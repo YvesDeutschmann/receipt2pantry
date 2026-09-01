@@ -231,6 +231,7 @@ def connect_costco_from_app():
             "user_id": "uuid",              // Required: must match authenticated user
             "idToken": "eyJ...",            // Required: JWT idToken from WebView
             "clientId": "uuid",             // Optional: clientID from localStorage
+            "wcsClientId": "uuid",          // Optional: WCS client ID
             "refreshToken": "...",          // Optional: refresh token from MSAL
             "refreshTokenClientId": "uuid"   // Optional: client ID for refresh token
         }
@@ -279,14 +280,29 @@ def connect_costco_from_app():
                 credentials["clientId"] = data["clientId"]
             if data.get("clientIdentifier"):
                 credentials["clientIdentifier"] = data["clientIdentifier"]
+            if data.get("wcsClientId"):
+                credentials["wcsClientId"] = data["wcsClientId"]
             if data.get("refreshToken"):
                 credentials["refreshToken"] = data["refreshToken"]
             if data.get("refreshTokenClientId"):
                 credentials["refreshTokenClientId"] = data["refreshTokenClientId"]
+            if data.get("userAgent"):
+                credentials["userAgent"] = data["userAgent"]
 
             secrets_service = current_app.config.get("SECRETS_SERVICE")
             if not secrets_service:
                 return jsonify({"error": "Secrets service not configured"}), 503
+
+            try:
+                existing = secrets_service.retrieve_user_credentials(user_id, "costco")
+                if isinstance(existing, dict):
+                    merged = dict(existing)
+                    for key, value in credentials.items():
+                        if value is not None and value != "":
+                            merged[key] = value
+                    credentials = merged
+            except Exception:
+                pass
 
             vault_key_id = secrets_service.store_user_credentials(
                 user_id=user_id,

@@ -8,6 +8,7 @@ import { useCostcoSync, STATUS } from '../hooks/useCostcoSync';
 import { api } from '../services/apiClient';
 import SyncSuccessAlert from './SyncSuccessAlert';
 import ReconnectBanner from './ReconnectBanner';
+import { COSTCO_RECONNECT_MESSAGE } from '../services/costcoSilentSyncOutcome';
 
 function DevMockCostcoBlock({ userId, onSyncSuccess, className = '' }) {
   const [mockStatus, setMockStatus] = useState('idle');
@@ -88,6 +89,8 @@ export default function CostcoOneTapSync({ userId, className = '', onSyncSuccess
     checkStoredTokens,
     isNative,
   } = useCostcoSync(userId);
+
+  const needsInteractiveRetry = error === COSTCO_RECONNECT_MESSAGE;
 
   const successFiredRef = useRef(false);
 
@@ -182,7 +185,7 @@ export default function CostcoOneTapSync({ userId, className = '', onSyncSuccess
           <p>{error}</p>
           <button
             type="button"
-            onClick={() => (hasStoredTokens ? startSilent() : startSync())}
+            onClick={() => (needsInteractiveRetry ? startSync() : hasStoredTokens ? startSilent() : startSync())}
             className="self-start btn btn-ghost text-sm py-1.5 px-3"
           >
             Retry

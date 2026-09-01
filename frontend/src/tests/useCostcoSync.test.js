@@ -29,11 +29,16 @@ vi.mock('../services/costcoWebViewBridge', () => ({
   startSilentSync: () => mockStartSilentSync(),
   clearStoredTokens: () => mockClearStoredTokens(),
   clearCostcoInAppBrowserSession: () => mockClearCostcoInAppBrowserSession(),
+  clearCostcoReconnectCooldown: vi.fn(() => Promise.resolve()),
 }))
 
 vi.mock('../services/costcoNativeSync', () => ({
   isTokenExpired: vi.fn(() => false),
   submitToBackend: (...args) => mockSubmitToBackend(...args),
+}))
+
+vi.mock('../services/costcoSilentIngest', () => ({
+  submitSilentReceipts: (...args) => mockSubmitToBackend(...args),
 }))
 
 vi.mock('../services/apiClient', () => ({
@@ -335,7 +340,7 @@ describe('useCostcoSync', () => {
       dispatchSpy.mockRestore()
     })
 
-    it('test_startSilent_dispatches_costco_sync_completed_on_zero_receipts', async () => {
+    it('test_startSilent_reports_error_on_zero_receipts', async () => {
       mockStartSilentSync.mockResolvedValue({ receipts: [] })
       const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
       const { result } = renderHook(() => useCostcoSync(userId))
@@ -345,16 +350,12 @@ describe('useCostcoSync', () => {
       })
 
       await waitFor(() => {
-        expect(result.current.status).toBe(STATUS.SUCCESS)
+        expect(result.current.status).toBe(STATUS.ERROR)
       })
 
+      expect(result.current.error).toMatch(/No new Costco receipts/)
       const completedEvents = getCostcoSyncCompletedEvents(dispatchSpy)
-      expect(completedEvents).toHaveLength(1)
-      expect(completedEvents[0].detail).toEqual({
-        tier: 'silent',
-        receipts_stored: 0,
-        items_added: 0,
-      })
+      expect(completedEvents).toHaveLength(0)
 
       dispatchSpy.mockRestore()
     })
@@ -603,7 +604,63 @@ describe('useCostcoSync', () => {
   })
 
   describe('group E — silent path', () => {
-    it('test_startSilent_sets_empty_result_when_no_receipts_returned', async () => {
+    it('test_startSilent_needs_reconnect_clears_tokens', async () => {
+      mockStartSilentSync.mockResolvedValue({ needs_reconnect: true, reason: 'refresh_invalid_grant' })
+      const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+      const { result } = renderHook(() => useCostcoSync(userId))
+
+      await act(async () => {
+        await result.current.startSilent()
+      })
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.ERROR)
+      })
+
+      expect(mockClearStoredTokens).toHaveBeenCalled()
+      expect(mockClearCostcoInAppBrowserSession).toHaveBeenCalled()
+      expect(result.current.hasStoredTokens).toBe(false)
+      expect(result.current.error).toMatch(/session expired/i)
+      const reconnectEvents = dispatchSpy.mock.calls.filter(
+        (c) => c[0]?.type === 'costco-sync-needs-reconnect'
+      )
+      expect(reconnectEvents.length).toBeGreaterThanOrEqual(1)
+      dispatchSpy.mockRestore()
+    })
+
+    it('test_startSilent_needs_reconnect_does_not_dispatch_completed', async () => {
+      mockStartSilentSync.mockResolvedValue({ needs_reconnect: true, reason: 'refresh_invalid_grant' })
+      const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+      const { result } = renderHook(() => useCostcoSync(userId))
+
+      await act(async () => {
+        await result.current.startSilent()
+      })
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.ERROR)
+      })
+
+      const completedEvents = dispatchSpy.mock.calls
+        .map(([event]) => event)
+        .filter((event) => event instanceof CustomEvent && event.type === 'costco-sync-completed')
+      expect(completedEvents).toHaveLength(0)
+      dispatchSpy.mockRestore()
+    })
+
+    it('test_startSilent_skipped_returns_idle', async () => {
+      mockStartSilentSync.mockResolvedValue({ _skipped: true, reason: 'webview_busy' })
+      const { result } = renderHook(() => useCostcoSync(userId))
+
+      await act(async () => {
+        await result.current.startSilent()
+      })
+
+      expect(result.current.status).toBe(STATUS.IDLE)
+      expect(result.current.error).toBeNull()
+    })
+
+    it('test_startSilent_sets_error_when_no_receipts_returned', async () => {
       mockStartSilentSync.mockResolvedValue({ receipts: [] })
 
       const { result } = renderHook(() => useCostcoSync(userId))
@@ -613,20 +670,71 @@ describe('useCostcoSync', () => {
       })
 
       await waitFor(() => {
-        expect(result.current.status).toBe(STATUS.SUCCESS)
+        expect(result.current.status).toBe(STATUS.ERROR)
       })
 
-      expect(result.current.result).toEqual({
-        receipts: [],
-        count: 0,
-        receipts_stored: 0,
-        items_added_to_pantry: 0,
-        errors: [],
-      })
+      expect(result.current.error).toMatch(/No new Costco receipts/)
       expect(mockSubmitToBackend).not.toHaveBeenCalled()
     })
 
-    it('test_startSilent_clears_tokens_on_any_thrown_error', async () => {
+    it('test_startSilent_preserves_tokens_on_network_ingest_error', async () => {
+      const receipts = [{ order_id: 'r1', total_amount: 50, items: [] }]
+      mockStartSilentSync.mockResolvedValue({
+        receipts,
+        idToken: 'token',
+        _fromWebView: true,
+      })
+      mockSubmitToBackend.mockRejectedValue(new Error('Network Error'))
+      mockHasStoredTokens.mockResolvedValue(true)
+
+      const { result } = renderHook(() => useCostcoSync(userId))
+      await act(async () => {
+        await result.current.checkStoredTokens()
+      })
+
+      await act(async () => {
+        await result.current.startSilent()
+      })
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.ERROR)
+      })
+
+      expect(mockClearStoredTokens).not.toHaveBeenCalled()
+      expect(mockClearCostcoInAppBrowserSession).not.toHaveBeenCalled()
+      expect(result.current.hasStoredTokens).toBe(true)
+      expect(result.current.error).toMatch(/Network Error/)
+    })
+
+    it('test_startSilent_tokens_only_does_not_clear_tokens', async () => {
+      mockStartSilentSync.mockResolvedValue({ idToken: 'x', _tokensOnly: true })
+      const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+      mockHasStoredTokens.mockResolvedValue(true)
+
+      const { result } = renderHook(() => useCostcoSync(userId))
+      await act(async () => {
+        await result.current.checkStoredTokens()
+      })
+
+      await act(async () => {
+        await result.current.startSilent()
+      })
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.ERROR)
+      })
+
+      expect(mockClearStoredTokens).not.toHaveBeenCalled()
+      expect(result.current.hasStoredTokens).toBe(true)
+      expect(result.current.error).toMatch(/Try Silent Sync again/)
+      const reconnectEvents = dispatchSpy.mock.calls.filter(
+        (c) => c[0]?.type === 'costco-sync-needs-reconnect'
+      )
+      expect(reconnectEvents).toHaveLength(0)
+      dispatchSpy.mockRestore()
+    })
+
+    it('test_startSilent_clears_tokens_on_non_transient_thrown_error', async () => {
       mockStartSilentSync.mockRejectedValue(new Error('silent sync crashed'))
 
       const { result } = renderHook(() => useCostcoSync(userId))

@@ -14,6 +14,11 @@
  */
 
 import { MSAL_CREDENTIAL_JS } from './costcoMsalCredentialSource';
+import {
+  COSTCO_B2C_TENANT,
+  COSTCO_B2C_POLICY_FALLBACK,
+  COSTCO_B2C_CLIENT_ID,
+} from './costcoB2cConfig';
 
 const RECEIPTS_QUERY =
   'query receiptsWithCounts($startDate: String!, $endDate: String!,$documentType:String!,$documentSubType:String!) { receiptsWithCounts(startDate: $startDate, endDate: $endDate,documentType:$documentType,documentSubType:$documentSubType) { inWarehouse gasStation carWash gasAndCarWash receipts{ warehouseName receiptType documentType transactionDateTime transactionBarcode transactionType total totalItemCount itemArray { itemNumber itemDescription01 itemDescription02 amount unit } tenderArray { tenderTypeCode tenderDescription amountTender } couponArray { upcnumberCoupon } } } }';
@@ -57,6 +62,9 @@ export function getExtractScript(graphqlUrl) {
   var TOKEN_POLL=400,TOKEN_MAX=3e5,BRIDGE_POLL=100,BRIDGE_MAX=20e3;
   var GRAPHQL_URL='${graphqlUrl}';
   var CLIENT_ID='${CLIENT_IDENTIFIER}';
+  var B2C_TENANT='${COSTCO_B2C_TENANT}';
+  var B2C_POLICY_FALLBACK='${COSTCO_B2C_POLICY_FALLBACK}';
+  var B2C_CLIENT_ID='${COSTCO_B2C_CLIENT_ID}';
 
   // iOS InAppBrowser: pass an OBJECT to postMessage, not JSON.stringify (Safeway pattern).
   function postMsg(type,payload){
@@ -70,20 +78,54 @@ export function getExtractScript(graphqlUrl) {
     }catch(_){}
     return false;
   }
-  function postDebug(msg,data){postMsg('costco-webview-fetch-debug',{message:msg,data:data||{}});}
+  function postDebug(msg,data){return postMsg('costco-webview-fetch-debug',{message:msg,data:data||{}});}
+
+  function traceTryPostBranch(branch){
+    if(!window.__mealdTryPostTrace)return;
+    var prev=window.__mealdTryPostTraceLast||'';
+    if(prev===branch)return;
+    if(postDebug('tryPost-branch',{branch:branch}))window.__mealdTryPostTraceLast=branch;
+  }
+
+  function resetCostcoSessionIfNonceChanged(){
+    var nonce=typeof window!=='undefined'&&window.__mealdSyncNonce!=null?String(window.__mealdSyncNonce):'';
+    var seen=typeof window!=='undefined'&&window.__mealdSyncNonceSeen!=null?String(window.__mealdSyncNonceSeen):'';
+    if(!nonce||nonce===seen)return false;
+    window.__mealdSyncNonceSeen=nonce;
+    if(window.__costcoPollIv){try{clearInterval(window.__costcoPollIv);}catch(_){}}
+    window.__costcoPollIv=null;
+    window.__costcoPollActive=false;
+    window.__costcoRtRefreshStarted=false;
+    window.__costcoUnrecoverablePosted=false;
+    window.__costcoAppRefreshRequested=false;
+    window.__costcoFetchStarted=false;
+    window.__costcoReceiptsPosted=false;
+    window.__costcoRtRefreshAttempts=0;
+    window.__costcoRtRefreshBackoffUntil=0;
+    window.__costcoDiagCount=0;
+    window.__costcoDiagLastMs=0;
+    window.__costcoCensusCount=0;
+    window.__costcoCensusLastMs=0;
+    window.__costcoMissStreak=0;
+    window.__costcoMissLastMs=0;
+    return true;
+  }
 
   ${MSAL_CREDENTIAL_JS}
 
   if(!window.__costcoOpenWrapped){window.__costcoOpenWrapped=true;(function(){var origOpen=window.open;window.open=function(url,target,features){try{postDebug('window-open-intercepted',{url:String(url||'').slice(0,500),target:target||'',features:String(features||'').slice(0,200)});}catch(_){}return origOpen?origOpen.apply(this,arguments):null;};})();}
 
   function postDiag(){
-    if(window.__costcoDiagPosted)return;
-    window.__costcoDiagPosted=true;
+    var now=Date.now();
+    var count=window.__costcoDiagCount||0;
+    var last=window.__costcoDiagLastMs||0;
+    if(count>=8)return;
+    if(count>0&&now-last<3000)return;
     try{
-      var lsKeys=[],ssKeys=[];
-      try{for(var i=0;i<Math.min(localStorage.length,10);i++)lsKeys.push(localStorage.key(i));}catch(_){}
-      try{for(var i=0;i<Math.min(sessionStorage.length,10);i++)ssKeys.push(sessionStorage.key(i));}catch(_){}
-      postDebug('page-diagnostic',{
+      var lsKeys=[],ssKeys=[],lsCap=Math.min(localStorage.length,60),ssCap=Math.min(sessionStorage.length,60),ki;
+      try{for(ki=0;ki<lsCap;ki++){var lk=localStorage.key(ki);if(lk)lsKeys.push(String(lk).slice(0,120));}}catch(_){}
+      try{for(ki=0;ki<ssCap;ki++){var sk=sessionStorage.key(ki);if(sk)ssKeys.push(String(sk).slice(0,120));}}catch(_){}
+      var ok=postDebug('page-diagnostic',{
         href:location.href||'',
         title:document.title||'',
         lsLen:localStorage.length,lsKeys:lsKeys,
@@ -92,13 +134,92 @@ export function getExtractScript(graphqlUrl) {
         hasWindowOpen:typeof window.open,
         ua:navigator.userAgent||''
       });
+      if(ok){
+        window.__costcoDiagCount=count+1;
+        window.__costcoDiagLastMs=now;
+      }
     }catch(_){}
+  }
+
+  function hasSigninEnv(st){
+    try{
+      for(var i=0;i<st.length;i++){
+        try{
+          var k=st.key(i);
+          var val=JSON.parse(st.getItem(k));
+          if(val&&val.credentialType&&val.environment==='signin.costco.com')return true;
+        }catch(e){}
+      }
+    }catch(_){}
+    return false;
+  }
+  function hasExpiredSigninIdToken(st){
+    try{
+      for(var i=0;i<st.length;i++){
+        try{
+          var k=st.key(i);
+          var val=JSON.parse(st.getItem(k));
+          if(val&&val.credentialType==='IdToken'&&val.environment==='signin.costco.com'&&val.secret&&isJwtExpired(val.secret,60))return true;
+        }catch(e){}
+      }
+    }catch(_){}
+    return false;
+  }
+  function hasFreshAccessToken(st){
+    try{
+      for(var i=0;i<st.length;i++){
+        try{
+          var k=st.key(i);
+          var val=JSON.parse(st.getItem(k));
+          if(val&&val.credentialType==='AccessToken'&&val.environment==='signin.costco.com'&&val.secret&&!isJwtExpired(val.secret,60))return true;
+        }catch(e){}
+      }
+    }catch(_){}
+    return false;
+  }
+  function classifyMsalMissReason(){
+    var ls=credentialCensus(localStorage);
+    var ss=credentialCensus(sessionStorage);
+    var seen=ls.seen+ss.seen;
+    if(seen===0)return 'no_msal_entries';
+    if(!hasSigninEnv(localStorage)&&!hasSigninEnv(sessionStorage))return 'env_mismatch';
+    var hasRt=ls.hasUsableRt||ss.hasUsableRt;
+    var freshAcc=hasFreshAccessToken(localStorage)||hasFreshAccessToken(sessionStorage);
+    var expiredId=hasExpiredSigninIdToken(localStorage)||hasExpiredSigninIdToken(sessionStorage);
+    if(expiredId&&hasRt&&!freshAcc)return 'expired_id_rt_present';
+    var unparse=ls.unparseable+ss.unparseable;
+    if(unparse>0&&unparse>=seen)return 'unparseable';
+    if((ls.expired+ss.expired)>=seen&&!hasRt)return 'all_expired';
+    return 'unknown';
+  }
+  function postMsalCensusMiss(){
+    var now=Date.now();
+    var count=window.__costcoCensusCount||0;
+    var last=window.__costcoCensusLastMs||0;
+    if(count>=8){traceTryPostBranch('census_capped');return;}
+    if(count>0&&now-last<3000)return;
+    var ls=credentialCensus(localStorage);
+    var ss=credentialCensus(sessionStorage);
+    var tfc=null;
+    try{tfc=sessionStorage.getItem('getTokenFailureCount');}catch(_){}
+    var ok=postDebug('msal-census',{
+      reason:classifyMsalMissReason(),
+      tokenFailureCount:tfc,
+      ls:ls,
+      ss:ss
+    });
+    if(ok){
+      window.__costcoCensusCount=count+1;
+      window.__costcoCensusLastMs=now;
+      traceTryPostBranch('census_posted');
+    }
   }
 
   function postReceiptsFromWebView(receipts,idT,accT,c,rt,rtCid,wcsCid,userAgent){
     if(window.__costcoReceiptsPosted)return true;
     var token=accT||idT;
-    var ok=postMsg('costco-receipts',{receipts:receipts||[],idToken:token||idT,accessToken:accT||null,clientID:c,wcsClientId:wcsCid,refreshToken:rt,refreshTokenClientId:rtCid,userAgent:userAgent||(navigator.userAgent||'')});
+    var safeRt=rt&&rt!=='revoked'?rt:null;
+    var ok=postMsg('costco-receipts',{receipts:receipts||[],idToken:token||idT,accessToken:accT||null,clientID:c,wcsClientId:wcsCid,refreshToken:safeRt,refreshTokenClientId:rtCid,userAgent:userAgent||(navigator.userAgent||'')});
     if(ok)window.__costcoReceiptsPosted=true;
     return ok;
   }
@@ -108,7 +229,8 @@ export function getExtractScript(graphqlUrl) {
     var token=accT||idT;
     var wcs=wcsCid||'${WCS_CLIENT_ID}';
     if(!token||token.length<50)return false;
-    return postMsg('costco-tokens',{idToken:token||idT,accessToken:accT||null,clientID:c,wcsClientId:wcs,capturedFromGraphQL:false,refreshToken:rt,refreshTokenClientId:rtCid,userAgent:userAgent||(navigator.userAgent||''),cookies:(document.cookie||'')});
+    var safeRt=rt&&rt!=='revoked'?rt:null;
+    return postMsg('costco-tokens',{idToken:token||idT,accessToken:accT||null,clientID:c,wcsClientId:wcs,capturedFromGraphQL:false,refreshToken:safeRt,refreshTokenClientId:rtCid,userAgent:userAgent||(navigator.userAgent||''),cookies:(document.cookie||'')});
   }
 
   function doFetchReceipts(tokens){
@@ -141,7 +263,7 @@ export function getExtractScript(graphqlUrl) {
   }
 
   function fetchReceiptsInWebView(idT,accT,c,wcsCid,rt,rtCid,userAgent){
-    if(window.__costcoFetchStarted)return;
+    if(window.__costcoFetchStarted){traceTryPostBranch('fetch_latched');return;}
     var token=accT||idT;
     var wcs=wcsCid||'${WCS_CLIENT_ID}';
     postDebug('fetchReceiptsInWebView',{tokenLen:(token||'').length,wcs:!!wcs,tokenExpired:!(token&&token.length>=50&&!isJwtExpired(token,60))});
@@ -149,14 +271,209 @@ export function getExtractScript(graphqlUrl) {
     doFetchReceipts({idT:idT,accT:accT,c:c,rt:rt,rtCid:rtCid,wcs:wcs,userAgent:userAgent||''});
   }
 
-  function postMsalTokensDiag(idT,accT){
+  function postMsalTokensDiag(idT,accT,r){
+    var rt=r&&r.rt;
     postDebug('msal-tokens-found',{
       host:(typeof location!=='undefined'&&location.hostname)?location.hostname:'',
-      idJwtExp:jwtExpiresAtSec(idT||''),
-      accJwtExp:jwtExpiresAtSec(accT||''),
-      idPreview:(idT||'').slice(0,36),
-      ms:typeof Date!=='undefined'&&Date.now?Date.now():0
+      tfp:jwtClaim(idT,'tfp')||jwtClaim(idT,'acr')||'',
+      idSecondsLeft:idT?jwtSecondsLeft(idT,60):null,
+      accSecondsLeft:accT?jwtSecondsLeft(accT,60):null,
+      hasAccess:!!accT,
+      hasRt:!!rt
     });
+  }
+
+  function b2cPolicyFromPayload(payload){
+    if(!payload)return B2C_POLICY_FALLBACK;
+    var raw=payload.tfp||payload.acr||B2C_POLICY_FALLBACK;
+    var policy=String(raw).toLowerCase();
+    if(/^[a-z0-9_-]{1,128}$/.test(policy))return policy;
+    return B2C_POLICY_FALLBACK;
+  }
+
+  function resolveB2cTokenEndpoint(idToken,msalAuth){
+    var policy=B2C_POLICY_FALLBACK;
+    var tenant=B2C_TENANT;
+    var authoritySource='fallback';
+    try{
+      var payload=jwtPayload(idToken);
+      var iss=String(payload&&payload.iss||'');
+      if(payload&&iss.indexOf('signin.costco.com')>=0){
+        policy=b2cPolicyFromPayload(payload);
+        if(iss.indexOf('signin.costco.com')>=0){
+          var parts=iss.replace(/\\/$/,'').split('/');
+          if(parts.length>1&&parts[parts.length-1]==='v2.0')tenant=parts[parts.length-2]||tenant;
+          else if(parts.length>0)tenant=parts[parts.length-1]||tenant;
+        }
+        authoritySource='iss';
+      }else if(msalAuth&&msalAuth.tenant){
+        tenant=msalAuth.tenant;
+        if(msalAuth.policy)policy=msalAuth.policy;
+        authoritySource='msal';
+      }
+    }catch(_){
+      if(msalAuth&&msalAuth.tenant){
+        tenant=msalAuth.tenant;
+        if(msalAuth.policy)policy=msalAuth.policy;
+        authoritySource='msal';
+      }
+    }
+  var endpoint='https://signin.costco.com/'+tenant+'/'+policy+'/oauth2/v2.0/token';
+  return{endpoint:endpoint,policy:policy,tenant:tenant,authoritySource:authoritySource};
+  }
+
+  function buildB2cTokenEndpoint(idToken,msalAuth){
+    return resolveB2cTokenEndpoint(idToken,msalAuth).endpoint;
+  }
+
+  function postTokenRotated(idT,rt,rtCid,c){
+    postMsg('costco-token-rotated',{
+      idToken:idT,
+      accessToken:null,
+      clientID:c,
+      wcsClientId:'${WCS_CLIENT_ID}',
+      refreshToken:rt,
+      refreshTokenClientId:rtCid,
+      userAgent:navigator.userAgent||''
+    });
+  }
+
+  function postSilentUnrecoverable(reason){
+    if(window.__costcoUnrecoverablePosted)return;
+    if(postMsg('costco-silent-unrecoverable',{reason:String(reason||'unknown').slice(0,120)})){
+      window.__costcoUnrecoverablePosted=true;
+    }
+  }
+
+  function postAppRefreshRequest(){
+    if(window.__costcoAppRefreshRequested)return;
+    if(postMsg('costco-app-refresh-request',{})){
+      window.__costcoAppRefreshRequested=true;
+    }
+  }
+
+  function shouldDeclareUnrecoverable(){
+    var now=Date.now();
+    var streak=window.__costcoMissStreak||0;
+    var last=window.__costcoMissLastMs||0;
+    if(streak===0){
+      window.__costcoMissStreak=1;
+      window.__costcoMissLastMs=now;
+      return false;
+    }
+    if(now-last>=6000)return true;
+    try{if(document.readyState==='complete')return true;}catch(_){}
+    window.__costcoMissStreak=streak+1;
+    window.__costcoMissLastMs=now;
+    return streak>=1&&(now-last)>=3000;
+  }
+
+  function tryRefreshWithRt(expiredId,rEntry,c,msalAuth){
+    var now=Date.now();
+    if(window.__costcoRtRefreshBackoffUntil&&now<window.__costcoRtRefreshBackoffUntil){traceTryPostBranch('refresh_backoff');return true;}
+    var attempts=window.__costcoRtRefreshAttempts||0;
+    if(attempts>=3){
+      postSilentUnrecoverable('refresh_http_exhausted');
+      traceTryPostBranch('refresh_exhausted');
+      return true;
+    }
+    if(window.__costcoRtRefreshStarted){traceTryPostBranch('refresh_latched');return true;}
+    window.__costcoRtRefreshStarted=true;
+    traceTryPostBranch('refresh_started');
+    var resolved=resolveB2cTokenEndpoint(expiredId,msalAuth);
+    var endpoint=resolved.endpoint;
+    var policy=resolved.policy;
+    var tenantPrefix=String(resolved.tenant||'').slice(0,8);
+    var authoritySource=resolved.authoritySource;
+    var clientId=rEntry.clientId||B2C_CLIENT_ID;
+    var attemptNum=attempts+1;
+    postDebug('rt-refresh-start',{policy:policy,tenant:tenantPrefix,authoritySource:authoritySource,attempt:attemptNum,source:'page'});
+    var body='grant_type='+encodeURIComponent('refresh_token')+
+      '&client_id='+encodeURIComponent(clientId)+
+      '&refresh_token='+encodeURIComponent(rEntry.rt)+
+      '&scope='+encodeURIComponent('openid offline_access '+clientId);
+    window.fetch(endpoint,{
+      method:'POST',
+      headers:{'Content-Type':'application/x-www-form-urlencoded','User-Agent':navigator.userAgent||''},
+      body:body,
+      credentials:'omit'
+    }).then(function(resp){
+      return resp.text().then(function(text){
+        var data={};
+        try{data=JSON.parse(text);}catch(_){}
+        var rotated=!!(data&&data.refresh_token);
+        var hasNewId=!!(data&&data.id_token);
+        var errCode=data&&data.error?String(data.error):'';
+        var contentType='';
+        try{contentType=String(resp.headers&&resp.headers.get('content-type')||'').slice(0,50);}catch(_){}
+        var bodyPreview=String(text||'').slice(0,120);
+        postDebug('rt-refresh-result',{
+          status:resp.status,
+          cors:false,
+          errorCode:errCode.slice(0,80),
+          policy:policy,
+          tenant:tenantPrefix,
+          authoritySource:authoritySource,
+          attempt:attemptNum,
+          contentType:contentType,
+          bodyPreview:bodyPreview,
+          hasNewId:hasNewId,
+          rotated:rotated,
+          source:'page'
+        });
+        if(resp.status===200&&data.id_token){
+          if(isJwtExpired(data.id_token,60)){
+            postSilentUnrecoverable('refresh_clock_skew');
+            return;
+          }
+          window.__costcoRtRefreshAttempts=0;
+          window.__costcoRtRefreshBackoffUntil=0;
+          var newRt=data.refresh_token||rEntry.rt;
+          writeRotatedRT(rEntry,newRt);
+          postTokenRotated(data.id_token,newRt,rEntry.clientId,c);
+          injectSyncOverlay();
+          doFetchReceipts({idT:data.id_token,accT:null,c:c,rt:newRt,rtCid:rEntry.clientId,wcs:'${WCS_CLIENT_ID}',userAgent:navigator.userAgent||''});
+          return;
+        }
+        if(errCode==='invalid_grant'||errCode==='interaction_required'||errCode==='login_required'){
+          postSilentUnrecoverable('refresh_'+errCode);
+          return;
+        }
+        if(resp.status>=400&&resp.status<500){
+          postSilentUnrecoverable('refresh_http_'+resp.status);
+          return;
+        }
+        window.__costcoRtRefreshStarted=false;
+        window.__costcoRtRefreshAttempts=attemptNum;
+        var backoffMs=attemptNum===1?1000:attemptNum===2?3000:8000;
+        window.__costcoRtRefreshBackoffUntil=Date.now()+backoffMs;
+      });
+    }).catch(function(err){
+      var msg=String(err&&err.message||err||'');
+      var isCors=msg.indexOf('Failed to fetch')>=0||msg.indexOf('NetworkError')>=0;
+      window.__costcoRtRefreshStarted=false;
+      window.__costcoRtRefreshAttempts=attemptNum;
+      var backoffMs=attemptNum===1?1000:attemptNum===2?3000:8000;
+      window.__costcoRtRefreshBackoffUntil=Date.now()+backoffMs;
+      postDebug('rt-refresh-result',{
+        status:0,
+        cors:isCors,
+        errorCode:isCors?'cors':'network',
+        policy:policy,
+        tenant:tenantPrefix,
+        authoritySource:authoritySource,
+        attempt:attemptNum,
+        hasNewId:false,
+        rotated:false,
+        source:'page'
+      });
+      if(isCors){
+        if(!window.__costcoS3ForceRefresh)postAppRefreshRequest();
+        return;
+      }
+      if(attemptNum>=3)postSilentUnrecoverable('refresh_network_exhausted');
+    });
+    return true;
   }
 
   function injectSyncOverlay(){
@@ -175,17 +492,53 @@ export function getExtractScript(graphqlUrl) {
 
   function tryPost(){
     var host=typeof location!=='undefined'&&location.hostname?location.hostname:'';
-    if(host!=='www.costco.com'&&host!=='costco.com'){return false;}
+    if(host!=='www.costco.com'&&host!=='costco.com'){traceTryPostBranch('host_mismatch');return false;}
+    var forceRefresh=!!window.__costcoS3ForceRefresh;
+    var liveIdForRefresh=null;
     var idT,accT; try{idT=findIdToken(localStorage);}catch(_){}
     if(!idT)try{idT=findIdToken(sessionStorage);}catch(_){}
     try{accT=findAccessToken(localStorage);}catch(_){}
     if(!accT)try{accT=findAccessToken(sessionStorage);}catch(_){}
+    if(forceRefresh){
+      liveIdForRefresh=idT||accT;
+      idT=null;
+      accT=null;
+    }
     var c; try{c=localStorage.getItem('clientID')||localStorage.getItem('clientId')||sessionStorage.getItem('clientID')||sessionStorage.getItem('clientId')||null;}catch(_){c=null;}
     var r; try{r=findRT(localStorage);if(!r.rt)r=findRT(sessionStorage);}catch(_){r={rt:null,clientId:null};}
+    if(!idT&&!accT&&window.__mealdInjectedIdToken&&!isJwtExpired(window.__mealdInjectedIdToken,60)){
+      idT=window.__mealdInjectedIdToken;
+    }
     if(idT&&isJwtExpired(idT,60))idT=null;
     if(accT&&isJwtExpired(accT,60))accT=null;
-    if(!idT&&!accT)return false;
-    postMsalTokensDiag(idT,accT);
+    if(!idT&&!accT){
+      var rEntry; try{rEntry=findRTWithKey(localStorage);if(!rEntry.rt)rEntry=findRTWithKey(sessionStorage);}catch(_){rEntry={rt:null,clientId:null,key:null,storage:null,homeAccountId:null};}
+      var msalAuth=findB2cAuthorityAny();
+      if(rEntry.homeAccountId){
+        var rtAuth=b2cAuthorityFromEntry({homeAccountId:rEntry.homeAccountId,realm:null});
+        if(rtAuth.tenant){
+          if(!msalAuth||!msalAuth.tenant)msalAuth=rtAuth;
+          else if(!msalAuth.policy&&rtAuth.policy)msalAuth.policy=rtAuth.policy;
+        }
+      }
+      var expiredId; try{expiredId=findExpiredIdToken(localStorage);if(!expiredId)expiredId=findExpiredIdToken(sessionStorage);}catch(_){expiredId=null;}
+      if(forceRefresh&&liveIdForRefresh)expiredId=liveIdForRefresh;
+      if(!expiredId){
+        try{expiredId=findSigninIdTokenForEndpointAny();}catch(_){expiredId=null;}
+      }
+      if(rEntry.rt){
+        if(tryRefreshWithRt(expiredId||'',rEntry,c,msalAuth))return false;
+      }
+      postMsalCensusMiss();
+      if(shouldDeclareUnrecoverable()){
+        var missReason=classifyMsalMissReason();
+        if(!forceRefresh&&missReason==='expired_id_rt_present'&&!rEntry.rt)postAppRefreshRequest();
+        else if(missReason!=='expired_id_rt_present')postSilentUnrecoverable(missReason);
+      }
+      return false;
+    }
+    traceTryPostBranch('tokens_found');
+    postMsalTokensDiag(idT,accT,r);
     injectSyncOverlay();
     if(host==='www.costco.com'){fetchReceiptsInWebView(idT,accT,c,'${WCS_CLIENT_ID}',r.rt,r.clientId,navigator.userAgent||'');}
     else{postTokens(idT,accT,c,navigator.userAgent||'',r.rt,r.clientId,'${WCS_CLIENT_ID}');}
@@ -193,8 +546,10 @@ export function getExtractScript(graphqlUrl) {
   }
 
   function waitBridge(cb){var t0=Date.now();function check(){if(window.mobileApp&&typeof window.mobileApp.postMessage==='function'){cb();return;}if(Date.now()-t0>BRIDGE_MAX)return;setTimeout(check,BRIDGE_POLL);}check();}
-  function pollTokens(){postDiag();var t0=Date.now(),iv=setInterval(function(){if(tryPost()){clearInterval(iv);if(typeof window!=='undefined')window.__costcoPollActive=false;return;}if(Date.now()-t0>TOKEN_MAX){clearInterval(iv);if(typeof window!=='undefined')window.__costcoPollActive=false;}},TOKEN_POLL);}
-  postDebug('script_run',{href:(location.href||'').slice(0,200),host:(location.hostname||'')});
+  function pollTokens(){postDiag();var t0=Date.now(),iv=setInterval(function(){postDiag();if(typeof window.__costcoSweepResourceTiming==='function')window.__costcoSweepResourceTiming();if(tryPost()){clearInterval(iv);window.__costcoPollIv=null;if(typeof window!=='undefined')window.__costcoPollActive=false;return;}if(Date.now()-t0>TOKEN_MAX){clearInterval(iv);window.__costcoPollIv=null;if(typeof window!=='undefined')window.__costcoPollActive=false;}},TOKEN_POLL);window.__costcoPollIv=iv;}
+  var sessionReset=resetCostcoSessionIfNonceChanged();
+  var nonceTag=typeof window.__mealdSyncNonce!=='undefined'?String(window.__mealdSyncNonce).slice(0,8):'';
+  postDebug('script_run',{href:(location.href||'').slice(0,200),host:(location.hostname||''),nonce:nonceTag,reset:sessionReset});
   if(typeof window!=='undefined'&&!window.__costcoPollActive){window.__costcoPollActive=true;waitBridge(pollTokens);}
 })();
 `;
