@@ -97,3 +97,19 @@ export function patchNetworkSecurityConfig(xmlPath, newIp) {
     writeFileSync(xmlPath, xml, 'utf8');
   }
 }
+
+/** Remove LAN cleartext domains; keep localhost / 10.0.2.2 for emulator. */
+export function stripLanDomainsFromNetworkSecurityConfig(xmlPath) {
+  let xml = readFileSync(xmlPath, 'utf8');
+  const original = xml;
+  xml = xml.replace(LAN_DOMAIN_RE, (full, ip) => {
+    if (ip === '10.0.2.2') return full;
+    return '';
+  });
+  // Collapse blank lines left by removals
+  xml = xml.replace(/\n[ \t]*\n[ \t]*\n/g, '\n\n');
+  if (xml !== original) {
+    writeFileSync(xmlPath, xml, 'utf8');
+  }
+  return xml !== original;
+}

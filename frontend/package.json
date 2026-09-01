@@ -19,6 +19,7 @@
     "cap:run:android": "npm run cap:patch && node scripts/apply-android-lan-env.js && cap run android",
     "cap:run:ios": "npm run cap:patch && cap sync ios && cap run ios",
     "build:mobile": "npm run cap:patch && vite build && node scripts/apply-android-lan-env.js && cap sync",
+    "build:play-aab": "node scripts/build-play-aab.js",
     "assets:generate": "node scripts/generate-assets.js && npx capacitor-assets generate --iconBackgroundColor '#F5F0E8' --iconBackgroundColorDark '#1A1A2E' --splashBackgroundColor '#F5F0E8' --splashBackgroundColorDark '#1A1A2E' --ios --android && node scripts/ios-expand-app-icons.js",
     "postinstall": "npm run cap:patch",
     "ios:16": "npx cap run ios --target-name='iPhone 16 Pro'",
