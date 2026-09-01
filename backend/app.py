@@ -1,10 +1,18 @@
 """Flask application factory"""
 
-from flask import Flask
+from flask import Flask, jsonify, request
 from flask_cors import CORS
-from backend.config import get_config
+from backend.config import ProductionConfig, get_config
 from backend.utils.logger import setup_logger, get_logger
 from backend.utils.exceptions import GrocerySyncException
+from backend.utils.monitoring import init_monitoring, capture_exception
+from backend.utils.request_context import (
+    REQUEST_ID_HEADER,
+    SYNC_ID_HEADER,
+    get_request_id,
+    resolve_request_id,
+    set_request_id,
+)
 
 # Import routes
 from backend.routes.health import health_bp
@@ -17,6 +25,7 @@ from backend.routes.pantry import pantry_bp
 from backend.routes.recipes import recipes_bp
 from backend.routes.meal_plan import meal_plan_bp
 from backend.routes.pool import pool_bp
+from backend.routes.telemetry import telemetry_bp
 
 
 def wire_suggestion_pool_store(app: Flask) -> None:
@@ -44,6 +53,8 @@ def create_app(config=None):
         config = get_config()
     
     app.config.from_object(config)
+
+    init_monitoring(config)
     
     # Setup logging
     log_level = config.LOG_LEVEL
@@ -54,6 +65,26 @@ def create_app(config=None):
     cors_origins = config.get_cors_origins()
     CORS(app, resources={r"/api/*": {"origins": cors_origins}})
     logger.info(f"CORS enabled for origins: {cors_origins}")
+
+    @app.before_request
+    def _assign_request_id():
+        request_id = resolve_request_id(request.headers.get(REQUEST_ID_HEADER))
+        set_request_id(request_id)
+        try:
+            import sentry_sdk
+            sentry_sdk.set_tag("request_id", request_id)
+            sync_id = (request.headers.get(SYNC_ID_HEADER) or "").strip()
+            if sync_id:
+                sentry_sdk.set_tag("sync_id", sync_id)
+        except Exception:
+            pass
+
+    @app.after_request
+    def _echo_request_id(response):
+        request_id = get_request_id()
+        if request_id:
+            response.headers[REQUEST_ID_HEADER] = request_id
+        return response
     
     # Initialize AI service if configured (do this first so other services can use it)
     ai_service = None
@@ -181,45 +212,27 @@ def create_app(config=None):
     else:
         logger.info("Supabase not configured (development mode)")
     
-    # Initialize secrets service
-    if config.AWS_ACCESS_KEY_ID and config.AWS_SECRET_ACCESS_KEY:
-        try:
-            from backend.services.secrets_service import create_secrets_service
-            secrets_service = create_secrets_service(
-                use_mock=False,
-                region=config.AWS_REGION,
-                access_key_id=config.AWS_ACCESS_KEY_ID,
-                secret_access_key=config.AWS_SECRET_ACCESS_KEY
-            )
-            app.config["SECRETS_SERVICE"] = secrets_service
-            logger.info("AWS Secrets Manager initialized")
-        except Exception as e:
-            logger.warning(f"Failed to initialize Secrets Manager: {e}")
-            # Fallback to Supabase Vault if available, otherwise mock
-            supabase_service = app.config.get("SUPABASE_SERVICE")
-            if supabase_service and supabase_service.admin_client:
-                from backend.services.secrets_service import SupabaseVaultService
-                secrets_service = SupabaseVaultService(supabase_service.admin_client)
-                app.config["SECRETS_SERVICE"] = secrets_service
-                logger.info("Using Supabase Vault Service")
-            else:
-                from backend.services.secrets_service import create_secrets_service
-                secrets_service = create_secrets_service(use_mock=True)
-                app.config["SECRETS_SERVICE"] = secrets_service
-                logger.info("Using mock Secrets Service")
+    # Initialize secrets service: Supabase Vault (prod + dev with service role), mock (dev only)
+    from backend.utils.exceptions import ConfigurationException
+
+    supabase_service = app.config.get("SUPABASE_SERVICE")
+    if supabase_service and supabase_service.admin_client:
+        from backend.services.secrets_service import SupabaseVaultService
+
+        secrets_service = SupabaseVaultService(supabase_service.admin_client)
+        app.config["SECRETS_SERVICE"] = secrets_service
+        logger.info("Using Supabase Vault Service")
+    elif isinstance(config, ProductionConfig):
+        raise ConfigurationException(
+            "Supabase Vault is required in production (SUPABASE_SERVICE_ROLE_KEY "
+            "must be set so admin_client can access vault RPCs)"
+        )
     else:
-        # Use Supabase Vault if available, otherwise mock service
-        supabase_service = app.config.get("SUPABASE_SERVICE")
-        if supabase_service and supabase_service.admin_client:
-            from backend.services.secrets_service import SupabaseVaultService
-            secrets_service = SupabaseVaultService(supabase_service.admin_client)
-            app.config["SECRETS_SERVICE"] = secrets_service
-            logger.info("Using Supabase Vault Service (development mode)")
-        else:
-            from backend.services.secrets_service import create_secrets_service
-            secrets_service = create_secrets_service(use_mock=True)
-            app.config["SECRETS_SERVICE"] = secrets_service
-            logger.info("Using mock Secrets Service (development mode)")
+        from backend.services.secrets_service import create_mock_secrets_service
+
+        secrets_service = create_mock_secrets_service()
+        app.config["SECRETS_SERVICE"] = secrets_service
+        logger.info("Using mock Secrets Service (development only)")
     
     # Import providers and parsers to register them
     from backend.providers import costco_provider  # noqa: F401
@@ -238,6 +251,7 @@ def create_app(config=None):
     app.register_blueprint(recipes_bp, url_prefix="/api")
     app.register_blueprint(meal_plan_bp, url_prefix="/api")
     app.register_blueprint(pool_bp, url_prefix="/api")
+    app.register_blueprint(telemetry_bp, url_prefix="/api")
     
     logger.info("Routes registered")
     
@@ -251,23 +265,32 @@ def create_app(config=None):
 def register_error_handlers(app):
     """Register error handlers for the application"""
     logger = get_logger(__name__)
+
+    def _error_body(message: str, status_code: int):
+        body = {"error": message}
+        request_id = get_request_id()
+        if request_id:
+            body["request_id"] = request_id
+        return jsonify(body), status_code
     
     @app.errorhandler(GrocerySyncException)
     def handle_grocerysync_exception(e):
         """Handle custom Meald exceptions"""
         logger.error(f"Meald exception: {e}")
-        return {"error": str(e)}, 500
+        capture_exception(e)
+        return _error_body(str(e), 500)
     
     @app.errorhandler(404)
     def handle_not_found(e):
         """Handle 404 errors"""
-        return {"error": "Resource not found"}, 404
+        return _error_body("Resource not found", 404)
     
     @app.errorhandler(500)
     def handle_internal_error(e):
         """Handle 500 errors"""
         logger.error(f"Internal server error: {e}")
-        return {"error": "Internal server error"}, 500
+        capture_exception(e)
+        return _error_body("Internal server error", 500)
 
 
 def main():

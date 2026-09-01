@@ -8,16 +8,30 @@ import {
   Settings,
 } from 'lucide-react'
 import { hapticSelection } from '../utils/haptics'
+import { FEATURES } from '../config/features'
 
-const tabs = [
-  { path: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { path: '/pantry', icon: Package, label: 'Pantry' },
-  { path: '/recipes', icon: UtensilsCrossed, label: 'Recipes' },
-  { path: '/meal-plan', icon: CalendarDays, label: 'Meal Plan' },
-  { path: '/settings', icon: Settings, label: 'Settings' },
-]
+function getTabs() {
+  return [
+    { path: '/', icon: LayoutDashboard, label: 'Dashboard', enabled: true },
+    { path: '/pantry', icon: Package, label: 'Pantry', enabled: true },
+    {
+      path: '/recipes',
+      icon: UtensilsCrossed,
+      label: 'Dinner',
+      ariaLabel: "What's for Dinner",
+      enabled: true,
+    },
+    {
+      path: '/meal-plan',
+      icon: CalendarDays,
+      label: 'Meal Plan',
+      enabled: FEATURES.mealPlanner,
+    },
+    { path: '/settings', icon: Settings, label: 'Settings', enabled: true },
+  ].filter((tab) => tab.enabled)
+}
 
-function TabLink({ to, icon: Icon, label }) {
+function TabLink({ to, icon: Icon, label, ariaLabel }) {
   const handleClick = () => {
     hapticSelection()
   }
@@ -25,6 +39,7 @@ function TabLink({ to, icon: Icon, label }) {
   return (
     <NavLink
       to={to}
+      aria-label={ariaLabel ?? label}
       onClick={handleClick}
       className={({ isActive }) =>
         `flex flex-col items-center justify-center flex-1 min-h-[56px] pt-2 pb-2 pb-safe-bottom transition-colors border-t-2 border-transparent ${
@@ -46,6 +61,8 @@ function TabLink({ to, icon: Icon, label }) {
 }
 
 function BottomTabBar() {
+  const tabs = getTabs()
+
   return (
     <nav
       className="fixed bottom-0 left-0 right-0 min-h-[56px] pt-2 pb-safe-bottom bg-forest-mid backdrop-blur-lg border-t border-forest-light z-50"
@@ -53,8 +70,14 @@ function BottomTabBar() {
       aria-label="Main navigation"
     >
       <div className="flex h-full">
-        {tabs.map(({ path, icon, label }) => (
-          <TabLink key={path} to={path} icon={icon} label={label} />
+        {tabs.map(({ path, icon, label, ariaLabel }) => (
+          <TabLink
+            key={path}
+            to={path}
+            icon={icon}
+            label={label}
+            ariaLabel={ariaLabel}
+          />
         ))}
       </div>
     </nav>

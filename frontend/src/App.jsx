@@ -10,6 +10,7 @@ import Providers from './pages/Providers'
 import Settings from './pages/Settings'
 import Recipes from './pages/Recipes'
 import MealPlan from './pages/MealPlan'
+import { FEATURES } from './config/features'
 import Auth from './pages/Auth'
 import ProtectedRoute from './components/ProtectedRoute'
 import OnboardingRoute from './components/OnboardingRoute'
@@ -42,7 +43,9 @@ function AppRoutes() {
               <Route index element={<Dashboard />} />
               <Route path="pantry" element={<Pantry />} />
               <Route path="recipes" element={<Recipes />} />
-              <Route path="meal-plan" element={<MealPlan />} />
+              {FEATURES.mealPlanner && (
+                <Route path="meal-plan" element={<MealPlan />} />
+              )}
               <Route path="settings" element={<Settings />} />
               <Route path="providers" element={<Providers />} />
             </Route>

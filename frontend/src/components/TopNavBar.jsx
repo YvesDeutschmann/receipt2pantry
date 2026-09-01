@@ -4,6 +4,7 @@ import { Home, Users, LogOut } from 'lucide-react'
 import { api } from '../services/apiClient'
 import { useAuth } from '../contexts/AuthContext'
 import HouseholdModal from './HouseholdModal'
+import { FEATURES } from '../config/features'
 
 function TopNavBar() {
   const location = useLocation()
@@ -58,11 +59,13 @@ function TopNavBar() {
                   Pantry
                 </NavLink>
                 <NavLink to="/recipes" className={navLinkClass}>
-                  Recipe Ideas
+                  What&apos;s for Dinner
                 </NavLink>
-                <NavLink to="/meal-plan" className={navLinkClass}>
-                  Meal Plan
-                </NavLink>
+                {FEATURES.mealPlanner && (
+                  <NavLink to="/meal-plan" className={navLinkClass}>
+                    Meal Plan
+                  </NavLink>
+                )}
                 <NavLink to="/providers" className={navLinkClass}>
                   Providers
                 </NavLink>

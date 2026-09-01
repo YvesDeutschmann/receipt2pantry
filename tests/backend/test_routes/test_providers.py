@@ -21,15 +21,15 @@ def test_list_providers(client):
     assert "costco" in data["providers"]
 
 
-def test_get_provider_status_missing_user_id(client):
-    """Test getting provider status without user_id"""
+def test_get_provider_status_missing_user_id(client, mocker):
+    """Test getting provider status without authenticated user."""
+    mocker.patch("backend.routes.providers.get_user_id_from_request", return_value=None)
     response = client.get('/api/providers/safeway/status')
     
-    assert response.status_code == 400
+    assert response.status_code == 401
     
     data = json.loads(response.data)
     assert "error" in data
-    assert "user_id" in data["error"].lower()
 
 
 def test_test_provider_connection_missing_body(client):
@@ -122,6 +122,7 @@ def test_store_costco_receipts_valid_payload(client):
         '/api/providers/costco/store-receipts',
         data=json.dumps(payload),
         content_type='application/json',
+        headers={'X-User-Id': TEST_USER_ID},
     )
     assert response.status_code == 200
     data = json.loads(response.data)
@@ -131,28 +132,28 @@ def test_store_costco_receipts_valid_payload(client):
 
 
 def test_store_costco_receipts_missing_user_id(client):
-    """store-receipts returns 400 when user_id is missing."""
+    """store-receipts returns 401 when user is not authenticated."""
     payload = {'receipts': []}
     response = client.post(
         '/api/providers/costco/store-receipts',
         data=json.dumps(payload),
         content_type='application/json',
     )
-    assert response.status_code == 400
+    assert response.status_code == 401
     data = json.loads(response.data)
     assert 'error' in data
-    assert 'user_id' in data['error'].lower()
 
 
 def test_store_costco_receipts_invalid_user_id(client):
-    """store-receipts returns 400 when user_id is not a valid UUID."""
-    payload = {'receipts': [], 'user_id': 'not-a-uuid'}
+    """store-receipts returns 401 when X-User-Id is not a valid UUID."""
+    payload = {'receipts': []}
     response = client.post(
         '/api/providers/costco/store-receipts',
         data=json.dumps(payload),
         content_type='application/json',
+        headers={'X-User-Id': 'not-a-uuid'},
     )
-    assert response.status_code == 400
+    assert response.status_code == 401
     data = json.loads(response.data)
     assert 'error' in data
 
@@ -164,6 +165,7 @@ def test_store_costco_receipts_non_array_receipts(client):
         '/api/providers/costco/store-receipts',
         data=json.dumps(payload),
         content_type='application/json',
+        headers={'X-User-Id': TEST_USER_ID},
     )
     assert response.status_code == 400
     data = json.loads(response.data)
@@ -185,6 +187,7 @@ def test_store_costco_receipts_warehouse_filter(client):
         '/api/providers/costco/store-receipts',
         data=json.dumps(payload),
         content_type='application/json',
+        headers={'X-User-Id': TEST_USER_ID},
     )
     assert response.status_code == 200
     data = json.loads(response.data)
@@ -196,17 +199,16 @@ def test_store_costco_receipts_warehouse_filter(client):
 # --- connect_costco_from_app ---
 
 def test_connect_costco_from_app_missing_user_id(client):
-    """connect-from-app returns 400 when user_id is missing."""
+    """connect-from-app returns 401 when user is not authenticated."""
     payload = {'idToken': 'eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJ0ZXN0In0.x'}
     response = client.post(
         '/api/providers/costco/connect-from-app',
         data=json.dumps(payload),
         content_type='application/json',
     )
-    assert response.status_code == 400
+    assert response.status_code == 401
     data = json.loads(response.data)
     assert 'error' in data
-    assert 'user_id' in data['error'].lower()
 
 
 def test_connect_costco_from_app_missing_id_token(client):
@@ -216,6 +218,7 @@ def test_connect_costco_from_app_missing_id_token(client):
         '/api/providers/costco/connect-from-app',
         data=json.dumps(payload),
         content_type='application/json',
+        headers={'X-User-Id': TEST_USER_ID},
     )
     assert response.status_code == 400
     data = json.loads(response.data)
@@ -241,8 +244,9 @@ def test_CONNECT_FROM_APP_EXPIRED_TOKEN_RETURNS_NEEDS_RECONNECT(client, mocker):
 
     response = client.post(
         '/api/providers/costco/connect-from-app',
-        data=json.dumps({'user_id': TEST_USER_ID, 'idToken': EXPIRED_JWT}),
+        data=json.dumps({'idToken': EXPIRED_JWT}),
         content_type='application/json',
+        headers={'X-User-Id': TEST_USER_ID},
     )
 
     assert response.status_code == 401
@@ -265,8 +269,9 @@ def test_CONNECT_FROM_APP_AUTH_EXCEPTION_RETURNS_NEEDS_RECONNECT(client, mocker)
 
     response = client.post(
         '/api/providers/costco/connect-from-app',
-        data=json.dumps({'user_id': TEST_USER_ID, 'idToken': EXPIRED_JWT}),
+        data=json.dumps({'idToken': EXPIRED_JWT}),
         content_type='application/json',
+        headers={'X-User-Id': TEST_USER_ID},
     )
 
     assert response.status_code == 401
@@ -324,8 +329,9 @@ def test_EXPIRED_CREDENTIALS_KEY_ABSENT_FROM_ALL_401_PATHS(client, mocker, setup
 
     response = client.post(
         '/api/providers/costco/connect-from-app',
-        data=json.dumps({'user_id': TEST_USER_ID, 'idToken': EXPIRED_JWT}),
+        data=json.dumps({'idToken': EXPIRED_JWT}),
         content_type='application/json',
+        headers={'X-User-Id': TEST_USER_ID},
     )
 
     assert response.status_code == 401

@@ -1,217 +1,178 @@
-"""Tests for `SecretsService` — AWS Secrets Manager client mocked via Stubber / unittest.mock."""
+"""Tests for Supabase Vault and mock secrets services."""
 
 import json
 import logging
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
-import boto3
 import pytest
-from botocore.exceptions import ClientError
-from botocore.stub import Stubber
 
 from backend.services import secrets_service as secrets_service_module
-from backend.services.secrets_service import SecretsService
+from backend.services.secrets_service import (
+    MockSecretsService,
+    SupabaseVaultService,
+    create_mock_secrets_service,
+)
 from backend.utils.exceptions import ConfigurationException, SecretsNotFoundException
 
 
-def _sm_client():
-    """Real boto3 client shape (no network) for exception factories and Stubber."""
-    return boto3.client("secretsmanager", region_name="us-west-2")
+def _mock_rpc_client(responses: dict[str, object]):
+    """Build a mock Supabase client whose .rpc().execute() returns preset data."""
+    client = MagicMock()
+
+    def rpc(name, params=None):
+        chain = MagicMock()
+        payload = responses.get(name)
+        if isinstance(payload, Exception):
+            chain.execute.side_effect = payload
+        else:
+            result = MagicMock()
+            result.data = payload
+            chain.execute.return_value = result
+        return chain
+
+    client.rpc.side_effect = rpc
+    return client
 
 
-def test_uses_iam_role_when_keys_absent():
-    with patch("backend.services.secrets_service.boto3.client") as mock_client:
-        mock_client.return_value = MagicMock()
-        SecretsService("us-west-1")
+def test_vault_store_creates_when_secret_missing():
+    client = _mock_rpc_client({"vault_get_secret_by_name": None})
+    svc = SupabaseVaultService(client)
 
-    mock_client.assert_called_once_with("secretsmanager", region_name="us-west-1")
-    kwargs = mock_client.call_args.kwargs
-    assert "aws_access_key_id" not in kwargs
-    assert "aws_secret_access_key" not in kwargs
+    key = svc.store_user_credentials("user-1", "costco", {"token": "abc"})
 
-
-def test_uses_explicit_keys_when_provided():
-    with patch("backend.services.secrets_service.boto3.client") as mock_client:
-        mock_client.return_value = MagicMock()
-        SecretsService(
-            "eu-central-1",
-            access_key_id="AKIATESTKEY",
-            secret_access_key="secret-key-value",
-        )
-
-    mock_client.assert_called_once_with(
-        "secretsmanager",
-        region_name="eu-central-1",
-        aws_access_key_id="AKIATESTKEY",
-        aws_secret_access_key="secret-key-value",
-    )
+    assert key == "grocerysync:user-1:costco"
+    assert client.rpc.call_args_list[0].args[0] == "vault_get_secret_by_name"
+    create_calls = [c for c in client.rpc.call_args_list if c.args[0] == "vault_create_secret"]
+    assert len(create_calls) == 1
+    assert create_calls[0].args[1]["unique_name"] == "grocerysync:user-1:costco"
 
 
-def test_region_propagated_to_boto3_client():
-    with patch("backend.services.secrets_service.boto3.client") as mock_client:
-        mock_client.return_value = MagicMock()
-        SecretsService("ap-southeast-2")
+def test_vault_store_updates_when_secret_exists():
+    client = _mock_rpc_client({"vault_get_secret_by_name": '{"token":"old"}'})
+    svc = SupabaseVaultService(client)
 
-    assert mock_client.call_args.kwargs["region_name"] == "ap-southeast-2"
+    svc.store_user_credentials("user-1", "costco", {"token": "new"})
+
+    update_calls = [
+        c for c in client.rpc.call_args_list if c.args[0] == "vault_update_secret_by_name"
+    ]
+    assert len(update_calls) == 1
+    assert update_calls[0].args[1]["new_secret"] == json.dumps({"token": "new"})
 
 
-def test_get_secret_parses_SecretString_as_json():
-    client = boto3.client("secretsmanager", region_name="us-east-1")
-    secret_id = "grocerysync/user-1/safeway/credentials"
-    payload = {"refresh_token": "rt", "access_token": "at"}
+def test_vault_retrieve_parses_json():
+    payload = {"refreshToken": "rt"}
+    client = _mock_rpc_client({"vault_get_secret_by_name": json.dumps(payload)})
+    svc = SupabaseVaultService(client)
 
-    with Stubber(client) as stubber:
-        stubber.add_response(
-            "get_secret_value",
-            {
-                "ARN": "arn:aws:secretsmanager:us-east-1:1:secret:x",
-                "Name": secret_id,
-                "SecretString": json.dumps(payload),
-                "VersionId": "a" * 32,
-                "CreatedDate": "2020-01-01T00:00:00Z",
-            },
-            expected_params={"SecretId": secret_id},
-        )
-
-        with patch("backend.services.secrets_service.boto3.client", return_value=client):
-            svc = SecretsService("us-east-1")
-            out = svc.retrieve_user_credentials("user-1", "safeway")
+    out = svc.retrieve_user_credentials("user-1", "costco")
 
     assert out == payload
 
 
-def test_get_secret_raises_SecretsNotFoundException_on_ResourceNotFoundException():
-    sm = _sm_client()
-    rnf = sm.exceptions.ResourceNotFoundException(
-        {"Error": {"Code": "ResourceNotFoundException", "Message": "not found"}},
-        "GetSecretValue",
-    )
-    mock_client = MagicMock()
-    mock_client.get_secret_value.side_effect = rnf
-    mock_client.exceptions.ResourceNotFoundException = sm.exceptions.ResourceNotFoundException
-
-    with patch("backend.services.secrets_service.boto3.client", return_value=mock_client):
-        svc = SecretsService("us-west-2")
+def test_vault_retrieve_raises_when_missing():
+    client = _mock_rpc_client({"vault_get_secret_by_name": None})
+    svc = SupabaseVaultService(client)
 
     with pytest.raises(SecretsNotFoundException):
-        svc.retrieve_user_credentials("missing", "safeway")
+        svc.retrieve_user_credentials("user-1", "costco")
 
 
-def test_get_secret_reraises_other_ClientError():
-    sm = _sm_client()
-    mock_client = MagicMock()
-    mock_client.get_secret_value.side_effect = ClientError(
-        {"Error": {"Code": "AccessDeniedException", "Message": "denied"}},
-        "GetSecretValue",
+def test_vault_delete_calls_rpc():
+    client = _mock_rpc_client({})
+    svc = SupabaseVaultService(client)
+
+    assert svc.delete_user_credentials("user-1", "costco") is True
+    client.rpc.assert_called_with(
+        "vault_delete_secret_by_name", {"secret_name": "grocerysync:user-1:costco"}
     )
-    mock_client.exceptions.ResourceNotFoundException = sm.exceptions.ResourceNotFoundException
-
-    with patch("backend.services.secrets_service.boto3.client", return_value=mock_client):
-        svc = SecretsService("us-west-2")
-
-    with pytest.raises(ConfigurationException, match="Failed to retrieve credentials"):
-        svc.retrieve_user_credentials("u", "qfc")
 
 
-def test_put_secret_calls_create_when_not_exists():
-    sm = _sm_client()
-    mock_client = MagicMock()
-    mock_client.create_secret.return_value = {"ARN": "arn:create"}
-    mock_client.exceptions.ResourceExistsException = sm.exceptions.ResourceExistsException
-
-    with patch("backend.services.secrets_service.boto3.client", return_value=mock_client):
-        svc = SecretsService("us-west-2")
-
-    arn = svc.store_user_credentials("u1", "safeway", {"k": "v"})
-
-    assert arn == "arn:create"
-    mock_client.create_secret.assert_called_once()
-    mock_client.update_secret.assert_not_called()
-    call_kw = mock_client.create_secret.call_args.kwargs
-    assert call_kw["Name"] == "grocerysync/u1/safeway/credentials"
-    assert json.loads(call_kw["SecretString"]) == {"k": "v"}
-
-
-def test_put_secret_calls_update_when_exists():
-    sm = _sm_client()
-    rex = sm.exceptions.ResourceExistsException(
-        {"Error": {"Code": "ResourceExistsException", "Message": "exists"}},
-        "CreateSecret",
-    )
-    mock_client = MagicMock()
-    mock_client.create_secret.side_effect = rex
-    mock_client.update_secret.return_value = {"ARN": "arn:update"}
-    mock_client.exceptions.ResourceExistsException = sm.exceptions.ResourceExistsException
-
-    with patch("backend.services.secrets_service.boto3.client", return_value=mock_client):
-        svc = SecretsService("us-west-2")
-
-    arn = svc.store_user_credentials("u2", "costco", {"a": "b"})
-
-    assert arn == "arn:update"
-    mock_client.update_secret.assert_called_once()
-    upd_kw = mock_client.update_secret.call_args.kwargs
-    assert upd_kw["SecretId"] == "grocerysync/u2/costco/credentials"
-    assert json.loads(upd_kw["SecretString"]) == {"a": "b"}
-
-
-def test_put_secret_is_idempotent_for_same_value():
-    sm = _sm_client()
-    rex = sm.exceptions.ResourceExistsException(
-        {"Error": {"Code": "ResourceExistsException", "Message": "exists"}},
-        "CreateSecret",
-    )
-    mock_client = MagicMock()
-    # First store: create succeeds. Second store: create reports exists → update succeeds.
-    mock_client.create_secret.side_effect = [
-        {"ARN": "arn:first"},
-        rex,
-    ]
-    mock_client.update_secret.return_value = {"ARN": "arn:next"}
-    mock_client.exceptions.ResourceExistsException = sm.exceptions.ResourceExistsException
-
-    with patch("backend.services.secrets_service.boto3.client", return_value=mock_client):
-        svc = SecretsService("us-west-2")
-
-    creds = {"token": "same"}
-    a1 = svc.store_user_credentials("u3", "safeway", creds)
-    a2 = svc.store_user_credentials("u3", "safeway", creds)
-
-    assert mock_client.create_secret.call_count == 2
-    assert mock_client.update_secret.call_count == 1
-    assert a1 == "arn:first"
-    assert a2 == "arn:next"
-
-
-def test_decrypted_secret_value_never_logged(caplog):
-    client = boto3.client("secretsmanager", region_name="us-east-1")
-    secret_id = "grocerysync/u9/safeway/credentials"
+def test_vault_decrypted_secret_never_logged(caplog):
     sensitive = "DO_NOT_LOG_THIS_PLAINTEXT_SECRET"
+    client = _mock_rpc_client(
+        {"vault_get_secret_by_name": json.dumps({"password": sensitive})}
+    )
+    svc = SupabaseVaultService(client)
 
-    with Stubber(client) as stubber:
-        stubber.add_response(
-            "get_secret_value",
-            {
-                "ARN": "arn:aws:secretsmanager:us-east-1:1:secret:y",
-                "Name": secret_id,
-                "SecretString": json.dumps({"password": sensitive}),
-                "VersionId": "b" * 32,
-                "CreatedDate": "2020-01-01T00:00:00Z",
-            },
-            expected_params={"SecretId": secret_id},
-        )
-
-        with patch("backend.services.secrets_service.boto3.client", return_value=client):
-            svc = SecretsService("us-east-1")
-
-        caplog.set_level(logging.INFO)
-        # Module logger does not propagate; attach caplog handler so records are visible.
-        svc_logger = secrets_service_module.logger
-        svc_logger.addHandler(caplog.handler)
-        try:
-            svc.retrieve_user_credentials("u9", "safeway")
-        finally:
-            svc_logger.removeHandler(caplog.handler)
+    caplog.set_level(logging.INFO)
+    svc_logger = secrets_service_module.logger
+    svc_logger.addHandler(caplog.handler)
+    try:
+        svc.retrieve_user_credentials("user-9", "costco")
+    finally:
+        svc_logger.removeHandler(caplog.handler)
 
     combined = " ".join(r.getMessage() for r in caplog.records) + caplog.text
     assert sensitive not in combined
+
+
+def test_mock_secrets_round_trip():
+    svc = MockSecretsService()
+    creds = {"username": "a@b.com", "password": "secret"}
+
+    key = svc.store_user_credentials("u1", "costco", creds)
+    assert key.startswith("mock-arn-")
+    assert svc.retrieve_user_credentials("u1", "costco") == creds
+    assert svc.rotate_credentials("u1", "costco", {"password": "new"}) is True
+    assert svc.retrieve_user_credentials("u1", "costco") == {"password": "new"}
+    assert svc.delete_user_credentials("u1", "costco") is True
+
+    with pytest.raises(SecretsNotFoundException):
+        svc.retrieve_user_credentials("u1", "costco")
+
+
+def test_create_mock_secrets_service():
+    svc = create_mock_secrets_service()
+    assert isinstance(svc, MockSecretsService)
+
+
+def test_mock_secrets_blocked_in_production(monkeypatch, mocker):
+    """Production startup must fail when Vault (admin_client) is unavailable."""
+    monkeypatch.setenv("FLASK_ENV", "production")
+    monkeypatch.setenv("FLASK_SECRET_KEY", "prod-key-not-default")
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-jwt-secret")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_KEY", "dummy-anon-key")
+    monkeypatch.setenv("CORS_ORIGINS", "capacitor://localhost")
+
+    mock_sb = MagicMock()
+    mock_sb.admin_client = None
+    mocker.patch(
+        "backend.services.supabase_service.create_supabase_service",
+        return_value=mock_sb,
+    )
+    mocker.patch(
+        "backend.services.receipt_processor.create_receipt_processor",
+        return_value=MagicMock(),
+    )
+
+    from backend.config import ProductionConfig
+    from backend.app import create_app
+
+    with pytest.raises(ConfigurationException, match="Supabase Vault is required"):
+        create_app(ProductionConfig())
+
+
+def test_production_uses_vault_when_admin_client_available(monkeypatch, mocker):
+    """Production with service role selects SupabaseVaultService, not mock."""
+    monkeypatch.setenv("FLASK_ENV", "production")
+    monkeypatch.setenv("FLASK_SECRET_KEY", "prod-key-not-default")
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", "test-jwt-secret")
+    monkeypatch.setenv("SUPABASE_URL", "https://example.supabase.co")
+    monkeypatch.setenv("SUPABASE_KEY", "dummy-anon-key")
+    monkeypatch.setenv("SUPABASE_SERVICE_ROLE_KEY", "dummy-service-key")
+    monkeypatch.setenv("CORS_ORIGINS", "capacitor://localhost")
+
+    mocker.patch("backend.services.supabase_service.create_client", return_value=MagicMock())
+    mocker.patch(
+        "backend.services.receipt_processor.ReceiptProcessor",
+        return_value=MagicMock(),
+    )
+
+    from backend.config import ProductionConfig
+    from backend.app import create_app
+    from backend.services.secrets_service import SupabaseVaultService
+
+    app = create_app(ProductionConfig())
+    assert isinstance(app.config["SECRETS_SERVICE"], SupabaseVaultService)

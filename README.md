@@ -10,7 +10,7 @@ Meald automatically fetches grocery receipts from your favorite stores and organ
 
 - 🏪 **Provider Integration**: Connect to grocery store accounts and automatically sync receipts
 - 📊 **Receipt Management**: View, search, and organize all your grocery receipts in one place
-- 🔒 **Secure Credentials**: Encrypted credential storage using AWS Secrets Manager
+- 🔒 **Secure Credentials**: Encrypted credential storage via Supabase Vault
 - 🎨 **Modern UI**: Beautiful, responsive interface built with React and Tailwind CSS
 - 🔌 **Extensible**: Modular provider system makes adding new stores easy
 
@@ -19,7 +19,7 @@ Meald automatically fetches grocery receipts from your favorite stores and organ
 ### Backend (Python + Flask)
 - **Flask** for REST API
 - **Supabase** for database
-- **AWS Secrets Manager** for credential storage
+- **Supabase Vault** for encrypted grocery credential storage
 - **Provider abstraction layer** for easy store integration
 
 ### Frontend (React + Vite)
@@ -42,7 +42,7 @@ Meald automatically fetches grocery receipts from your favorite stores and organ
 - Node.js 18+
 - uv package manager
 - Supabase account (optional for development)
-- AWS account (optional for production)
+- Supabase project (required for credential vault and database)
 
 ### Installation
 
@@ -88,6 +88,15 @@ npm run dev
 ```
 
 Visit `http://localhost:5173` to see the application.
+
+### Production & ops
+
+- **API:** `https://api.meald.app` (Fly.io) — [deploy runbook](docs/runbooks/deploy.md)
+- **Monitoring:** GlitchTip Cloud + UptimeRobot — [monitoring runbook](docs/runbooks/monitoring.md)
+- **Reconnect support:** [reconnect runbook](docs/runbooks/reconnect.md)
+- **Launch gate:** [MVP roadmap](docs/MVP_SCOPE_AND_ROADMAP.md) · [M6 findings](docs/implementation_briefs/mvp_gaps/06-launch-readiness-findings.md) (**NO-GO** until Area 5 device QA)
+
+Release mobile builds use `frontend/.env.production` (`VITE_API_BASE_URL=https://api.meald.app/api`).
 
 ### Testing
 
@@ -157,12 +166,12 @@ See `.env.example` for all available configuration options.
 **Key settings:**
 - `SUPABASE_URL` and `SUPABASE_KEY`: Database connection
 - `CONTENTSTACK_ACCESS_TOKEN`: Costco Contentstack CMS read-only token (for client-identifier verification)
-- `AWS_*`: Secrets Manager for credential storage (use mock in development)
+- `SUPABASE_SERVICE_ROLE_KEY`: Required for Supabase Vault (grocery credentials); without it, development falls back to an in-memory mock
 - `LOG_LEVEL`: Logging verbosity
 
 ## Security
 
-- All credentials are encrypted and stored in AWS Secrets Manager
+- Grocery provider credentials are encrypted in Supabase Vault (never stored in Postgres tables)
 - Row-level security (RLS) ensures users only access their own data
 - CORS configured for frontend domain only
 - No credentials stored in code or git
@@ -182,12 +191,7 @@ MIT License - see LICENSE file for details
 
 ## Roadmap
 
-- [ ] Additional providers (QFC, Costco, Walmart)
-- [ ] Recipe matching system
-- [ ] Meal planning assistant
-- [ ] Mobile app
-- [ ] Pantry inventory tracking
-- [ ] Shopping list generation
+See [`docs/MVP_SCOPE_AND_ROADMAP.md`](docs/MVP_SCOPE_AND_ROADMAP.md). MVP focuses on Safeway + Costco → pantry → What's for Dinner; meal planner and email auth are deferred behind feature flags. Launch readiness (M6) is **NO-GO** until physical-device QA against prod — track in [`06-launch-readiness-findings.md`](docs/implementation_briefs/mvp_gaps/06-launch-readiness-findings.md).
 
 ## Support
 

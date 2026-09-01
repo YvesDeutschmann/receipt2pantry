@@ -1,6 +1,7 @@
 import axios from 'axios'
 import { Preferences } from '@capacitor/preferences'
 import { supabase } from './supabaseClient'
+import { captureHandledError } from './monitoring'
 
 const PREF_MANUAL = 'dev_api_base_url'
 const PREF_SYNCED = 'dev_api_base_url_synced'
@@ -44,7 +45,7 @@ export async function initApiBaseUrl() {
 }
 
 export function shouldSyncApiBaseFromSupabase() {
-  return true
+  return import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_SETTINGS === '1'
 }
 
 export async function refreshSyncedApiBaseUrl() {
@@ -122,6 +123,13 @@ export function getApiBaseResolutionDebug() {
 
 const API_CLIENT_DEV_LOG_MAX = 2000
 
+function createRequestId() {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return crypto.randomUUID()
+  }
+  return `req-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
 /** Best-effort POST to backend /dev/log (same contract as webViewBridge.bridgeDevLog). */
 export function postDevLog(tag, msg) {
   try {
@@ -158,6 +166,10 @@ apiClient.interceptors.request.use(
   async (config) => {
     await initApiBaseUrl()
     config.baseURL = getEffectiveApiBaseUrl().url
+    config.headers = config.headers || {}
+    if (!config.headers['X-Request-Id']) {
+      config.headers['X-Request-Id'] = createRequestId()
+    }
     const { data: { session } } = await supabase.auth.getSession()
     if (session?.access_token) {
       config.headers.Authorization = `Bearer ${session.access_token}`
@@ -176,6 +188,7 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
+    const requestId = error.config?.headers?.['X-Request-Id']
     if (error.response) {
       // Server responded with error status
       const message = error.response.data?.error || 'An error occurred'
@@ -197,6 +210,14 @@ apiClient.interceptors.response.use(
       } catch {
         resolution = '{}'
       }
+      if (error.response.status >= 500) {
+        captureHandledError(new Error(`API ${method} ${fullUrl} failed with ${error.response.status}`), {
+          requestId,
+          status: error.response.status,
+          method,
+          url: fullUrl,
+        })
+      }
       postDevLog(
         'apiClient',
         `axios ${method} ${fullUrl} status=${error.response.status} bodyPreview=${bodyPreview} resolution=${resolution}`
@@ -204,9 +225,15 @@ apiClient.interceptors.response.use(
     } else if (error.request) {
       // Request made but no response
       console.error('Network Error:', error.message)
+      captureHandledError(error, {
+        requestId,
+        kind: 'network',
+        url: `${error.config?.baseURL || ''}${error.config?.url || ''}`,
+      })
     } else {
       // Something else happened
       console.error('Error:', error.message)
+      captureHandledError(error, { requestId, kind: 'client' })
     }
     return Promise.reject(error)
   }

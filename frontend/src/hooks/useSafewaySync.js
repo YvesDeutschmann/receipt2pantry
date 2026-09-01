@@ -15,6 +15,11 @@ import {
 import { parseSafewayReceipt } from '../services/safewayReceiptParser';
 import { api } from '../services/apiClient';
 import { dispatchProviderSyncCompleted } from '../services/providerSyncEvents';
+import {
+  logPhase,
+  reportAnomaly,
+  SyncPhase,
+} from '../services/syncEventLog';
 
 const LOG_PREFIX = '[SafewaySync]';
 const STATUS = {
@@ -130,7 +135,17 @@ export function useSafewaySync(userId) {
       }
 
       setStatus(STATUS.SUBMITTING);
-      const finalBackend = await api.ingestReceipts('safeway', receipts, userId);
+      void logPhase('safeway', SyncPhase.INGEST_STARTED, { mode: 'login' });
+      let finalBackend;
+      try {
+        finalBackend = await api.ingestReceipts('safeway', receipts, userId);
+      } catch (ingestErr) {
+        void reportAnomaly('safeway', SyncPhase.INGEST_FAILED, {
+          mode: 'login',
+          reason: ingestErr?.message || String(ingestErr),
+        });
+        throw ingestErr;
+      }
       setProgress(null);
       const itemsAdded = finalBackend.items_added_to_pantry ?? 0;
       if (itemsAdded > 3) {
@@ -150,12 +165,23 @@ export function useSafewaySync(userId) {
         receipts_stored: finalBackend.receipts_stored ?? receipts.length,
         items_added: itemsAdded,
       });
+      void logPhase('safeway', SyncPhase.SYNC_SUCCEEDED, {
+        mode: 'login',
+        metadata: {
+          receipts_stored: finalBackend.receipts_stored ?? receipts.length,
+          items_added: itemsAdded,
+        },
+      });
       setStatus(STATUS.SUCCESS);
       setHasStoredTokensState(true);
     } catch (err) {
       const msg = err?.message || String(err);
       const isTokenError = /token.*invalid|token.*expired|401|403|session.*expired/i.test(msg);
       console.error(`${LOG_PREFIX} startSync failed`, err?.message || err, err);
+      void reportAnomaly('safeway', SyncPhase.SYNC_FAILED, {
+        mode: 'login',
+        reason: msg,
+      });
       setProgress(null);
       if (isTokenError) {
         await clearStoredTokens();
@@ -234,7 +260,17 @@ export function useSafewaySync(userId) {
       setProgress(null);
       if (receipts.length > 0) {
         setStatus(STATUS.SUBMITTING);
-        const finalBackend = await api.ingestReceipts('safeway', receipts, userId);
+        void logPhase('safeway', SyncPhase.INGEST_STARTED, { mode: 'silent' });
+        let finalBackend;
+        try {
+          finalBackend = await api.ingestReceipts('safeway', receipts, userId);
+        } catch (ingestErr) {
+          void reportAnomaly('safeway', SyncPhase.INGEST_FAILED, {
+            mode: 'silent',
+            reason: ingestErr?.message || String(ingestErr),
+          });
+          throw ingestErr;
+        }
         const itemsAddedSilent = finalBackend.items_added_to_pantry ?? 0;
         if (itemsAddedSilent > 3) {
           void api.suggestions
@@ -253,6 +289,13 @@ export function useSafewaySync(userId) {
           receipts_stored: finalBackend.receipts_stored ?? receipts.length,
           items_added: itemsAddedSilent,
         });
+        void logPhase('safeway', SyncPhase.SYNC_SUCCEEDED, {
+          mode: 'silent',
+          metadata: {
+            receipts_stored: finalBackend.receipts_stored ?? receipts.length,
+            items_added: itemsAddedSilent,
+          },
+        });
       } else {
         setResult({
           receipts: [],
@@ -266,12 +309,20 @@ export function useSafewaySync(userId) {
           receipts_stored: 0,
           items_added: 0,
         });
+        void logPhase('safeway', SyncPhase.SYNC_SUCCEEDED, {
+          mode: 'silent',
+          metadata: { receipts_stored: 0, items_added: 0 },
+        });
       }
       setStatus(STATUS.SUCCESS);
       setHasStoredTokensState(true);
     } catch (err) {
       const msg = err?.message || String(err);
       console.error(`${LOG_PREFIX} startSilent failed`, msg);
+      void reportAnomaly('safeway', SyncPhase.SYNC_FAILED, {
+        mode: 'silent',
+        reason: msg,
+      });
       setProgress(null);
       await clearStoredTokens();
       setHasStoredTokensState(false);

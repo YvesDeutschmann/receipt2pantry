@@ -1,9 +1,11 @@
 """Dev-only API routes (guarded by Flask debug mode)."""
 
 import json
+import re
+import time
+from collections import defaultdict
 
 from flask import Blueprint, current_app, jsonify, request
-from flask_cors import cross_origin
 from pathlib import Path
 
 from backend.utils.auth import get_user_id_from_request
@@ -18,26 +20,75 @@ dev_bp = Blueprint("dev", __name__)
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _FIXTURES_DIR = _PROJECT_ROOT / "data" / "fixtures"
 
+_DEV_LOG_MAX_BODY_BYTES = 4096
+_DEV_LOG_RATE_LIMIT_PER_MINUTE = 240
+_dev_log_hits: dict[str, list[float]] = defaultdict(list)
+_CONTROL_CHAR_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def _dev_log_is_enabled() -> bool:
+    return bool(current_app.debug or current_app.config.get("DEV_LOG_ENABLED"))
+
+
+def _dev_log_client_ip() -> str:
+    """Prefer Fly-set client IP; do not trust client-supplied X-Forwarded-For for rate limits."""
+    fly_ip = request.headers.get("Fly-Client-IP")
+    if fly_ip:
+        return fly_ip.strip()
+    if request.remote_addr:
+        return request.remote_addr
+    return "unknown"
+
+
+def _dev_log_rate_limited(ip: str) -> bool:
+    now = time.time()
+    window = [t for t in _dev_log_hits[ip] if now - t < 60]
+    if len(window) >= _DEV_LOG_RATE_LIMIT_PER_MINUTE:
+        _dev_log_hits[ip] = window
+        return True
+    window.append(now)
+    _dev_log_hits[ip] = window
+    return False
+
+
+def _strip_control_chars(text: str) -> str:
+    return _CONTROL_CHAR_RE.sub("", text)
+
+
+def reset_dev_log_rate_limit_for_tests() -> None:
+    """Clear in-process rate-limit state (tests only)."""
+    _dev_log_hits.clear()
+
 
 def get_supabase_service():
     return current_app.config.get("SUPABASE_SERVICE")
 
 
 @dev_bp.route("/dev/log", methods=["POST", "GET", "OPTIONS"])
-@cross_origin(origins="*", methods=["POST", "GET", "OPTIONS"], allow_headers=["Content-Type"])
 def dev_log():
     """Receive log messages from native WebViews (iOS InAppBrowser) that can't reach os_log.
 
-    @cross_origin(origins="*") overrides the global Flask-CORS allowlist so this endpoint
-    accepts requests from any origin (Safeway/Okta/Albertsons SSO redirects, etc).
+    Available when Flask debug mode is on, or when DEV_LOG_ENABLED is set (temporary prod window).
 
     Tolerates three transports so iOS WKWebView quirks can't silence us:
       - POST application/json body: {tag, msg}
       - POST text/plain body: "TAG|MSG" or just "MSG"
       - GET ?tag=...&msg=...  (last-ditch, no body, no preflight)
     """
+    if not _dev_log_is_enabled():
+        return jsonify({"error": "Only available in dev mode"}), 403
+
     if request.method == "OPTIONS":
         return ("", 204)
+
+    if request.method != "GET":
+        raw_bytes = request.get_data()
+        if len(raw_bytes) > _DEV_LOG_MAX_BODY_BYTES:
+            return jsonify({"error": "Request body too large"}), 413
+
+    ip = _dev_log_client_ip()
+    if _dev_log_rate_limited(ip):
+        return jsonify({"error": "Rate limit exceeded"}), 429
 
     tag = "WebView"
     msg = ""
@@ -66,6 +117,10 @@ def dev_log():
                         msg = raw
                 else:
                     msg = raw
+        tag = _strip_control_chars(str(tag))[:64]
+        msg = _strip_control_chars(str(msg))
+        if len(msg) > 4000:
+            msg = msg[:4000] + "…"
         logger.info(f"[{tag}] {msg}")
     except Exception as e:
         logger.warning(f"[dev_log] failed to parse request: {e}")

@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { Navigate } from 'react-router-dom'
 import { Capacitor } from '@capacitor/core'
 import { useAuth } from '../contexts/AuthContext'
+import { FEATURES } from '../config/features'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MIN_PASSWORD_LENGTH = 8
@@ -32,9 +33,11 @@ function Auth() {
       }
     } catch (err) {
       const msg = err.message || 'Something went wrong'
+      const providerLabel = provider === 'apple' ? 'Apple' : 'Google'
+      const unavailableSuffix = FEATURES.emailAuth ? ' Try again or use email.' : ' Try again.'
       setError(
         msg.includes('unavailable') || msg.includes('provider')
-          ? `Sign in with ${provider === 'apple' ? 'Apple' : 'Google'} is unavailable. Try again or use email.`
+          ? `Sign in with ${providerLabel} is unavailable.${unavailableSuffix}`
           : msg
       )
     } finally {
@@ -105,6 +108,8 @@ function Auth() {
     }
   }
 
+  const showEmailFormUi = FEATURES.emailAuth && showEmailForm
+
   return (
     <div className="min-h-screen bg-forest flex flex-col items-center justify-center px-4 py-8">
       <div className="w-full max-w-sm card">
@@ -115,7 +120,7 @@ function Auth() {
           </p>
         </div>
 
-        {!showEmailForm ? (
+        {!showEmailFormUi ? (
           <>
             <div className="space-y-3 mb-6">
               {Capacitor.getPlatform() === 'ios' && (
@@ -146,16 +151,18 @@ function Auth() {
               <a href="/privacy" className="underline hover:text-cream">Privacy Policy</a>.
             </p>
 
-            <button
-              type="button"
-              onClick={() => {
-                setShowEmailForm(true)
-                setError('')
-              }}
-              className="w-full text-sm text-sage-light hover:text-terra-light transition-colors py-2"
-            >
-              Use email instead
-            </button>
+            {FEATURES.emailAuth && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEmailForm(true)
+                  setError('')
+                }}
+                className="w-full text-sm text-sage-light hover:text-terra-light transition-colors py-2"
+              >
+                Use email instead
+              </button>
+            )}
           </>
         ) : (
           <form onSubmit={handleEmailSubmit} className="space-y-4">
@@ -250,13 +257,13 @@ function Auth() {
           </form>
         )}
 
-        {error && !showEmailForm && (
+        {error && !showEmailFormUi && (
           <div className="mt-4 rounded-mise-md border border-[var(--color-error)] px-3 py-2 text-sm text-[var(--color-error)] bg-[var(--color-error)]/10">
             {error}
           </div>
         )}
 
-        {canUseTestUser && (
+        {FEATURES.emailAuth && canUseTestUser && (
           <div className="mt-6 pt-6 border-t border-forest-light">
             <button
               type="button"

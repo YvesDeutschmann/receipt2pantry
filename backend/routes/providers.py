@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify, request, current_app
 from backend.providers.provider_registry import ProviderRegistry
 from backend.services.receipt_service import store_fetched_receipts
 from backend.utils.logger import get_logger
+from backend.utils.auth import get_user_id_from_request
 from backend.utils.exceptions import AuthenticationException
 from backend.utils.costco_receipt_types import is_non_grocery_costco_receipt_type, receipt_type_from_payload
 
@@ -46,17 +47,6 @@ def _reconnect_response(provider: str, reason: str, detail: str = "") -> tuple:
         "provider": provider,
         "reason": reason,
     }), 401
-
-
-def _is_valid_user_id(user_id: str) -> bool:
-    """Return True if user_id is a non-empty, non-anonymous UUID."""
-    if not user_id or user_id.strip() == "" or user_id == "anonymous":
-        return False
-    try:
-        uuid.UUID(user_id)
-        return True
-    except (ValueError, TypeError):
-        return False
 
 
 def _store_and_process_fetched_receipts(user_id: str, provider_name: str, receipts: list) -> dict:
@@ -133,10 +123,14 @@ def get_provider_status(provider_name):
         user_id: User ID (required)
     """
     try:
-        user_id = request.args.get("user_id")
+        user_id = get_user_id_from_request()
         if not user_id:
-            return jsonify({"error": "user_id is required"}), 400
-        
+            return jsonify({"error": "User ID required"}), 401
+        try:
+            uuid.UUID(user_id)
+        except (ValueError, TypeError):
+            return jsonify({"error": "User ID required"}), 401
+
         # Native providers (WebView bridge) - no backend-stored credentials
         if provider_name in _NATIVE_PROVIDERS:
             return jsonify({
@@ -186,10 +180,14 @@ def store_costco_receipts():
     try:
         data = request.get_json() or {}
         receipts = data.get("receipts") or data.get("receipt_data") or []
-        user_id = data.get("user_id") or data.get("userId")
+        user_id = get_user_id_from_request()
 
-        if not _is_valid_user_id(user_id):
-            return jsonify({"error": "user_id is required and must be a valid UUID"}), 400
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 401
+        try:
+            uuid.UUID(user_id)
+        except (ValueError, TypeError):
+            return jsonify({"error": "User ID required"}), 401
         if not isinstance(receipts, list):
             return jsonify({"error": "receipts must be an array"}), 400
 
@@ -233,7 +231,6 @@ def connect_costco_from_app():
             "user_id": "uuid",              // Required: must match authenticated user
             "idToken": "eyJ...",            // Required: JWT idToken from WebView
             "clientId": "uuid",             // Optional: clientID from localStorage
-            "wcsClientId": "uuid",          // Optional: WCS client ID
             "refreshToken": "...",          // Optional: refresh token from MSAL
             "refreshTokenClientId": "uuid"   // Optional: client ID for refresh token
         }
@@ -252,13 +249,15 @@ def connect_costco_from_app():
         if not data:
             return jsonify({"error": "Request body is required"}), 400
 
-        user_id = data.get("user_id")
+        user_id = get_user_id_from_request()
         id_token = data.get("idToken") or data.get("id_token")
 
         if not user_id:
-            return jsonify({"error": "user_id is required"}), 400
-        if not _is_valid_user_id(user_id):
-            return jsonify({"error": "user_id must be a valid UUID"}), 400
+            return jsonify({"error": "User ID required"}), 401
+        try:
+            uuid.UUID(user_id)
+        except (ValueError, TypeError):
+            return jsonify({"error": "User ID required"}), 401
         if not id_token:
             return jsonify({"error": "idToken is required"}), 400
 

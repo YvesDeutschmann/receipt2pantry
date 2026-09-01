@@ -15,6 +15,12 @@ logger = get_logger(__name__)
 meal_plan_bp = Blueprint("meal_plan", __name__)
 
 
+@meal_plan_bp.before_request
+def _gate_meal_planner():
+    if not current_app.config.get("FEATURE_MEAL_PLANNER"):
+        return jsonify({"error": "Not found"}), 404
+
+
 def get_meal_plan_service():
     """Get meal plan service from app config"""
     return current_app.config.get("MEAL_PLAN_SERVICE")

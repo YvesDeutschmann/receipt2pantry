@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "monitoring:upload-sourcemaps": "sentry-cli sourcemaps upload --org meald_team --project meald-frontend ./dist/assets",
     "preview": "vite preview",
     "lint": "eslint .",
     "test": "vitest",
@@ -37,6 +38,7 @@
     "@capacitor/status-bar": "^8.0.1",
     "@capawesome/capacitor-google-sign-in": "^0.1.1",
     "@capgo/inappbrowser": "^8.1.23",
+    "@sentry/react": "^10.68.0",
     "@supabase/supabase-js": "^2.97.0",
     "axios": "^1.7.0",
     "capacitor-secure-storage-plugin": "^0.13.0",
