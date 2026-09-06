@@ -179,6 +179,66 @@ def test_sync_telemetry_accepts_webview_orphan_closed(sync_telemetry_client, moc
     assert json.loads(response.data)["accepted"] == 1
 
 
+def test_sync_telemetry_insert_constraint_violation_returns_400(sync_telemetry_client, mocker):
+    mocker.patch(
+        "backend.routes.telemetry.get_user_id_from_request",
+        return_value="jwt-user-id",
+    )
+    insert_mock = (
+        sync_telemetry_client.application.config["SUPABASE_SERVICE"]
+        .admin_client.table.return_value.insert.return_value
+    )
+    insert_mock.execute.side_effect = Exception(
+        'new row for relation "sync_events" violates check constraint "sync_events_phase_check"'
+    )
+    response = sync_telemetry_client.post(
+        "/api/telemetry/sync",
+        data=json.dumps(
+            {
+                "events": [
+                    {
+                        "provider": "costco",
+                        "phase": "webview_orphan_closed",
+                        "syncId": "11111111-1111-1111-1111-111111111111",
+                    }
+                ]
+            }
+        ),
+        content_type="application/json",
+    )
+    assert response.status_code == 400
+    assert json.loads(response.data)["error"] == "Invalid phase or constraint"
+
+
+def test_sync_telemetry_insert_generic_error_returns_500(sync_telemetry_client, mocker):
+    mocker.patch(
+        "backend.routes.telemetry.get_user_id_from_request",
+        return_value="jwt-user-id",
+    )
+    insert_mock = (
+        sync_telemetry_client.application.config["SUPABASE_SERVICE"]
+        .admin_client.table.return_value.insert.return_value
+    )
+    insert_mock.execute.side_effect = Exception("connection reset by peer")
+    response = sync_telemetry_client.post(
+        "/api/telemetry/sync",
+        data=json.dumps(
+            {
+                "events": [
+                    {
+                        "provider": "costco",
+                        "phase": "session_begin",
+                        "syncId": "11111111-1111-1111-1111-111111111111",
+                    }
+                ]
+            }
+        ),
+        content_type="application/json",
+    )
+    assert response.status_code == 500
+    assert json.loads(response.data)["error"] == "Failed to store telemetry"
+
+
 def test_sync_telemetry_rejects_oversized_batch(sync_telemetry_client, mocker):
     mocker.patch(
         "backend.routes.telemetry.get_user_id_from_request",

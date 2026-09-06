@@ -29,6 +29,7 @@ vi.mock('../services/safewayWebViewBridge', () => ({
   startLogin: (...args) => mockStartLogin(...args),
   startSilentSync: vi.fn(),
   clearStoredTokens: vi.fn(),
+  clearSafewayReconnectCooldown: vi.fn(() => Promise.resolve()),
   fetchSafewayReceipts: (...args) => mockFetchSafewayReceipts(...args),
 }))
 
@@ -324,8 +325,10 @@ describe('useSafewaySync — Test-First Suite', () => {
   })
 
   describe('group F — silent path', () => {
-    it('test_startSilent_null_result_sets_session_expired_error', async () => {
+    it('test_startSilent_null_result_sets_timeout_error_without_clearing_tokens', async () => {
       vi.mocked(startSilentSync).mockResolvedValue(null)
+      const reconnectListener = vi.fn()
+      window.addEventListener('safeway-sync-needs-reconnect', reconnectListener)
 
       const { result } = renderHook(() => useSafewaySync(userId))
 
@@ -337,8 +340,55 @@ describe('useSafewaySync — Test-First Suite', () => {
         expect(result.current.status).toBe(STATUS.ERROR)
       })
 
-      expect(result.current.error).toBe('Safeway session expired. Please sign in again.')
+      expect(result.current.error).toMatch(/timed out/i)
+      expect(vi.mocked(clearStoredTokens)).not.toHaveBeenCalled()
+      expect(reconnectListener).not.toHaveBeenCalled()
+      window.removeEventListener('safeway-sync-needs-reconnect', reconnectListener)
+    })
+
+    it('test_startSilent_needs_reconnect_dispatches_event_and_clears_tokens', async () => {
+      vi.mocked(startSilentSync).mockResolvedValue({
+        needs_reconnect: true,
+        reason: 'missing_session_cookie',
+      })
+      const reconnectListener = vi.fn()
+      window.addEventListener('safeway-sync-needs-reconnect', reconnectListener)
+
+      const { result } = renderHook(() => useSafewaySync(userId))
+
+      await act(async () => {
+        await result.current.startSilent()
+      })
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.ERROR)
+      })
+
       expect(vi.mocked(clearStoredTokens)).toHaveBeenCalled()
+      expect(reconnectListener).toHaveBeenCalled()
+      window.removeEventListener('safeway-sync-needs-reconnect', reconnectListener)
+    })
+
+    it('test_startSilent_missing_club_card_keeps_tokens', async () => {
+      vi.mocked(startSilentSync).mockResolvedValue({
+        accessToken: 'tok',
+      })
+      const reconnectListener = vi.fn()
+      window.addEventListener('safeway-sync-needs-reconnect', reconnectListener)
+
+      const { result } = renderHook(() => useSafewaySync(userId))
+
+      await act(async () => {
+        await result.current.startSilent()
+      })
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.ERROR)
+      })
+
+      expect(vi.mocked(clearStoredTokens)).not.toHaveBeenCalled()
+      expect(reconnectListener).not.toHaveBeenCalled()
+      window.removeEventListener('safeway-sync-needs-reconnect', reconnectListener)
     })
 
     it('test_startSilent_empty_receipts_sets_success_with_zero_counts', async () => {

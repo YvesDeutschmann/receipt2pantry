@@ -13,8 +13,21 @@ let initPromise = null
 
 /** Normalize user/pasted URL to API base (…/api, no trailing slash). */
 export function normalizeApiBaseUrl(url) {
-  const t = (url || '').trim().replace(/\/+$/, '')
+  let t = (url || '').trim().replace(/\/+$/, '')
   if (!t) return ''
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(t)) {
+    t = `http://${t}`
+  }
+  try {
+    const parsed = new URL(t)
+    // Vite's LAN URL is not the API. Flask is :5000.
+    if (parsed.port === '5173') {
+      parsed.port = '5000'
+    }
+    t = `${parsed.origin}${parsed.pathname}`.replace(/\/+$/, '')
+  } catch {
+    /* keep t */
+  }
   return /\/api$/.test(t) ? t : `${t}/api`
 }
 
@@ -34,7 +47,15 @@ export async function initApiBaseUrl() {
         Preferences.get({ key: PREF_MANUAL }),
         Preferences.get({ key: PREF_SYNCED }),
       ])
-      manualOverride = m || null
+      const normalizedManual = normalizeApiBaseUrl(m)
+      if (m && normalizedManual && normalizedManual !== m) {
+        try {
+          await Preferences.set({ key: PREF_MANUAL, value: normalizedManual })
+        } catch {
+          /* keep in-memory rewrite even if persist fails */
+        }
+      }
+      manualOverride = normalizedManual || null
       syncedValue = s || null
     } catch {
       manualOverride = null

@@ -108,6 +108,16 @@ def _validate_metadata(metadata: Any) -> dict[str, Any] | None:
     return out
 
 
+def _is_sync_events_constraint_violation(exc: Exception) -> bool:
+    """Postgres CHECK on sync_events.phase (e.g. unknown phase not in DB allowlist)."""
+    msg = str(exc).lower()
+    return (
+        "23514" in msg
+        or "check constraint" in msg
+        or "sync_events_phase_check" in msg
+    )
+
+
 def _parse_occurred_at(raw: Any) -> str:
     if raw is None:
         return datetime.now(timezone.utc).isoformat()
@@ -276,6 +286,9 @@ def ingest_sync_events():
     try:
         client.table("sync_events").insert(rows).execute()
     except Exception as exc:
+        if _is_sync_events_constraint_violation(exc):
+            logger.warning("sync_telemetry constraint violation: %s", exc)
+            return jsonify({"error": "Invalid phase or constraint"}), 400
         logger.error("Failed to ingest sync events: %s", exc)
         return jsonify({"error": "Failed to store telemetry"}), 500
 

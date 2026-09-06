@@ -46,7 +46,7 @@ Supabase auth (Meald login) can still be valid while a **store** session is expi
 ```text
 Foreground auto-sync → auth failure → <provider>-sync-needs-reconnect event
   → ReconnectBanner / SyncToastHost / NeedsAttentionSection
-  → user taps Reconnect → WebView login → credentials in vault
+  → user taps Reconnect → WebView login → tokens on device
   → <provider>-sync-completed → UI clears
 ```
 
@@ -89,7 +89,7 @@ If the user dismissed the banner or cleared **Needs attention** but the pantry i
 
 | Store | Flow | Notes |
 |-------|------|-------|
-| **Safeway** | WebView bridge login | User re-enters Safeway credentials; session cookie stored in Supabase Vault via secrets service |
+| **Safeway** | WebView bridge login | Session tokens stored in device Preferences (`safeway_accessToken`, `safeway_clubCard`); cookies live in InAppBrowser jar |
 | **Costco** | One-Tap WebView | Token via `connect-from-app`; check `_reconnect_response` reasons in backend logs if refresh fails |
 
 Credentials land in `grocery_accounts` + vault (`backend/services/secrets_service.py`). Vault is Supabase-only (no AWS).

@@ -231,6 +231,11 @@ function pickSyncMetadata(flat, maxKeys = 10) {
     'tokenErrorDescription',
     'tokenSource',
     'tokenSweepRuns',
+    'rtRefreshStatus',
+    'rtRefreshErrorCode',
+    'rtRefreshSource',
+    'rtRefreshRotated',
+    'rtRefreshPolicy',
   ];
   const out = {};
   for (const key of priority) {
@@ -699,24 +704,34 @@ function pickRtRefreshTelemetryMeta(data) {
   const out = {};
   if (typeof data.status === 'number') out.status = data.status;
   if (data.policy) out.policy = String(data.policy).slice(0, 64);
-  if (data.tenant) out.tenant = String(data.tenant).slice(0, 16);
   if (data.authoritySource) out.authoritySource = String(data.authoritySource).slice(0, 16);
   if (typeof data.attempt === 'number') out.attempt = data.attempt;
   if (data.errorCode) out.errorCode = String(data.errorCode).slice(0, 80);
+  if (data.source) out.source = String(data.source).slice(0, 16);
+  if (data.rotated) out.rotated = Boolean(data.rotated);
   return out;
 }
 
-function logRtRefreshExchange(provider, mode, data) {
+/**
+ * Persist page RT refresh to sync_events as token_exchange (allowlisted scalars only).
+ * @param {{ count: number, max: number } | null} [rtRefreshCap] silent-only row cap
+ */
+export function logRtRefreshExchange(provider, mode, data, rtRefreshCap = null) {
   if (!data || typeof data !== 'object') return;
   const status = data.status;
-  if (status === 200 && data.hasNewId) return;
-  const reason = data.errorCode
-    ? String(data.errorCode).slice(0, 120)
-    : status
-      ? `http_${status}`
-      : data.cors
-        ? 'cors'
-        : 'network';
+  const isSuccess = status === 200 && data.hasNewId;
+  if (isSuccess && mode !== 'silent') return;
+  if (rtRefreshCap && rtRefreshCap.count >= rtRefreshCap.max) return;
+  const reason = isSuccess
+    ? 'refreshed'
+    : data.errorCode
+      ? String(data.errorCode).slice(0, 120)
+      : status
+        ? `http_${status}`
+        : data.cors
+          ? 'cors'
+          : 'network';
+  if (rtRefreshCap) rtRefreshCap.count += 1;
   void logPhase(provider, SyncPhase.TOKEN_EXCHANGE, {
     mode,
     reason,
@@ -1545,6 +1560,9 @@ export function createWebViewBridge(config) {
         let timeout;
         let lastCensusSummary = null;
         let lastCensusAtMs = 0;
+        let lastRtRefreshSummary = null;
+        let lastRtRefreshAtMs = 0;
+        const rtRefreshCap = { count: 0, max: 4 };
         let sessionBackgroundMs = 0;
         let pausedAt = null;
         let silentOpenReady = false;
@@ -1574,8 +1592,14 @@ export function createWebViewBridge(config) {
           unsubForeground?.();
         };
 
-        const censusMeta = (base) =>
-          anomalyMetadataWithCensus(base, lastCensusSummary, lastCensusAtMs);
+        const censusMeta = (base) => {
+          const merged = pickSyncMetadata({
+            ...(lastCensusSummary || {}),
+            ...(lastRtRefreshSummary || {}),
+          });
+          const capturedAtMs = Math.max(lastCensusAtMs || 0, lastRtRefreshAtMs || 0);
+          return anomalyMetadataWithCensus(base, merged, capturedAtMs);
+        };
 
         const scheduleSilentTimeout = () => {
           if (timeout) clearTimeout(timeout);
@@ -1694,6 +1718,7 @@ export function createWebViewBridge(config) {
 
         const runSilentHttpOnlyPoll = async () => {
           if (!httpOnlyCookies || received || silentHttpOnlyInjected) return;
+          if (httpOnlyCookies.skipSilentInject?.()) return;
           try {
             const cookies = await InAppBrowser.getCookies({
               url: httpOnlyCookies.url,
@@ -1731,18 +1756,20 @@ export function createWebViewBridge(config) {
             extendSilentDeadline();
             const flat = flattenCensusFromDebugMessage(d);
             if (flat) {
-              lastCensusSummary = flat;
-              lastCensusAtMs = Date.now();
+              lastRtRefreshSummary = flat;
+              lastRtRefreshAtMs = Date.now();
             }
             return false;
           }
           if (d.message === 'rt-refresh-result') {
             const flat = flattenCensusFromDebugMessage(d);
             if (flat) {
-              lastCensusSummary = flat;
-              lastCensusAtMs = Date.now();
+              lastRtRefreshSummary = flat;
+              lastRtRefreshAtMs = Date.now();
             }
-            logRtRefreshExchange(provider, silentMode, d.data);
+            if (!received) {
+              logRtRefreshExchange(provider, silentMode, d.data, rtRefreshCap);
+            }
             return false;
           }
           return false;

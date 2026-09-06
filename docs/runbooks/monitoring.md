@@ -89,8 +89,9 @@ Costco/Safeway WebView sync emits **lifecycle phases** to `sync_events` (via `PO
 | `ingest_failed` | Receipts fetched but `POST /api/receipts/ingest` (or Costco store) failed |
 | `sync_failed` | Hook-level failure after WebView work |
 | `needs_reconnect` | Token/session invalid; user must reconnect provider |
+| `webview_orphan_closed` | Leftover unowned WebView instance closed before a new session (cleanup telemetry; not an anomaly) |
 
-Full enum: see migration `20260728170000_sync_events.sql`.
+Full enum: see migrations `20260728170000_sync_events.sql` and `20260831190000_sync_events_webview_orphan_phase.sql`.
 
 ### Sync failure rate (daily check)
 
@@ -121,10 +122,14 @@ Suggested alert thresholds (tune after baseline):
 | `token_exchange` with `reason` like `http_404` | ≥ 3 in 1h for one user | Wrong B2C authority or dead RT — check `metadata.authoritySource` |
 | `sync_failed` with `reason` `refresh_stalled` | any in prod | Interactive login idle watchdog — user stuck on Orders page |
 
-Token refresh failures in production appear as `token_exchange` rows (not only `/api/dev/log`):
+Token refresh in production appears as `token_exchange` rows (not only `/api/dev/log`):
+
+- **Silent Costco page RT grant:** `reason = 'refreshed'`, metadata uses `status`, `policy`, `source`, `rotated` (no tokens).
+- **Interactive login diagnostic probe:** metadata uses `tokenFired`, `tokenStatus`, `tokenPolicy`, `tokenSweepRuns`.
+- **Failures (both modes):** `reason` is `invalid_grant`, `cors`, `http_<status>`, etc.
 
 ```sql
-SELECT phase, reason, metadata, occurred_at
+SELECT phase, reason, metadata, occurred_at, mode
 FROM sync_events
 WHERE phase = 'token_exchange'
   AND occurred_at > now() - interval '2 hours'

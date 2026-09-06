@@ -17,7 +17,7 @@ causes and hypotheses already ruled out. Do not re-litigate them here.
 | AccessToken on success | **Never present.** Extract uses the IdToken. RefreshToken is present; silent redeem shipped 2026-08-27 (was Bug A). |
 | IdToken lifetime | **~15 minutes**, not ~1 hour. |
 | Run C (Play ×3 vs Fly) | **Closed without running.** A/B already settled interactive login; C would not diagnose silent auto-fetch. |
-| Next chapter | **Silent sync after expiry.** Bug A fix shipped 2026-08-27; resilience shipped 2026-08-29. Device matrix S1–S5 **pass** (S3 2026-08-31). WebView listener leak + instance scoping shipped 2026-08-31; re-verify S3 **without** force-stop after interactive login. |
+| Next chapter | **Silent sync after expiry.** Bug A fix shipped 2026-08-27; resilience shipped 2026-08-29. Device matrix S1–S5 **pass** (S3 2026-08-31). WebView listener leak + instance scoping shipped 2026-08-31. Safeway bounded matrix **closed 2026-09-06**. |
 
 ---
 
@@ -112,8 +112,9 @@ use `pm clear` for that (it wipes the page RT you need for S3).
    is `localStorage.setItem('SYNC_AUTO_ENABLED', '0')` in the **Meald** WebView (safe to set via
    `chrome://inspect` on `https://localhost` before Costco sync; do not inspect the Costco
    InAppBrowser during login).
-2. **Pin LAN API** — Settings → Dev Tools → set Effective URL to your laptop Flask
-   (`http://<lan-ip>:5000/api`) → Save override → Test connection.
+2. **Pin LAN API** — debug APKs allow HTTP to the LAN. Confirm **Effective** is
+   Flask (`http://<lan-ip>:5000/api`, not Vite `:5173`) → Test connection.
+   **Clear override** if a leftover `:5173` URL is stored.
 3. **Run B purge** — leave **off** for Run A and B1. B3 was not run; leave the toggle off.
 
 ### Automated capture (no Chrome DevTools during login)
@@ -450,8 +451,9 @@ foreground + ~1 s settle + one retry, clear session only on terminal B2C
 | `needs_reconnect` | none |
 
 JWT from the 07:11 login was ~36 min old at tap, so this silent was after expiry.
-`rt-refresh-*` is still Flask-only; those lines had scrolled off before ingest. No
-`invalid_grant`. Gap: silent `sync_events` still have no census / refresh metadata.
+`rt-refresh-*` was Flask-only at the time (tee buffer rotated). Post-2026-09-06 ship:
+silent refresh also lands as `token_exchange` (`reason=refreshed`) on the same `sync_id`.
+No `invalid_grant`. Gap closed for durable refresh metadata.
 
 `ingest_started` at 07:48:25 and `store-receipts` at 07:48:59 match the new gate:
 the hook logs ingest, then `submitSilentReceipts` waits for foreground + settle
@@ -579,19 +581,23 @@ suppressed during S3). The flag is restored automatically — re-arm and retry.
 localStorage.setItem('COSTCO_S3_SMASH_RT', '1');
 ```
 
-## Separate thread, still not covered
+## Separate thread — Safeway bounded matrix
 
 Safeway silent sync hit `needs_reconnect` three times on 2026-07-29 (08:57, 09:25, 09:42) plus
-five `sync_skipped`. Same critical path, different provider, not yet investigated.
+five `sync_skipped`. Same critical path, different provider.
+
+**Closed 2026-09-06** on debug APK + LAN Flask: [safeway-session-diagnostic-runs.md](safeway-session-diagnostic-runs.md)
+(S-live, S-reconnect, S-leftover, S-cooldown all **PASS**). Do not reopen 431/dedup/MFA unless they appear on this APK. Area 5 vs `api.meald.app` is still open.
 
 ## Remaining Costco silent items
 
 | Item | Status |
 |---|---|
 | **S3** (revoked page RT → honest reconnect) | **PASS** 2026-08-31 (09:43; reconfirmed ~13:30 after force-stop). Procedure retained for regression |
-| Leftover InAppBrowser after interactive login | **Mitigated 2026-08-31** (listener cleanup + instance scoping + silent open gate). S3 should pass without force-stop; use Dev Tools force-close only if timeout persists. See [leftover session](#leftover-inappbrowser-after-login-2026-08-31) |
+| Leftover InAppBrowser after interactive login | **Mitigated 2026-08-31.** Shared cleanup re-proved 2026-09-06 on Safeway S-leftover (`fa349725`, no force-stop). Use Dev Tools force-close only if timeout persists. See [leftover session](#leftover-inappbrowser-after-login-2026-08-31) |
 | Scheduler 6 h `sync_reconnectCooldown_costco` | **Untested on device.** Code only sets it on terminal `needs_reconnect` in `adaptCostcoSilentSync`. Manual Silent button does not set it. Test with S3 then `SYNC_AUTO` on |
-| Silent `sync_events` census / `rt-refresh-*` on the terminal row | **Open.** Still Flask `/api/dev/log` only; buffer rotates |
+| `webview_orphan_closed` telemetry ingest 500 | **Closed 2026-09-06.** Migration `20260831190000` applied to remote; Flask maps CHECK `23514` to HTTP 400 so client isolate+poison works |
+| Silent `sync_events` census / `rt-refresh-*` on the terminal row | **Closed 2026-09-06.** Silent page RT refresh persists as `token_exchange` (`reason=refreshed`, metadata `status`/`source`/`policy`). Join on `sync_id`; Flask `/api/dev/log` is debug-only |
 | Durable ingest queue across process death | **Out of scope** for the resilience ship. Force-kill before ingest still drops the in-memory payload; next silent re-fetches |
 | Launch Area 5 (cold-start / auto-sync / forced-reconnect on prod iOS + Android) | **Still open** in [06-launch-readiness-findings.md](../implementation_briefs/mvp_gaps/06-launch-readiness-findings.md). S1–S5 is debug-APK + LAN Flask, not that sign-off |
 
