@@ -63,6 +63,7 @@ describe('costcoTokenRefresh', () => {
     expect(isTerminalRefreshError({ code: 'http_404', status: 404 })).toBe(true);
     expect(isTerminalRefreshError({ code: 'refresh_clock_skew' })).toBe(true);
     expect(isTerminalRefreshError({ code: 'http_500' })).toBe(false);
+    expect(isTerminalRefreshError({ message: 'Unauthorized', status: 401 })).toBe(false);
   });
 
   it('refreshCostcoTokensAppSide rejects clock-skew id_token', async () => {
