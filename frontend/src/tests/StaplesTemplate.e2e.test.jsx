@@ -36,6 +36,7 @@ vi.mock('../services/apiClient', () => ({ api: mockApi }))
 vi.mock('../services/supabaseClient', () => ({
   supabase: {
     auth: {
+      getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
       updateUser: vi.fn((payload) =>
         Promise.resolve({
           data: {

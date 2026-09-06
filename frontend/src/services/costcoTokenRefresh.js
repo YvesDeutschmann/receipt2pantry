@@ -98,11 +98,9 @@ export function isTerminalRefreshError(err) {
   ) {
     return true;
   }
+  // Refresh failures already set code to the OAuth error or `http_${status}`.
+  // Do not treat a generic Meald/API 401 object as a dead Costco session.
   if (/^http_4/.test(code) || code.includes('http_404') || code.includes('http_400')) {
-    return true;
-  }
-  const status = err?.status;
-  if (typeof status === 'number' && status >= 400 && status < 500) {
     return true;
   }
   return false;
