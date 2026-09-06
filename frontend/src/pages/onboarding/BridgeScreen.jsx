@@ -1,25 +1,40 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useOnboarding } from '../../contexts/OnboardingContext'
+
+const GENERIC_ERROR = 'Something went wrong. Please try again.'
 
 function BridgeScreen() {
   const navigate = useNavigate()
   const { completeBridge } = useOnboarding()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const inFlightRef = useRef(false)
+
+  const clearInFlight = () => {
+    inFlightRef.current = false
+    setLoading(false)
+  }
 
   const proceedFromBridge = async (navigateTo, coldStartMeta) => {
+    if (inFlightRef.current) return
+
+    inFlightRef.current = true
     setError(null)
     setLoading(true)
+
     try {
       const ok = await completeBridge(coldStartMeta)
-      if (!ok) return
+      if (!ok) {
+        setError(GENERIC_ERROR)
+        clearInFlight()
+        return
+      }
 
       navigate(navigateTo, { replace: true })
-    } catch (err) {
-      setError(err.message || 'Something went wrong. Tap to try again.')
-    } finally {
-      setLoading(false)
+    } catch {
+      setError(GENERIC_ERROR)
+      clearInFlight()
     }
   }
 
@@ -30,29 +45,14 @@ function BridgeScreen() {
           Now let&apos;s stock your pantry.
         </h1>
         <p className="text-sage-light text-center mb-8 leading-relaxed">
-          We&apos;ll connect to your grocery store to see what you&apos;ve been buying.
-          It takes about a minute and you&apos;ll come right back. Your first recipe
-          suggestions will be ready after that.
+          Connect a store to fill your pantry from recent receipts, or add items yourself.
+          You&apos;ll get dinner suggestions either way.
         </p>
 
         {error && (
           <div
-            role="button"
-            tabIndex={0}
-            onClick={() =>
-              proceedFromBridge('/providers', {
-                cold_start_skip_grocery: false,
-                bridge_chose_providers: true,
-              })
-            }
-            onKeyDown={(e) =>
-              e.key === 'Enter' &&
-              proceedFromBridge('/providers', {
-                cold_start_skip_grocery: false,
-                bridge_chose_providers: true,
-              })
-            }
-            className="rounded-mise-md border border-[var(--color-error)] px-3 py-2 text-sm text-[var(--color-error)] bg-[var(--color-error)]/10 mb-6 cursor-pointer"
+            role="alert"
+            className="rounded-mise-md border border-[var(--color-error)] px-3 py-2 text-sm text-[var(--color-error)] bg-[var(--color-error)]/10 mb-6"
           >
             {error}
           </div>
@@ -72,7 +72,7 @@ function BridgeScreen() {
           {loading ? (
             <span className="flex items-center justify-center gap-2">
               <span className="animate-spin rounded-full h-4 w-4 border-2 border-cream border-t-transparent" />
-              Connecting...
+              Working…
             </span>
           ) : (
             'Connect my grocery store'
@@ -89,7 +89,7 @@ function BridgeScreen() {
             })
           }
           disabled={loading}
-          className="w-full text-sm text-sage-light hover:text-terra-light transition-colors py-2"
+          className="w-full btn btn-secondary disabled:opacity-50 disabled:cursor-not-allowed"
         >
           I&apos;ll add items manually
         </button>
