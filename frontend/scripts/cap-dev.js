@@ -9,29 +9,14 @@
  * CAP_BACKEND_PORT (default 5000) for Flask / API URL written to .env.local
  */
 import { spawnSync } from 'node:child_process';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import {
-  getLanIPv4,
-  patchNetworkSecurityConfig,
-} from './android-network-security-patch.js';
+import { getLanIPv4 } from './android-network-security-patch.js';
+import { applyAndroidLanEnv } from './apply-android-lan-env.js';
 import { applyCapEnvVarsFromFiles } from './load-frontend-env-for-cap.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const frontendRoot = join(__dirname, '..');
-
-function updateEnvLocal(envPath, key, value) {
-  let content = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
-  const lineRE = new RegExp(`^${key.replace(/\\/g, '\\\\').replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}=.*$`, 'm');
-  const newLine = `${key}=${value}`;
-  if (lineRE.test(content)) {
-    content = content.replace(lineRE, newLine);
-  } else {
-    content += (content && !content.endsWith('\n') ? '\n' : '') + newLine + '\n';
-  }
-  writeFileSync(envPath, content, 'utf8');
-}
 
 function runCap(args, env) {
   const result = spawnSync('npx', ['cap', ...args], {
@@ -51,29 +36,9 @@ applyCapEnvVarsFromFiles(frontendRoot);
 
 const port = process.env.CAP_DEV_PORT || '5173';
 
-const ip =
-  process.env.ANDROID_DEV_LAN_IP?.trim() ||
-  process.env.CAP_DEV_HOST?.trim() ||
-  getLanIPv4();
+const applied = applyAndroidLanEnv({ frontendRoot, writeApiUrl: true });
+const ip = applied.ip || getLanIPv4();
 const devUrl = `http://${ip}:${port}/`;
-
-const xmlPath = join(
-  frontendRoot,
-  'android',
-  'app',
-  'src',
-  'main',
-  'res',
-  'xml',
-  'network_security_config.xml'
-);
-patchNetworkSecurityConfig(xmlPath, ip);
-
-const backendPort = process.env.CAP_BACKEND_PORT || '5000';
-const apiBaseUrl = `http://${ip}:${backendPort}/api`;
-const envLocalPath = join(frontendRoot, '.env.local');
-updateEnvLocal(envLocalPath, 'VITE_API_BASE_URL', apiBaseUrl);
-console.log(`VITE_API_BASE_URL=${apiBaseUrl}  (written to .env.local)`);
 
 console.log(`DEV_SERVER_URL=${devUrl}`);
 const env = { ...process.env, DEV_SERVER_URL: devUrl };

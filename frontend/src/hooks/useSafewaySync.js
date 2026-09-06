@@ -11,10 +11,17 @@ import {
   startSilentSync,
   clearStoredTokens,
   fetchSafewayReceipts,
+  clearSafewayReconnectCooldown,
 } from '../services/safewayWebViewBridge';
 import { parseSafewayReceipt } from '../services/safewayReceiptParser';
 import { api } from '../services/apiClient';
 import { dispatchProviderSyncCompleted } from '../services/providerSyncEvents';
+import {
+  classifySafewaySilentResult,
+  SAFEWAY_RECONNECT_MESSAGE,
+  SAFEWAY_TIMEOUT_MESSAGE,
+  SAFEWAY_MISSING_CLUB_MESSAGE,
+} from '../services/safewaySilentSyncOutcome';
 import {
   logPhase,
   reportAnomaly,
@@ -125,6 +132,7 @@ export function useSafewaySync(userId) {
       if (!userId) {
         setProgress(null);
         setResult({ receipts, count: receipts.length, receipts_stored: 0, items_added_to_pantry: 0 });
+        await clearSafewayReconnectCooldown();
         dispatchProviderSyncCompleted('safeway', {
           tier: 'manual',
           receipts_stored: 0,
@@ -160,6 +168,7 @@ export function useSafewaySync(userId) {
         items_added_to_pantry: itemsAdded,
         errors: finalBackend.errors ?? [],
       });
+      await clearSafewayReconnectCooldown();
       dispatchProviderSyncCompleted('safeway', {
         tier: 'manual',
         receipts_stored: finalBackend.receipts_stored ?? receipts.length,
@@ -219,22 +228,34 @@ export function useSafewaySync(userId) {
       } catch (_) {}
 
       const syncResult = await startSilentSync();
-      if (!syncResult) {
+      const outcome = classifySafewaySilentResult(syncResult);
+
+      if (outcome === 'skipped') {
         setProgress(null);
-        await clearStoredTokens();
-        setHasStoredTokensState(false);
-        setError('Safeway session expired. Please sign in again.');
+        setStatus(STATUS.IDLE);
+        return;
+      }
+
+      if (outcome === 'timeout') {
+        setProgress(null);
+        setError(SAFEWAY_TIMEOUT_MESSAGE);
         setStatus(STATUS.ERROR);
         return;
       }
 
-      if (!syncResult.accessToken) {
-        throw new Error('Safeway session invalid. Please sign in again.');
-      }
-      if (!syncResult.clubCard) {
+      if (outcome === 'needs_reconnect') {
+        setProgress(null);
         await clearStoredTokens();
         setHasStoredTokensState(false);
-        setError('Could not read your Safeway club card. Please sign in again.');
+        setError(SAFEWAY_RECONNECT_MESSAGE);
+        setStatus(STATUS.ERROR);
+        window.dispatchEvent(new CustomEvent('safeway-sync-needs-reconnect'));
+        return;
+      }
+
+      if (outcome === 'error') {
+        setProgress(null);
+        setError(SAFEWAY_MISSING_CLUB_MESSAGE);
         setStatus(STATUS.ERROR);
         return;
       }
@@ -250,10 +271,17 @@ export function useSafewaySync(userId) {
         });
         receipts = (raw || []).map((r) => parseSafewayReceipt(r)).filter(Boolean);
       } catch (fetchErr) {
-        await handleFetchAuthError(fetchErr, async () => {
+        const cleared = await handleFetchAuthError(fetchErr, async () => {
           await clearStoredTokens();
           setHasStoredTokensState(false);
         });
+        if (cleared) {
+          setProgress(null);
+          setError(SAFEWAY_RECONNECT_MESSAGE);
+          setStatus(STATUS.ERROR);
+          window.dispatchEvent(new CustomEvent('safeway-sync-needs-reconnect'));
+          return;
+        }
         throw fetchErr;
       }
 
@@ -284,6 +312,7 @@ export function useSafewaySync(userId) {
           items_added_to_pantry: itemsAddedSilent,
           errors: finalBackend.errors ?? [],
         });
+        await clearSafewayReconnectCooldown();
         dispatchProviderSyncCompleted('safeway', {
           tier: 'silent',
           receipts_stored: finalBackend.receipts_stored ?? receipts.length,
@@ -304,6 +333,7 @@ export function useSafewaySync(userId) {
           items_added_to_pantry: 0,
           errors: [],
         });
+        await clearSafewayReconnectCooldown();
         dispatchProviderSyncCompleted('safeway', {
           tier: 'silent',
           receipts_stored: 0,
@@ -324,8 +354,6 @@ export function useSafewaySync(userId) {
         reason: msg,
       });
       setProgress(null);
-      await clearStoredTokens();
-      setHasStoredTokensState(false);
       setError(msg || 'Failed to fetch receipts.');
       setStatus(STATUS.ERROR);
     }

@@ -14,11 +14,17 @@ import {
   classifyCostcoSilentResult,
   isTerminalSilentReconnectResult,
 } from '../services/costcoSilentSyncOutcome';
+import { classifySafewaySilentResult } from '../services/safewaySilentSyncOutcome';
 import {
   isCostcoReconnectCooldownActive,
   setCostcoReconnectCooldown,
   clearCostcoReconnectCooldown,
 } from '../services/costcoWebViewBridge';
+import {
+  isSafewayReconnectCooldownActive,
+  setSafewayReconnectCooldown,
+  clearSafewayReconnectCooldown,
+} from '../services/safewayWebViewBridge';
 
 // [CHANGED from Phase 4] Default is always-on; SYNC_AUTO_ENABLED='0' is the kill-switch.
 const AUTO_SYNC_KILL_SWITCH = '0';
@@ -31,18 +37,25 @@ const hasCostcoTokens = costcoBridge.hasStoredTokens;
 
 // TODO: replace with runSafewaySilentSync once silent_sync Phase 3 is merged
 async function adaptSafewaySilentSync(userId) {
+  if (await isSafewayReconnectCooldownActive()) {
+    return { outcome: 'skipped', reason: 'reconnect_cooldown' };
+  }
+
   const syncResult = await safewayBridge.startSilentSync();
-  if (syncResult?._skipped) {
+  const kind = classifySafewaySilentResult(syncResult);
+
+  if (kind === 'skipped') {
     return { outcome: 'skipped' };
   }
-  if (!syncResult) {
-    return { outcome: 'needs_reconnect' };
+  if (kind === 'timeout') {
+    return { outcome: 'error', message: 'silent_timeout' };
   }
-  if (!syncResult.accessToken) {
-    return { outcome: 'needs_reconnect' };
+  if (kind === 'needs_reconnect') {
+    await setSafewayReconnectCooldown();
+    return { outcome: 'needs_reconnect', message: syncResult?.reason || 'needs_reconnect' };
   }
-  if (!syncResult.clubCard) {
-    return { outcome: 'needs_reconnect' };
+  if (kind === 'error') {
+    return { outcome: 'error', message: 'missing_club_card' };
   }
 
   try {
@@ -66,6 +79,7 @@ async function adaptSafewaySilentSync(userId) {
     const receipts = (raw || []).map((r) => parseSafewayReceipt(r)).filter(Boolean);
 
     if (receipts.length === 0) {
+      await clearSafewayReconnectCooldown();
       return { outcome: 'synced', tier: 'silent', receipts_stored: 0, items_added: 0 };
     }
 
@@ -76,6 +90,7 @@ async function adaptSafewaySilentSync(userId) {
         .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
         .catch(() => {});
     }
+    await clearSafewayReconnectCooldown();
     return {
       outcome: 'synced',
       tier: 'silent',
@@ -90,6 +105,7 @@ async function adaptSafewaySilentSync(userId) {
       status === 403 ||
       /401|403|unauthorized|forbidden/i.test(msg);
     if (isAuth) {
+      await setSafewayReconnectCooldown();
       return { outcome: 'needs_reconnect' };
     }
     return { outcome: 'error', message: msg };

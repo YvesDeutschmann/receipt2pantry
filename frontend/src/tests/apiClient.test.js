@@ -75,6 +75,25 @@ function getResponseErrorInterceptor() {
   return call[1]
 }
 
+describe('normalizeApiBaseUrl', () => {
+  it('adds http and rewrites Vite :5173 to Flask :5000/api', async () => {
+    vi.resetModules()
+    const { normalizeApiBaseUrl } = await loadApiModule()
+    expect(normalizeApiBaseUrl('192.168.50.33:5173')).toBe(
+      'http://192.168.50.33:5000/api'
+    )
+    expect(normalizeApiBaseUrl('http://192.168.50.33:5173')).toBe(
+      'http://192.168.50.33:5000/api'
+    )
+    expect(normalizeApiBaseUrl('http://192.168.50.33:5000')).toBe(
+      'http://192.168.50.33:5000/api'
+    )
+    expect(normalizeApiBaseUrl('https://abc.ngrok-free.app')).toBe(
+      'https://abc.ngrok-free.app/api'
+    )
+  })
+})
+
 describe('apiClient', () => {
   beforeEach(() => {
     vi.clearAllMocks()

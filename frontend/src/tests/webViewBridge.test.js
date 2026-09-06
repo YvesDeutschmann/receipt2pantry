@@ -1116,6 +1116,83 @@ describe('webViewBridge contract', () => {
       })
     })
 
+    it('test_flattenCensusFromDebugMessage_flattens_rt_refresh_result', async () => {
+      const { flattenCensusFromDebugMessage } = await import('../services/webViewBridge.js')
+      const flat = flattenCensusFromDebugMessage({
+        message: 'rt-refresh-result',
+        data: {
+          status: 200,
+          cors: false,
+          errorCode: '',
+          policy: 'B2C_1A_SSO_WCS_signup_signin_209',
+          hasNewId: true,
+          rotated: true,
+          source: 'page',
+          bodyPreview: '{"id_token":"eyJ..."}',
+        },
+      })
+      expect(flat).toMatchObject({
+        censusReason: 'rt-refresh-result',
+        rtRefreshStatus: 200,
+        rtRefreshSource: 'page',
+        rtRefreshRotated: true,
+      })
+      expect(flat).not.toHaveProperty('bodyPreview')
+    })
+
+    it('test_logRtRefreshExchange_silent_success_writes_token_exchange', async () => {
+      const { logRtRefreshExchange } = await import('../services/webViewBridge.js')
+      syncLogMocks.logPhase.mockClear()
+      logRtRefreshExchange(
+        'costco',
+        'silent',
+        {
+          status: 200,
+          hasNewId: true,
+          policy: 'B2C_1A_SSO_WCS_signup_signin_209',
+          source: 'page',
+          rotated: true,
+          bodyPreview: '{"id_token":"secret"}',
+        },
+        { count: 0, max: 4 }
+      )
+      expect(syncLogMocks.logPhase).toHaveBeenCalledWith(
+        'costco',
+        'token_exchange',
+        expect.objectContaining({
+          mode: 'silent',
+          reason: 'refreshed',
+          metadata: expect.objectContaining({
+            status: 200,
+            policy: 'B2C_1A_SSO_WCS_signup_signin_209',
+            source: 'page',
+            rotated: true,
+          }),
+        })
+      )
+      const meta = syncLogMocks.logPhase.mock.calls[0][2].metadata
+      expect(meta).not.toHaveProperty('bodyPreview')
+    })
+
+    it('test_logRtRefreshExchange_login_success_skipped', async () => {
+      const { logRtRefreshExchange } = await import('../services/webViewBridge.js')
+      syncLogMocks.logPhase.mockClear()
+      logRtRefreshExchange('costco', 'login', { status: 200, hasNewId: true })
+      expect(syncLogMocks.logPhase).not.toHaveBeenCalled()
+    })
+
+    it('test_logRtRefreshExchange_silent_cap_at_four', async () => {
+      const { logRtRefreshExchange } = await import('../services/webViewBridge.js')
+      syncLogMocks.logPhase.mockClear()
+      const cap = { count: 0, max: 4 }
+      const data = { status: 400, errorCode: 'invalid_grant', source: 'page' }
+      for (let i = 0; i < 5; i++) {
+        logRtRefreshExchange('costco', 'silent', data, cap)
+      }
+      expect(syncLogMocks.logPhase).toHaveBeenCalledTimes(4)
+      expect(cap.count).toBe(4)
+    })
+
     it('test_costco_extract_nonce_reset_clears_rt_refresh_latch', async () => {
       const { getExtractScript } = await import('../services/costcoExtractScript.js')
       const posts = []

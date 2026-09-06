@@ -8,12 +8,15 @@ const {
   preferencesGetMock,
   preferencesSetMock,
   readFlagsMock,
-  runSafewaySilentSyncMock,
+  startSafewaySilentSyncMock,
+  fetchSafewayReceiptsMock,
   startCostcoSilentSyncMock,
   hasSafewayTokensMock,
   hasCostcoTokensMock,
   isCostcoCooldownMock,
   setCostcoCooldownMock,
+  isSafewayCooldownMock,
+  setSafewayCooldownMock,
 } = vi.hoisted(() => ({
   isNativePlatformMock: vi.fn(() => true),
   addListenerMock: vi.fn(),
@@ -21,12 +24,15 @@ const {
   preferencesGetMock: vi.fn(() => Promise.resolve({ value: null })),
   preferencesSetMock: vi.fn(() => Promise.resolve()),
   readFlagsMock: vi.fn(() => ({ minResyncMsOverride: null })),
-  runSafewaySilentSyncMock: vi.fn(),
+  startSafewaySilentSyncMock: vi.fn(),
+  fetchSafewayReceiptsMock: vi.fn(() => Promise.resolve([])),
   startCostcoSilentSyncMock: vi.fn(),
   hasSafewayTokensMock: vi.fn(() => Promise.resolve(true)),
   hasCostcoTokensMock: vi.fn(() => Promise.resolve(true)),
   isCostcoCooldownMock: vi.fn(() => Promise.resolve(false)),
   setCostcoCooldownMock: vi.fn(() => Promise.resolve()),
+  isSafewayCooldownMock: vi.fn(() => Promise.resolve(false)),
+  setSafewayCooldownMock: vi.fn(() => Promise.resolve()),
 }));
 
 let appStateHandler = null;
@@ -55,12 +61,19 @@ vi.mock('../../services/syncDebugFlags', () => ({
   redact: (v) => v,
 }));
 
-vi.mock('../../services/safewayWebViewBridge', () => ({
-  runSafewaySilentSync: (...args) => runSafewaySilentSyncMock(...args),
-  hasStoredTokens: (...args) => hasSafewayTokensMock(...args),
-  startSilentSync: vi.fn(),
-  fetchSafewayReceipts: vi.fn(),
-}));
+vi.mock('../../services/safewayWebViewBridge', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    runSafewaySilentSync: undefined,
+    hasStoredTokens: (...args) => hasSafewayTokensMock(...args),
+    startSilentSync: (...args) => startSafewaySilentSyncMock(...args),
+    fetchSafewayReceipts: (...args) => fetchSafewayReceiptsMock(...args),
+    isSafewayReconnectCooldownActive: (...args) => isSafewayCooldownMock(...args),
+    setSafewayReconnectCooldown: (...args) => setSafewayCooldownMock(...args),
+    clearSafewayReconnectCooldown: vi.fn(() => Promise.resolve()),
+  };
+});
 
 vi.mock('../../services/costcoWebViewBridge', async (importOriginal) => {
   const actual = await importOriginal();
@@ -168,11 +181,14 @@ describe('useAppSyncScheduler', () => {
     preferencesSetMock.mockResolvedValue(undefined);
     hasSafewayTokensMock.mockResolvedValue(true);
     hasCostcoTokensMock.mockResolvedValue(true);
-    runSafewaySilentSyncMock.mockResolvedValue({
-      outcome: 'synced',
-      tier: 'silent',
-      receipts_stored: 1,
-      items_added: 0,
+    isCostcoCooldownMock.mockResolvedValue(false);
+    isSafewayCooldownMock.mockResolvedValue(false);
+    setCostcoCooldownMock.mockClear();
+    setSafewayCooldownMock.mockClear();
+    fetchSafewayReceiptsMock.mockResolvedValue([]);
+    startSafewaySilentSyncMock.mockResolvedValue({
+      accessToken: 'tok',
+      clubCard: '999',
     });
     startCostcoSilentSyncMock.mockResolvedValue({
       receipts: [{ order_id: 'c1' }],
@@ -192,7 +208,7 @@ describe('useAppSyncScheduler', () => {
     renderHook(() => useAppSyncScheduler({ userId }));
     await flushMountAndDebounce();
     expect(addListenerMock).not.toHaveBeenCalled();
-    expect(runSafewaySilentSyncMock).not.toHaveBeenCalled();
+    expect(startSafewaySilentSyncMock).not.toHaveBeenCalled();
   });
 
   it('NOOP_WHEN_KILL_SWITCH_ON — addListener not called', () => {
@@ -204,44 +220,44 @@ describe('useAppSyncScheduler', () => {
   it('AUTO_ENABLED_WHEN_FLAG_ABSENT — scheduler runs on mount', async () => {
     renderHook(() => useAppSyncScheduler({ userId }));
     await flushMountAndDebounce();
-    expect(runSafewaySilentSyncMock).toHaveBeenCalledWith(userId);
+    expect(startSafewaySilentSyncMock).toHaveBeenCalled();
   });
 
   it('AUTO_ENABLED_WHEN_FLAG_IS_1 — scheduler runs', async () => {
     localStorage.setItem('SYNC_AUTO_ENABLED', '1');
     renderHook(() => useAppSyncScheduler({ userId }));
     await flushMountAndDebounce();
-    expect(runSafewaySilentSyncMock).toHaveBeenCalled();
+    expect(startSafewaySilentSyncMock).toHaveBeenCalled();
   });
 
   it('NOOP_WHEN_USER_ID_NULL — no provider run', async () => {
     renderHook(() => useAppSyncScheduler({ userId: null }));
     await flushMountAndDebounce();
-    expect(runSafewaySilentSyncMock).not.toHaveBeenCalled();
+    expect(startSafewaySilentSyncMock).not.toHaveBeenCalled();
     expect(startCostcoSilentSyncMock).not.toHaveBeenCalled();
   });
 
-  it('RUNS_ON_MOUNT_AFTER_AUTH_SETTLED — runSafewaySilentSync once after MOUNT_DELAY_MS', async () => {
+  it('RUNS_ON_MOUNT_AFTER_AUTH_SETTLED — startSilentSync once after MOUNT_DELAY_MS', async () => {
     renderHook(() => useAppSyncScheduler({ userId }));
     await act(async () => {
       vi.advanceTimersByTime(249);
       await Promise.resolve();
     });
-    expect(runSafewaySilentSyncMock).not.toHaveBeenCalled();
+    expect(startSafewaySilentSyncMock).not.toHaveBeenCalled();
     await act(async () => {
       vi.advanceTimersByTime(1);
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(runSafewaySilentSyncMock).toHaveBeenCalledTimes(1);
+    expect(startSafewaySilentSyncMock).toHaveBeenCalledTimes(1);
   });
 
   it('RUNS_ON_APP_STATE_ACTIVE_TRUE — provider run triggered', async () => {
     renderHook(() => useAppSyncScheduler({ userId }));
-    runSafewaySilentSyncMock.mockClear();
+    startSafewaySilentSyncMock.mockClear();
     startCostcoSilentSyncMock.mockClear();
     await simulateAppActive();
-    expect(runSafewaySilentSyncMock).toHaveBeenCalled();
+    expect(startSafewaySilentSyncMock).toHaveBeenCalled();
   });
 
   it('DOES_NOT_RUN_ON_APP_STATE_INACTIVE — no run', async () => {
@@ -251,13 +267,13 @@ describe('useAppSyncScheduler', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    runSafewaySilentSyncMock.mockClear();
+    startSafewaySilentSyncMock.mockClear();
     await act(async () => {
       appStateHandler?.({ isActive: false });
       vi.advanceTimersByTime(2000);
       await Promise.resolve();
     });
-    expect(runSafewaySilentSyncMock).not.toHaveBeenCalled();
+    expect(startSafewaySilentSyncMock).not.toHaveBeenCalled();
   });
 
   it('DEBOUNCES_RAPID_APP_STATE_EVENTS — exactly one run', async () => {
@@ -267,7 +283,7 @@ describe('useAppSyncScheduler', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    runSafewaySilentSyncMock.mockClear();
+    startSafewaySilentSyncMock.mockClear();
     await act(async () => {
       appStateHandler?.({ isActive: true });
       appStateHandler?.({ isActive: true });
@@ -276,7 +292,7 @@ describe('useAppSyncScheduler', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    expect(runSafewaySilentSyncMock).toHaveBeenCalledTimes(1);
+    expect(startSafewaySilentSyncMock).toHaveBeenCalledTimes(1);
   });
 
   it('SKIPS_WHEN_THROTTLE_NOT_EXPIRED — safeway skipped, costco runs', async () => {
@@ -288,7 +304,7 @@ describe('useAppSyncScheduler', () => {
     });
     renderHook(() => useAppSyncScheduler({ userId }));
     await flushMountAndDebounce();
-    expect(runSafewaySilentSyncMock).not.toHaveBeenCalled();
+    expect(startSafewaySilentSyncMock).not.toHaveBeenCalled();
     expect(startCostcoSilentSyncMock).toHaveBeenCalled();
   });
 
@@ -297,14 +313,14 @@ describe('useAppSyncScheduler', () => {
     preferencesGetMock.mockResolvedValue({ value: String(Date.now()) });
     renderHook(() => useAppSyncScheduler({ userId }));
     await flushMountAndDebounce();
-    expect(runSafewaySilentSyncMock).toHaveBeenCalled();
+    expect(startSafewaySilentSyncMock).toHaveBeenCalled();
   });
 
   it('SKIPS_PROVIDER_WITHOUT_STORED_TOKENS — only Costco runs', async () => {
     hasSafewayTokensMock.mockResolvedValue(false);
     renderHook(() => useAppSyncScheduler({ userId }));
     await flushMountAndDebounce();
-    expect(runSafewaySilentSyncMock).not.toHaveBeenCalled();
+    expect(startSafewaySilentSyncMock).not.toHaveBeenCalled();
     expect(startCostcoSilentSyncMock).toHaveBeenCalled();
   });
 
@@ -320,7 +336,10 @@ describe('useAppSyncScheduler', () => {
   });
 
   it('DOES_NOT_WRITE_LAST_RUN_ON_NEEDS_RECONNECT', async () => {
-    runSafewaySilentSyncMock.mockResolvedValue({ outcome: 'needs_reconnect' });
+    startSafewaySilentSyncMock.mockResolvedValue({
+      needs_reconnect: true,
+      reason: 'missing_session_cookie',
+    });
     renderHook(() => useAppSyncScheduler({ userId }));
     await flushMountAndDebounce();
     expect(preferencesSetMock).not.toHaveBeenCalledWith(
@@ -330,7 +349,7 @@ describe('useAppSyncScheduler', () => {
 
   it('DOES_NOT_WRITE_LAST_RUN_ON_SKIPPED', async () => {
     hasCostcoTokensMock.mockResolvedValue(false);
-    runSafewaySilentSyncMock.mockResolvedValue({ outcome: 'skipped' });
+    startSafewaySilentSyncMock.mockResolvedValue({ _skipped: true, reason: 'webview_busy' });
     renderHook(() => useAppSyncScheduler({ userId }));
     await flushMountAndDebounce();
     expect(preferencesSetMock).not.toHaveBeenCalled();
@@ -338,7 +357,7 @@ describe('useAppSyncScheduler', () => {
 
   it('DOES_NOT_WRITE_LAST_RUN_ON_ERROR_OUTCOME', async () => {
     hasCostcoTokensMock.mockResolvedValue(false);
-    runSafewaySilentSyncMock.mockResolvedValue({ outcome: 'error', message: 'boom' });
+    startSafewaySilentSyncMock.mockResolvedValue(null);
     renderHook(() => useAppSyncScheduler({ userId }));
     await flushMountAndDebounce();
     expect(preferencesSetMock).not.toHaveBeenCalled();
@@ -360,17 +379,63 @@ describe('useAppSyncScheduler', () => {
   });
 
   it('DISPATCHES_NEEDS_RECONNECT_EVENT', async () => {
-    runSafewaySilentSyncMock.mockResolvedValue({ outcome: 'needs_reconnect' });
+    startSafewaySilentSyncMock.mockResolvedValue({
+      needs_reconnect: true,
+      reason: 'missing_session_cookie',
+    });
     const listener = vi.fn();
     window.addEventListener('safeway-sync-needs-reconnect', listener);
     renderHook(() => useAppSyncScheduler({ userId }));
     await flushMountAndDebounce();
     expect(listener).toHaveBeenCalled();
+    expect(setSafewayCooldownMock).toHaveBeenCalled();
     window.removeEventListener('safeway-sync-needs-reconnect', listener);
   });
 
+  it('SAFEWAY_NEEDS_RECONNECT_SETS_COOLDOWN_WITHOUT_LAST_RUN', async () => {
+    hasCostcoTokensMock.mockResolvedValue(false);
+    startSafewaySilentSyncMock.mockResolvedValue({
+      needs_reconnect: true,
+      reason: 'missing_session_cookie',
+    });
+    renderHook(() => useAppSyncScheduler({ userId }));
+    await flushMountAndDebounce();
+    expect(setSafewayCooldownMock).toHaveBeenCalled();
+    expect(preferencesSetMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ key: 'sync_lastRun_safeway' })
+    );
+  });
+
+  it('SAFEWAY_TIMEOUT_NOT_RECONNECT_OR_COOLDOWN', async () => {
+    hasCostcoTokensMock.mockResolvedValue(false);
+    startSafewaySilentSyncMock.mockResolvedValue(null);
+    const reconnectListener = vi.fn();
+    const errorListener = vi.fn();
+    window.addEventListener('safeway-sync-needs-reconnect', reconnectListener);
+    window.addEventListener('safeway-sync-error', errorListener);
+    renderHook(() => useAppSyncScheduler({ userId }));
+    await flushMountAndDebounce();
+    expect(reconnectListener).not.toHaveBeenCalled();
+    expect(setSafewayCooldownMock).not.toHaveBeenCalled();
+    expect(errorListener).toHaveBeenCalled();
+    window.removeEventListener('safeway-sync-needs-reconnect', reconnectListener);
+    window.removeEventListener('safeway-sync-error', errorListener);
+  });
+
+  it('SAFEWAY_COOLDOWN_SKIPS_BEFORE_SILENT', async () => {
+    hasCostcoTokensMock.mockResolvedValue(false);
+    isSafewayCooldownMock.mockResolvedValue(true);
+    const skippedListener = vi.fn();
+    window.addEventListener('safeway-sync-skipped', skippedListener);
+    renderHook(() => useAppSyncScheduler({ userId }));
+    await flushMountAndDebounce();
+    expect(startSafewaySilentSyncMock).not.toHaveBeenCalled();
+    expect(skippedListener).toHaveBeenCalled();
+    window.removeEventListener('safeway-sync-skipped', skippedListener);
+  });
+
   it('DISPATCHES_ERROR_EVENT_ON_THROW', async () => {
-    runSafewaySilentSyncMock.mockRejectedValue(new Error('sync blew up'));
+    startSafewaySilentSyncMock.mockRejectedValue(new Error('sync blew up'));
     const listener = vi.fn();
     window.addEventListener('safeway-sync-error', listener);
     renderHook(() => useAppSyncScheduler({ userId }));
@@ -381,7 +446,7 @@ describe('useAppSyncScheduler', () => {
   });
 
   it('DISPATCHES_SKIPPED_EVENT', async () => {
-    runSafewaySilentSyncMock.mockResolvedValue({ outcome: 'skipped' });
+    startSafewaySilentSyncMock.mockResolvedValue({ _skipped: true, reason: 'webview_busy' });
     const listener = vi.fn();
     window.addEventListener('safeway-sync-skipped', listener);
     renderHook(() => useAppSyncScheduler({ userId }));
@@ -460,11 +525,11 @@ describe('useAppSyncScheduler', () => {
 
   it('SEQUENTIAL_NOT_PARALLEL — costco starts after safeway resolves', async () => {
     const order = [];
-    runSafewaySilentSyncMock.mockImplementation(async () => {
+    startSafewaySilentSyncMock.mockImplementation(async () => {
       order.push('safeway-start');
       await Promise.resolve();
       order.push('safeway-end');
-      return { outcome: 'synced', tier: 'silent', receipts_stored: 0, items_added: 0 };
+      return { accessToken: 'tok', clubCard: '999' };
     });
     startCostcoSilentSyncMock.mockImplementation(async () => {
       order.push('costco-start');
@@ -481,11 +546,10 @@ describe('useAppSyncScheduler', () => {
 
   it('IN_FLIGHT_GUARD_SKIPS_CONCURRENT_TRIGGER', async () => {
     let resolveSafeway;
-    runSafewaySilentSyncMock.mockImplementation(
+    startSafewaySilentSyncMock.mockImplementation(
       () =>
         new Promise((resolve) => {
-          resolveSafeway = () =>
-            resolve({ outcome: 'synced', tier: 'silent', receipts_stored: 0, items_added: 0 });
+          resolveSafeway = () => resolve({ accessToken: 'tok', clubCard: '999' });
         })
     );
     renderHook(() => useAppSyncScheduler({ userId }));
@@ -498,7 +562,7 @@ describe('useAppSyncScheduler', () => {
       vi.advanceTimersByTime(1000);
       await Promise.resolve();
     });
-    expect(runSafewaySilentSyncMock).toHaveBeenCalledTimes(1);
+    expect(startSafewaySilentSyncMock).toHaveBeenCalledTimes(1);
     await act(async () => {
       resolveSafeway?.();
       await Promise.resolve();
@@ -513,22 +577,22 @@ describe('useAppSyncScheduler', () => {
       await Promise.resolve();
       await Promise.resolve();
     });
-    runSafewaySilentSyncMock.mockClear();
+    startSafewaySilentSyncMock.mockClear();
     await act(async () => {
       appStateHandler?.({ isActive: true });
       vi.advanceTimersByTime(2000);
       await Promise.resolve();
     });
-    expect(runSafewaySilentSyncMock).not.toHaveBeenCalled();
+    expect(startSafewaySilentSyncMock).not.toHaveBeenCalled();
     expect(listenerRemoveMock).toHaveBeenCalled();
   });
 
   it('KILL_SWITCH_RE_CHECKED_AT_RUNTIME — no run after flag set to 0', async () => {
     renderHook(() => useAppSyncScheduler({ userId }));
     await flushMountAndDebounce();
-    runSafewaySilentSyncMock.mockClear();
+    startSafewaySilentSyncMock.mockClear();
     localStorage.setItem('SYNC_AUTO_ENABLED', '0');
     await simulateAppActive();
-    expect(runSafewaySilentSyncMock).not.toHaveBeenCalled();
+    expect(startSafewaySilentSyncMock).not.toHaveBeenCalled();
   });
 });

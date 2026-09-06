@@ -135,7 +135,7 @@ Production mobile builds bake in the API URL from [`frontend/.env.production`](.
 VITE_API_BASE_URL=https://api.meald.app/api
 ```
 
-Ensure `frontend/.env.local` has no active `VITE_API_BASE_URL` (LAN leftovers from `cap:dev`). Do **not** export `VITE_API_BASE_URL` from the repo-root `.env` when building — process env overrides Vite files and would bake `localhost` into the bundle.
+Store builds must use `npm run build:play-aab` (forces `VITE_API_BASE_URL` from `.env.production` and strips LAN cleartext). Do **not** use `build:mobile` for Play — that path writes the current LAN API URL into `.env.local` for debug APKs. Do **not** export `VITE_API_BASE_URL` from the repo-root `.env` when building — process env overrides Vite files and would bake `localhost` into the bundle.
 
 Verify after `cd frontend && npm run build`:
 

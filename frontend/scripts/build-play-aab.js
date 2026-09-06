@@ -54,13 +54,24 @@ function run(cmd, args, opts = {}) {
   console.log(`\n> ${cmd} ${args.join(' ')}`);
   const result = spawnSync(cmd, args, {
     cwd: opts.cwd ?? frontendRoot,
-    env: process.env,
+    env: opts.env ?? process.env,
     stdio: 'inherit',
     shell: opts.shell ?? false,
   });
   if (result.status !== 0) {
     process.exit(result.status ?? 1);
   }
+}
+
+function readProductionApiBaseUrl() {
+  const envPath = join(frontendRoot, '.env.production');
+  const match = readFileSync(envPath, 'utf8').match(/^VITE_API_BASE_URL=(.+)$/m);
+  const url = match?.[1]?.trim();
+  if (!url) {
+    console.error('FAIL: VITE_API_BASE_URL missing from frontend/.env.production');
+    process.exit(1);
+  }
+  return url;
 }
 
 function readVersion(gradle = readFileSync(buildGradlePath, 'utf8')) {
@@ -234,7 +245,11 @@ if (stripped) {
 }
 
 run('npm', ['run', 'cap:patch']);
-run('npx', ['vite', 'build']);
+const productionApiBase = readProductionApiBaseUrl();
+// Force the production API URL so a leftover LAN line in .env.local cannot win.
+run('npx', ['vite', 'build'], {
+  env: { ...process.env, VITE_API_BASE_URL: productionApiBase },
+});
 // Intentionally skip apply-android-lan-env.js — Play builds must not inject LAN cleartext.
 run('npx', ['cap', 'sync']);
 
