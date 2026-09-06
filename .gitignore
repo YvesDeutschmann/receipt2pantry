@@ -67,6 +67,9 @@ pnpm-debug.log*
 frontend/dist/
 frontend/build/
 
+# Local brand / icon drafts (not source of truth)
+frontend/assets/drafts/
+
 # Capacitor native build artifacts
 frontend/android/app/build/
 frontend/android/.gradle/

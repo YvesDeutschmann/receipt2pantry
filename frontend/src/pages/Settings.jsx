@@ -307,7 +307,7 @@ function Settings() {
                 <input
                   type="text"
                   className="input mt-1 w-full text-sm font-mono"
-                  placeholder="https://xxxx.ngrok-free.app or …/api"
+                  placeholder="http://192.168.x.x:5000/api"
                   value={devApiInput}
                   onChange={(e) => setDevApiInput(e.target.value)}
                 />

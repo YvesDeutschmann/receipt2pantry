@@ -60,23 +60,26 @@ To use the Vite dev server with hot reload on your phone (same Wi‑Fi as your P
 
 1. From `frontend`, run `**npm run dev**` in one terminal (Vite uses `host: true` so the dev server is reachable on your LAN).
 2. In another terminal, from `frontend`, run `**npm run cap:dev**`. This script:
-  - Detects your machine’s current LAN IPv4 (**or** uses `**ANDROID_DEV_LAN_IP`** / `**CAP_DEV_HOST`** from `.env` / `.env.local` if set — avoids committing IPs in tracked files)
-  - Updates `android/app/src/main/res/xml/network_security_config.xml` so Android allows HTTP to that IP (cleartext); the tracked XML only lists `localhost` + emulator — your LAN IP is injected by this script or by `**npm run cap:sync**` / `**cap run android**` when `ANDROID_DEV_LAN_IP` is in `.env.local`
-  - Writes `**VITE_API_BASE_URL**` to `.env.local` (e.g. `http://<your-ip>:5000/api`) so a later `**npm run build:mobile**` bakes the correct dev-machine API URL into the production bundle (otherwise the WebView uses `localhost` and API calls hit the phone)
-  - Runs `cap sync` with `**DEV_SERVER_URL**` set so `capacitor.config.ts` points the WebView at `http://<your-ip>:5173/`
+  - Detects your machine’s current LAN IPv4 (**or** uses `**ANDROID_DEV_LAN_IP`** / `**CAP_DEV_HOST`** from `.env` / `.env.local` if set)
+  - Writes `**VITE_API_BASE_URL**` to `.env.local` (`http://<your-ip>:5000/api`)
+  - Runs `cap sync` with `**DEV_SERVER_URL**` so the WebView loads `http://<your-ip>:5173/`
 3. Open the Android or iOS project and run on a device (e.g. `npx cap open android` → Run in Android Studio, or use Xcode on macOS).
 
 **One-shot from CLI (Android):** `npm run cap:run:android:dev` — same as `cap:dev` but also runs `cap run android`.
 
-**Custom port:** If Vite uses something other than 5173, set `CAP_DEV_PORT` before `cap:dev` (e.g. PowerShell: `$env:CAP_DEV_PORT=5174; npm run cap:dev`).
+**Bundled debug APK:** `npm run build:mobile` then `npm run cap:run:android`. Debug APKs use `android/app/src/debug/res/xml/network_security_config.xml`, which allows HTTP to any host — Test connection does not depend on injecting a LAN IP into the tracked main XML. `build:mobile` also writes `VITE_API_BASE_URL=http://<ip>:5000/api` before Vite bakes the bundle.
 
-**Backend / Flask port:** If the API listens on something other than 5000, set `CAP_BACKEND_PORT` before `cap:dev` (e.g. `$env:CAP_BACKEND_PORT=8080; npm run cap:dev`) so `.env.local` gets the matching `VITE_API_BASE_URL`.
+**Custom port:** If Vite uses something other than 5173, set `CAP_DEV_PORT` before `cap:dev`.
 
-**Wrong IP detected:** Add `ANDROID_DEV_LAN_IP=192.168.x.x` (or legacy `CAP_DEV_HOST`) to `**.env.local`** (gitignored), or export it for one session. If you have many virtual adapters (Hyper-V, Docker), prefer an explicit IP over auto-detect.
+**Backend / Flask port:** If the API listens on something other than 5000, set `CAP_BACKEND_PORT` so `.env.local` matches.
 
-**Production:** `npm run build:mobile` does not set `DEV_SERVER_URL`, so the app loads the bundled `dist/` and does not embed a dev `server.url`.
+**Wrong IP detected:** Add `ANDROID_DEV_LAN_IP=192.168.x.x` (or legacy `CAP_DEV_HOST`) to `**.env.local`**, or export it for one session.
 
-**If you get `net::ERR_CLEARTEXT_NOT_PERMITTED`:** Run `npm run cap:dev` again after connecting to a new network so the script refreshes your IP in `network_security_config.xml`. `10.0.2.2` (Android emulator → host loopback) is left unchanged.
+**Emulator only (no main-XML patch):** `SKIP_ANDROID_LAN_ENV=1`.
+
+**Production / Play:** Use `npm run build:play-aab` (strips LAN cleartext, forces `.env.production`). Do not commit a LAN `<domain>` in main XML.
+
+**If Dev Tools shows “Network Error”:** Effective must be `http://<lan-ip>:5000/api` (Flask), never Vite `:5173`. Saving an override rewrites `:5173` → `:5000`. A leftover override still wins until you Save again or tap **Clear override**. Flask must be on `0.0.0.0:5000`. `10.0.2.2` (emulator → host) is unchanged in the main XML.
 
 ---
 
@@ -98,7 +101,7 @@ In `frontend/.env.local` (gitignored), set:
 VITE_ENABLE_DEV_SETTINGS=1
 ```
 
-Then `npm run build:mobile` and distribute. This exposes **Settings → Dev Tools → Dev: API base URL** in a **release** build so you can paste an URL or see sync status. Omit this flag for real App Store production.
+Then `npm run build:mobile` and distribute. This exposes **Settings → Dev Tools → Dev: API base URL** in a **release** build so you can paste an URL or see sync status. `build:mobile` also writes a LAN `VITE_API_BASE_URL` for laptop debugging — testers should **Refresh from server** (or paste the ngrok URL) so Effective is not your Mac’s IP. Omit this flag for real App Store production. Use `npm run build:play-aab` for Play.
 
 **Note:** Supabase auto-fetch for `app_config` only runs when `import.meta.env.DEV` is true **or** `VITE_ENABLE_DEV_SETTINGS=1`, so production users without that flag do not poll `app_config`.
 

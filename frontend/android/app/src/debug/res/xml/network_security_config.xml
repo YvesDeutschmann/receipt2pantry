@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+  <!--
+    Debug APKs only (`cap run android` / app-debug.apk).
+    Allows HTTP to laptop Flask or Vite on any current LAN IP so DHCP
+    changes and a missing ANDROID_DEV_LAN_IP cannot block Test connection.
+    Release / Play AAB use src/main (localhost + 10.0.2.2 only).
+  -->
+  <base-config cleartextTrafficPermitted="true">
+    <trust-anchors>
+      <certificates src="system" />
+    </trust-anchors>
+  </base-config>
+</network-security-config>

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <network-security-config>
   <!--
-    Physical-device dev-only: LAN IP cleartext is added by npm run scripts
-    (ANDROID_DEV_LAN_IP or CAP_DEV_HOST from .env / .env.local, or npm run cap:dev auto-detect).
-    Do not commit a machine-specific IP — use .env.local (gitignored).
+    Physical-device debug APKs use src/debug (all cleartext). This main file
+    is for release / emulator. npm scripts may inject a LAN domain here for
+    cap:dev — do not commit a machine-specific IP. Play AAB strips LAN domains.
   -->
   <domain-config cleartextTrafficPermitted="true">
     <domain includeSubdomains="true">10.0.2.2</domain>

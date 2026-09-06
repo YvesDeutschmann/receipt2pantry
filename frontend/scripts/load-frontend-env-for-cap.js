@@ -2,7 +2,7 @@
  * Reads frontend/.env and frontend/.env.local (later overrides earlier).
  * Applies cap-related keys to process.env for Node scripts (cap-dev, apply-android-lan-env).
  */
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const CAP_KEYS = [
@@ -10,6 +10,7 @@ const CAP_KEYS = [
   'CAP_DEV_HOST',
   'CAP_DEV_PORT',
   'CAP_BACKEND_PORT',
+  'SKIP_ANDROID_LAN_ENV',
 ];
 
 /**
@@ -69,4 +70,24 @@ export function applyCapEnvVarsFromFiles(frontendRoot) {
       process.env[k] = String(v).trim();
     }
   }
+}
+
+/**
+ * Create or replace a KEY=value line in an env file (preserves comments / other keys).
+ *
+ * @param {string} envPath
+ * @param {string} key
+ * @param {string} value
+ */
+export function updateEnvLocal(envPath, key, value) {
+  let content = existsSync(envPath) ? readFileSync(envPath, 'utf8') : '';
+  const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const lineRE = new RegExp(`^${escaped}=.*$`, 'm');
+  const newLine = `${key}=${value}`;
+  if (lineRE.test(content)) {
+    content = content.replace(lineRE, newLine);
+  } else {
+    content += (content && !content.endsWith('\n') ? '\n' : '') + newLine + '\n';
+  }
+  writeFileSync(envPath, content, 'utf8');
 }
