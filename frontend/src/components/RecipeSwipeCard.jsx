@@ -37,7 +37,7 @@ const RecipeSwipeCard = ({
 
   return (
     <motion.div
-      className="relative bg-forest-mid rounded-mise-lg shadow-mise-lg overflow-hidden cursor-grab active:cursor-grabbing"
+      className="relative bg-forest-mid rounded-meald-lg shadow-meald-lg overflow-hidden cursor-grab active:cursor-grabbing"
       style={{ zIndex, x, y }}
       drag
       dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}

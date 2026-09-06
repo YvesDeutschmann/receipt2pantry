@@ -38,7 +38,7 @@ export default function PantrySearchOverlay({
             <button
               type="button"
               onClick={onClose}
-              className="p-2 rounded-mise-md text-sage-light hover:text-cream hover:bg-forest-light"
+              className="p-2 rounded-meald-md text-sage-light hover:text-cream hover:bg-forest-light"
               aria-label="Close"
             >
               <X className="w-6 h-6" />
@@ -59,7 +59,7 @@ export default function PantrySearchOverlay({
                           onClose()
                           onOpenVoice()
                         }}
-                        className="p-2.5 rounded-mise-md text-sage-light hover:text-cream hover:bg-forest-light shrink-0"
+                        className="p-2.5 rounded-meald-md text-sage-light hover:text-cream hover:bg-forest-light shrink-0"
                         aria-label="Tell us what you have (voice)"
                       >
                         <Mic className="w-5 h-5" />

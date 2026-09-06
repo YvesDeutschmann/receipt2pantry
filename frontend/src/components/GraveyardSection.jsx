@@ -110,7 +110,7 @@ export default function GraveyardSection({ userId, householdId, onPutBack }) {
                     ) : (
                       <button
                         type="button"
-                        className="px-3 py-1.5 text-sm rounded-mise-md border border-sage/40 text-cream hover:bg-forest-light"
+                        className="px-3 py-1.5 text-sm rounded-meald-md border border-sage/40 text-cream hover:bg-forest-light"
                         onClick={() => void handlePutBack(id)}
                       >
                         Put back

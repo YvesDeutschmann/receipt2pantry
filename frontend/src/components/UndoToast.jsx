@@ -48,7 +48,7 @@ export default function UndoToast({
           transition={{ duration: 0.2 }}
           className="fixed bottom-4 left-4 right-4 z-[100] max-w-lg mx-auto pointer-events-auto"
         >
-          <div className="flex items-center justify-between gap-3 rounded-mise-md bg-forest-mid border border-sage/30 px-4 py-3 shadow-mise-lg text-sm text-cream">
+          <div className="flex items-center justify-between gap-3 rounded-meald-md bg-forest-mid border border-sage/30 px-4 py-3 shadow-meald-lg text-sm text-cream">
             <span className="flex-1 min-w-0">{message}</span>
             {onAction && (
               <button

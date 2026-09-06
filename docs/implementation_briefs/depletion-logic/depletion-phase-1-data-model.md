@@ -1,6 +1,6 @@
-# Mise Depletion System — Phase 1: Data Model
+# Meald Depletion System — Phase 1: Data Model
 
-> **Reference:** Read `mise-depletion-master.md` before this document. All constraints and class definitions there apply here. This document defines only the scope of Phase 1.
+> **Reference:** Read `meald-depletion-master.md` before this document. All constraints and class definitions there apply here. This document defines only the scope of Phase 1.
 
 ---
 
@@ -199,7 +199,7 @@ Fixture J: Spinach, deleted_at set, in depletion_history (for graveyard UI)
 - [x] All tables created with correct types, constraints, and indexes
 - [x] `item_classification` seeded with ≥ 200 items covering Costco and Safeway top SKUs
 - [x] All 10 fixtures created and queryable
-- [x] Schema reviewed against every behavior in `mise-depletion-master.md` — no master doc behavior requires a schema change to implement
+- [x] Schema reviewed against every behavior in `meald-depletion-master.md` — no master doc behavior requires a schema change to implement
 - [x] No `confidence` column exists anywhere in the schema (see migration; `confidence_override` is allowed)
 
 ---

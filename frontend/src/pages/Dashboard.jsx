@@ -61,7 +61,7 @@ function Dashboard() {
 
       <NeedsAttentionSection />
 
-      <div className="mb-8 p-5 rounded-mise-lg border border-[var(--color-terra)]/35 bg-forest-light">
+      <div className="mb-8 p-5 rounded-meald-lg border border-[var(--color-terra)]/35 bg-forest-light">
         <p className="text-cream font-display font-semibold mb-1">
           {whatsForDinnerUnlocked ? "You're all set" : "What's for Dinner"}
         </p>
@@ -129,7 +129,7 @@ function Dashboard() {
         ) : (
           <div className="space-y-4">
             {receipts.map((receipt) => (
-              <div key={receipt.id} className="border border-forest-light rounded-mise-md p-4">
+              <div key={receipt.id} className="border border-forest-light rounded-meald-md p-4">
                 <div className="flex justify-between items-start">
                   <div>
                     <h3 className="font-semibold text-cream">{receipt.provider}</h3>

@@ -1,7 +1,7 @@
 Feature 2: Background Suggestion Pool — Architect's Planning Brief
 
 1. Feature Summary
-Right now, when a user wants meal suggestions, Mise reaches out to the Spoonacular API in real time and makes them wait. This feature eliminates that wait entirely by maintaining a pre-generated pool of meal suggestions that lives locally on the device, always ready before the user asks.
+Right now, when a user wants meal suggestions, Meald reaches out to the Spoonacular API in real time and makes them wait. This feature eliminates that wait entirely by maintaining a pre-generated pool of meal suggestions that lives locally on the device, always ready before the user asks.
 The pool is generated (or refreshed) in the background whenever something meaningful changes — the user finishes onboarding, their pantry shifts significantly after a receipt scan, they manually request a refresh, or the pool itself runs low. When the user opens the suggestions screen, they're swiping through results that were already fetched and ranked, with no spinner in sight.
 The most important intelligence in this feature is depletion-aware planning: when generating suggestions for multiple days ahead, the algorithm doesn't just look at the pantry as it exists right now. It simulates what the pantry will look like after earlier meals in the week are hypothetically cooked, so that later suggestions are realistic given what ingredients will still be available. This simulation is purely for planning purposes — the real pantry is only decremented when a user marks a meal as actually cooked, which is existing behavior that does not change.
 Before: User opens suggestions → spinner → API call → results appear (latency visible, failure possible in foreground).

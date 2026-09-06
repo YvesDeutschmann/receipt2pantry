@@ -75,7 +75,7 @@ In the hover actions `<div>` (currently wraps the single "Delete" button), add *
 
 ```jsx
 <button
-  className="px-3 py-1 bg-forest-mid text-cream text-sm rounded-mise-sm hover:bg-forest-light"
+  className="px-3 py-1 bg-forest-mid text-cream text-sm rounded-meald-sm hover:bg-forest-light"
   onClick={(e) => {
     e.stopPropagation()
     handleToggleLeftover(meal)

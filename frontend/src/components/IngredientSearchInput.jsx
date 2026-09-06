@@ -211,7 +211,7 @@ export default function IngredientSearchInput({
       )}
 
       {results.length > 0 && (
-        <ul className="mt-2 rounded-mise-md border border-sage/25 bg-forest-mid/80 overflow-hidden max-h-64 overflow-y-auto">
+        <ul className="mt-2 rounded-meald-md border border-sage/25 bg-forest-mid/80 overflow-hidden max-h-64 overflow-y-auto">
           {results.map((r) => (
             <li key={r.base_ingredient}>
               <button

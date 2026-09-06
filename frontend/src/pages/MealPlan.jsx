@@ -144,13 +144,13 @@ const MealPlan = () => {
       </div>
 
       {error && (
-        <div className="mb-4 p-4 border border-[var(--color-error)] rounded-mise-md bg-[var(--color-error)]/10">
+        <div className="mb-4 p-4 border border-[var(--color-error)] rounded-meald-md bg-[var(--color-error)]/10">
           <p className="text-[var(--color-error)]">{error}</p>
         </div>
       )}
 
       {/* Calendar Grid */}
-      <div className="bg-forest-mid rounded-mise-lg shadow-card overflow-hidden border border-forest-light">
+      <div className="bg-forest-mid rounded-meald-lg shadow-card overflow-hidden border border-forest-light">
         <div className="overflow-x-auto">
           <table className="w-full">
             <thead>
@@ -184,7 +184,7 @@ const MealPlan = () => {
                       >
                         {meal ? (
                           <div
-                            className="group relative p-2 bg-forest-light rounded-mise-md cursor-pointer hover:bg-forest-light/80 transition-colors"
+                            className="group relative p-2 bg-forest-light rounded-meald-md cursor-pointer hover:bg-forest-light/80 transition-colors"
                             onClick={() => handleMealClick(meal)}
                           >
                             <div className="flex items-start justify-between">
@@ -216,10 +216,10 @@ const MealPlan = () => {
                             </div>
                             
                             {/* Hover Actions */}
-                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 rounded-mise-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-50 rounded-meald-md flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
                               <div className="flex gap-2">
                                 <button
-                                  className="px-3 py-1 bg-forest-mid text-cream text-sm rounded-mise-sm hover:bg-forest-light"
+                                  className="px-3 py-1 bg-forest-mid text-cream text-sm rounded-meald-sm hover:bg-forest-light"
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleToggleLeftover(meal)
@@ -228,7 +228,7 @@ const MealPlan = () => {
                                   {meal.is_leftover ? '✓ Leftover' : 'Leftover'}
                                 </button>
                                 <button
-                                  className="px-3 py-1 bg-forest-mid text-cream text-sm rounded-mise-sm hover:bg-forest-light"
+                                  className="px-3 py-1 bg-forest-mid text-cream text-sm rounded-meald-sm hover:bg-forest-light"
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     handleDeleteMeal(meal.id)

@@ -33,7 +33,7 @@ function AdaptiveModal({ isOpen, onClose, title, children, hideHeader }) {
 
           {/* Bottom Sheet */}
           <motion.div
-            className="relative bg-forest-mid rounded-t-2xl shadow-mise-lg overflow-hidden flex flex-col max-h-[85vh] pb-safe"
+            className="relative bg-forest-mid rounded-t-2xl shadow-meald-lg overflow-hidden flex flex-col max-h-[85vh] pb-safe"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
@@ -92,7 +92,7 @@ function AdaptiveModal({ isOpen, onClose, title, children, hideHeader }) {
             onClick={handleBackdropClick}
           />
           <motion.div
-            className="relative bg-forest-mid rounded-mise-lg shadow-mise-lg max-w-lg w-full mx-auto"
+            className="relative bg-forest-mid rounded-meald-lg shadow-meald-lg max-w-lg w-full mx-auto"
             initial={{ opacity: 0, scale: 0.95 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}

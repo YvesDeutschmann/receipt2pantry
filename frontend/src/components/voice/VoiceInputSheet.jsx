@@ -274,7 +274,7 @@ export default function VoiceInputSheet({
             <button
               type="button"
               onClick={handleClose}
-              className="p-2 rounded-mise-md text-sage-light hover:text-cream hover:bg-forest-light"
+              className="p-2 rounded-meald-md text-sage-light hover:text-cream hover:bg-forest-light"
               aria-label="Close"
             >
               <X className="w-6 h-6" />
@@ -362,7 +362,7 @@ export default function VoiceInputSheet({
                 </div>
 
                 {uncertain.length > 0 && (
-                  <div className="mb-6 rounded-mise-md border border-sage/25 bg-forest-mid/50 p-3">
+                  <div className="mb-6 rounded-meald-md border border-sage/25 bg-forest-mid/50 p-3">
                     <p className="text-sage-light text-sm font-medium mb-3">
                       We weren&apos;t sure about these — do you mean…?
                     </p>
@@ -386,14 +386,14 @@ export default function VoiceInputSheet({
                               type="button"
                               disabled={!u.base_ingredient}
                               onClick={() => acceptUncertain(u)}
-                              className="px-3 py-1 rounded-mise-md bg-terra text-white text-xs disabled:opacity-40"
+                              className="px-3 py-1 rounded-meald-md bg-terra text-white text-xs disabled:opacity-40"
                             >
                               Yes
                             </button>
                             <button
                               type="button"
                               onClick={() => rejectUncertain(u)}
-                              className="px-3 py-1 rounded-mise-md border border-sage/40 text-sage-light text-xs"
+                              className="px-3 py-1 rounded-meald-md border border-sage/40 text-sage-light text-xs"
                             >
                               No
                             </button>

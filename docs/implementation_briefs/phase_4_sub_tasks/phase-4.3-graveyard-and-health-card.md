@@ -218,7 +218,7 @@ function relativeRemovalTime(deletedAt) {
 └──────────────────────────────────────────────┘
 ```
 
-- Card background: `bg-forest-mid border border-sage/30 rounded-mise-lg p-4`
+- Card background: `bg-forest-mid border border-sage/30 rounded-meald-lg p-4`
 - Title: "Quick pantry check" with a muted "30 seconds" label beside it.
 - Each item row: `base_ingredient` (or `normalized_name`) on the left. Two buttons on the right:
   - "Still have it": small outlined button, green-ish. On tap: call `api.correctPantryItem(userId, item.item_id, 'still_have_it')`. Animate a checkmark replacing the buttons. Remove the item from the list.

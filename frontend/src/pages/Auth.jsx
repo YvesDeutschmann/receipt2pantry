@@ -205,7 +205,7 @@ function Auth() {
             </div>
 
             {error && (
-              <div className="rounded-mise-md border border-[var(--color-error)] px-3 py-2 text-sm text-[var(--color-error)] bg-[var(--color-error)]/10">
+              <div className="rounded-meald-md border border-[var(--color-error)] px-3 py-2 text-sm text-[var(--color-error)] bg-[var(--color-error)]/10">
                 {error === 'exists' ? (
                   <>
                     An account with this email exists.{' '}
@@ -258,7 +258,7 @@ function Auth() {
         )}
 
         {error && !showEmailFormUi && (
-          <div className="mt-4 rounded-mise-md border border-[var(--color-error)] px-3 py-2 text-sm text-[var(--color-error)] bg-[var(--color-error)]/10">
+          <div className="mt-4 rounded-meald-md border border-[var(--color-error)] px-3 py-2 text-sm text-[var(--color-error)] bg-[var(--color-error)]/10">
             {error}
           </div>
         )}

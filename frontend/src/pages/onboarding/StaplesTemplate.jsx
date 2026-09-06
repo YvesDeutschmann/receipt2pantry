@@ -55,7 +55,7 @@ function StapleItemCard({
       layout
       onClick={() => onToggle(item.base_ingredient)}
       className={[
-        'relative w-full text-left rounded-mise-md border px-3 py-3 flex items-start gap-3 transition-colors',
+        'relative w-full text-left rounded-meald-md border px-3 py-3 flex items-start gap-3 transition-colors',
         selected
           ? 'border-[var(--color-terra)] bg-[var(--color-forest-light)]'
           : 'border-sage/30 bg-forest-mid/50',
@@ -98,7 +98,7 @@ function CategorySection({ name, items, selectedSet, preSelectedSet, receiptMatc
   const count = items.length
 
   return (
-    <div className="border border-sage/20 rounded-mise-md overflow-hidden mb-4 bg-forest-mid/30">
+    <div className="border border-sage/20 rounded-meald-md overflow-hidden mb-4 bg-forest-mid/30">
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
@@ -369,20 +369,20 @@ export default function StaplesTemplate() {
         <button
           type="button"
           onClick={() => setVoiceOpen(true)}
-          className="flex items-center justify-center gap-2 mb-4 text-sage-light text-xs w-full py-2 rounded-mise-md hover:bg-forest-light/60 hover:text-cream transition-colors"
+          className="flex items-center justify-center gap-2 mb-4 text-sage-light text-xs w-full py-2 rounded-meald-md hover:bg-forest-light/60 hover:text-cream transition-colors"
         >
           <Mic className="w-4 h-4" aria-hidden />
           Or just tell us what you have
         </button>
 
         {error && (
-          <div className="mb-4 rounded-mise-md border border-[var(--color-error)] px-3 py-2 text-sm text-[var(--color-error)] bg-[var(--color-error)]/10">
+          <div className="mb-4 rounded-meald-md border border-[var(--color-error)] px-3 py-2 text-sm text-[var(--color-error)] bg-[var(--color-error)]/10">
             <p>{error}</p>
             <div className="flex flex-wrap gap-2 mt-3">
               <button
                 type="button"
                 onClick={() => setError(null)}
-                className="text-xs px-3 py-1.5 rounded-mise-md bg-forest-light border border-sage/30 text-cream hover:border-terra/40"
+                className="text-xs px-3 py-1.5 rounded-meald-md bg-forest-light border border-sage/30 text-cream hover:border-terra/40"
               >
                 Try again
               </button>
@@ -396,7 +396,7 @@ export default function StaplesTemplate() {
                     setError(e.message || 'Sign out failed.')
                   }
                 }}
-                className="text-xs px-3 py-1.5 rounded-mise-md bg-transparent border border-sage/40 text-sage-light hover:text-cream"
+                className="text-xs px-3 py-1.5 rounded-meald-md bg-transparent border border-sage/40 text-sage-light hover:text-cream"
               >
                 Sign out and back in
               </button>
@@ -455,7 +455,7 @@ export default function StaplesTemplate() {
             exit={{ opacity: 0, y: 8 }}
             className="fixed bottom-24 left-4 right-4 max-w-lg mx-auto z-50"
           >
-            <div className="rounded-mise-md bg-forest-light border border-sage/30 text-cream text-sm px-4 py-3 text-center shadow-lg">
+            <div className="rounded-meald-md bg-forest-light border border-sage/30 text-cream text-sm px-4 py-3 text-center shadow-lg">
               {toast}
             </div>
           </motion.div>
@@ -477,7 +477,7 @@ export default function StaplesTemplate() {
               initial={{ y: 40, opacity: 0 }}
               animate={{ y: 0, opacity: 1 }}
               exit={{ y: 20, opacity: 0 }}
-              className="w-full max-w-sm rounded-mise-lg bg-forest-mid border border-sage/30 p-5"
+              className="w-full max-w-sm rounded-meald-lg bg-forest-mid border border-sage/30 p-5"
             >
               <h2 id="leave-title" className="text-cream font-display font-semibold mb-2">
                 Save what you&apos;ve selected so far?
