@@ -53,6 +53,8 @@ function SuggestionRecipeCard({
   onCookedIt,
   onDismiss,
   onExpand,
+  cookDisabled = false,
+  cookBusy = false,
 }) {
   const resolvedTier = tier ?? recipe.tier
   const useSoonLine = useSoonIngredientLine(recipe, resolvedTier)
@@ -121,13 +123,14 @@ function SuggestionRecipeCard({
 
           <button
             type="button"
-            className="mt-4 bg-terra text-cream font-semibold rounded-mise-md py-3 w-full"
+            className="mt-4 bg-terra text-cream font-semibold rounded-mise-md py-3 w-full disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={cookDisabled}
             onClick={(e) => {
               e.stopPropagation()
               onCookedIt(recipe)
             }}
           >
-            Cooked it
+            {cookBusy ? 'Recording…' : 'Cooked it'}
           </button>
         </div>
       </motion.div>

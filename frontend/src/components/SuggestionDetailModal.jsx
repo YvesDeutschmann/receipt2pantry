@@ -49,6 +49,32 @@ function rowKey(ing, index) {
   return ing.id != null ? String(ing.id) : `ing-${index}`
 }
 
+export function resolveRecipeFetchId(recipe) {
+  return String(recipe?.recipeIdForCook || recipe?.id || '')
+}
+
+export function shouldFetchRecipeDetails(recipe) {
+  const fetchId = resolveRecipeFetchId(recipe)
+  if (!fetchId) return false
+  if (fetchId.startsWith('staple_')) return false
+  if (!/^\d+$/.test(fetchId)) return false
+  if ((recipe?.extendedIngredients || []).length > 0) return false
+  return true
+}
+
+export function mergeRecipeDetails(recipe, details) {
+  return {
+    ...recipe,
+    ...details,
+    id: recipe.id,
+    recipeIdForCook: recipe.recipeIdForCook,
+    _fromPool: recipe._fromPool,
+    ingredient_flags: recipe.ingredient_flags,
+    tier: recipe.tier,
+    trigger_ingredient: recipe.trigger_ingredient,
+  }
+}
+
 function SuggestionDetailModal({
   isOpen,
   onClose,
@@ -58,6 +84,8 @@ function SuggestionDetailModal({
   pantryData,
   onCookedIt,
   onIngredientCorrected,
+  cookDisabled = false,
+  cookBusy = false,
 }) {
   const [detailRecipe, setDetailRecipe] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -81,18 +109,19 @@ function SuggestionDetailModal({
       return
     }
 
-    const rid = recipe.id
+    if (!shouldFetchRecipeDetails(recipe)) {
+      setDetailRecipe(recipe)
+      setDetailLoading(false)
+      return
+    }
+
+    const fetchId = resolveRecipeFetchId(recipe)
     setDetailLoading(true)
     setDetailRecipe({ ...recipe })
     void (async () => {
       try {
-        const details = await api.getRecipeDetails(userId, rid)
-        setDetailRecipe({
-          ...details,
-          ingredient_flags: recipe.ingredient_flags,
-          tier: recipe.tier,
-          trigger_ingredient: recipe.trigger_ingredient,
-        })
+        const details = await api.getRecipeDetails(userId, fetchId)
+        setDetailRecipe(mergeRecipeDetails(recipe, details))
       } catch (e) {
         console.error(e)
         setDetailRecipe(recipe)
@@ -275,10 +304,11 @@ function SuggestionDetailModal({
         {display && (
           <button
             type="button"
-            className="w-full bg-terra text-cream font-semibold rounded-mise-md py-3"
+            className="w-full bg-terra text-cream font-semibold rounded-mise-md py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+            disabled={cookDisabled}
             onClick={() => onCookedIt(display)}
           >
-            Cooked it
+            {cookBusy ? 'Recording…' : 'Cooked it'}
           </button>
         )}
         <button type="button" onClick={onClose} className="w-full btn btn-secondary">

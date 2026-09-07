@@ -95,6 +95,50 @@ class TestPantryCook:
         )
         assert resp.status_code == 400
 
+    def test_COOK_ENDPOINT_EMPTY_INGREDIENTS_UNKNOWN_STAPLE(
+        self, client_phase4, mock_supabase_service
+    ):
+        mock_supabase_service.admin_client = MagicMock()
+        resp = client_phase4.post(
+            "/api/pantry/cook",
+            data=json.dumps(
+                {
+                    "recipe_id": "staple_not_real",
+                    "servings": 2,
+                    "ingredients": [],
+                }
+            ),
+            content_type="application/json",
+            headers={"X-User-Id": "user-1"},
+        )
+        assert resp.status_code == 400
+
+    @patch("backend.routes.pantry.process_cook_event")
+    @patch("backend.routes.pantry.date")
+    def test_COOK_ENDPOINT_EMPTY_INGREDIENTS_ALLOWLISTED_STAPLE(
+        self, mock_date, mock_cook, client_phase4, mock_supabase_service
+    ):
+        mock_date.today.return_value = TEST_DATE
+        mock_supabase_service.admin_client = MagicMock()
+        resp = client_phase4.post(
+            "/api/pantry/cook",
+            data=json.dumps(
+                {
+                    "recipe_id": "staple_omelette",
+                    "recipe_name": "Omelette",
+                    "servings": 2,
+                    "ingredients": [],
+                }
+            ),
+            content_type="application/json",
+            headers={"X-User-Id": "user-1"},
+        )
+        assert resp.status_code == 200
+        assert json.loads(resp.data) == {"ok": True}
+        mock_cook.assert_called_once()
+        assert mock_cook.call_args[0][2] == "staple_omelette"
+        assert mock_cook.call_args[0][4] == []
+
 
 class TestGraveyard:
     def test_GRAVEYARD_RETURNS_RECENT_ITEMS(
