@@ -1,7 +1,7 @@
 """Pantry management service for tracking household ingredient inventory"""
 
 from typing import Any, Dict, List, Optional, Set, Tuple
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from backend.services.supabase_service import SupabaseService
 from backend.services.confidence_engine import (
     _rpc_soft_delete_pantry_item,
@@ -12,6 +12,10 @@ from backend.utils.exceptions import DatabaseException, ValidationException
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+_VALID_DEPLETION_CLASSES = frozenset(
+    {"PERISHABLE", "CONSUMABLE", "STAPLE", "UNIT_ITEM"}
+)
 
 
 class PantryService:
@@ -49,6 +53,7 @@ class PantryService:
         household_id: Optional[str] = None,
         *,
         today: Optional[date] = None,
+        include_deleted: bool = False,
     ) -> List[Dict]:
         """
         Get pantry items, preferring household scope if available
@@ -57,16 +62,83 @@ class PantryService:
             user_id: User ID (for legacy fallback)
             household_id: Household ID (preferred)
             today: Optional anchor date (reserved for time-deterministic call sites / tests)
+            include_deleted: When True, include soft-deleted rows (merge/resurrect only)
         
         Returns:
             List of pantry items
         """
         _ = today
         if household_id:
+            if include_deleted:
+                return self.supabase.get_household_pantry(
+                    household_id, include_deleted=True
+                )
             return self.supabase.get_household_pantry(household_id)
-        else:
-            # Fallback to user-scoped pantry (legacy)
-            return self.supabase.get_user_pantry(user_id)
+        if include_deleted:
+            return self.supabase.get_user_pantry(user_id, include_deleted=True)
+        return self.supabase.get_user_pantry(user_id)
+
+    @staticmethod
+    def _normalize_depletion_class(raw: Any) -> str:
+        if not isinstance(raw, str):
+            return "STAPLE"
+        dclass = raw.strip().upper()
+        return dclass if dclass in _VALID_DEPLETION_CLASSES else "STAPLE"
+
+    def _classification_for_base(self, base_ingredient: Optional[str]) -> Dict[str, Any]:
+        key = (base_ingredient or "").strip().lower()
+        if not key:
+            return {}
+        row = self.supabase.get_item_classifications_by_names([key]).get(key, {})
+        return row if isinstance(row, dict) else {}
+
+    def _depletion_fields(
+        self,
+        base_ingredient: str,
+        quantity: float,
+        *,
+        purchase_date: date,
+    ) -> Dict[str, Any]:
+        cls = self._classification_for_base(base_ingredient)
+        dclass = self._normalize_depletion_class(cls.get("depletion_class"))
+        fields: Dict[str, Any] = {
+            "depletion_class": dclass,
+            "purchase_date": purchase_date.isoformat(),
+        }
+        if dclass == "PERISHABLE" and cls.get("shelf_life_days"):
+            fields["available_until"] = (
+                purchase_date + timedelta(days=int(cls["shelf_life_days"]))
+            ).isoformat()
+        if dclass == "UNIT_ITEM":
+            fields["quantity_purchased"] = quantity
+        return fields
+
+    def _resurrect_fields(
+        self,
+        existing: Dict,
+        new_quantity: float,
+        *,
+        purchase_date: date,
+    ) -> Dict[str, Any]:
+        """Refresh purchase metadata on a soft-deleted row. Does not rewrite depletion_class."""
+        fields: Dict[str, Any] = {
+            "deleted_at": None,
+            "purchase_date": purchase_date.isoformat(),
+            "quantity": new_quantity,
+            "quantity_remaining": None,
+            "hard_expire_date": None,
+        }
+        dclass = self._normalize_depletion_class(existing.get("depletion_class"))
+        cls = self._classification_for_base(existing.get("base_ingredient"))
+        if not existing.get("depletion_class"):
+            dclass = self._normalize_depletion_class(cls.get("depletion_class"))
+        if dclass == "PERISHABLE" and cls.get("shelf_life_days"):
+            fields["available_until"] = (
+                purchase_date + timedelta(days=int(cls["shelf_life_days"]))
+            ).isoformat()
+        if dclass == "UNIT_ITEM":
+            fields["quantity_purchased"] = new_quantity
+        return fields
     
     async def add_to_pantry(
         self,
@@ -99,18 +171,38 @@ class PantryService:
                 household_id = self._get_household_id_for_user(user_id)
             
             # Get existing items (household-scoped if available)
-            existing_items = self._get_pantry_items(user_id, household_id)
+            existing_items = self._get_pantry_items(
+                user_id, household_id, include_deleted=True
+            )
             
-            existing_item = None
-            for item in existing_items:
-                if (item['base_ingredient'] == normalized_item.get('base_ingredient') and
-                    item.get('variant') == normalized_item.get('variant') and
-                    item.get('unit') == unit):
-                    existing_item = item
-                    break
+            existing_item = self._find_exact_pantry_match(
+                existing_items,
+                normalized_item.get("base_ingredient"),
+                normalized_item.get("variant"),
+                unit,
+            )
             
             if existing_item:
-                # Update existing item (add quantity)
+                purchase_date = reference_date or date.today()
+
+                if existing_item.get("deleted_at") is not None:
+                    existing_qty = existing_item.get("quantity") or 0
+                    new_quantity = max(existing_qty, 1) + quantity
+                    self.supabase.update_pantry_item_fields(
+                        existing_item["id"],
+                        self._resurrect_fields(
+                            existing_item,
+                            new_quantity,
+                            purchase_date=purchase_date,
+                        ),
+                    )
+                    logger.info(
+                        f"Resurrected pantry: {normalized_item.get('normalized_name')} "
+                        f"quantity → {new_quantity}"
+                    )
+                    return existing_item["id"]
+
+                # Update existing live item (add quantity)
                 new_quantity = existing_item['quantity'] + quantity
                 
                 self.supabase.update_pantry_quantity(existing_item['id'], new_quantity)
@@ -152,6 +244,15 @@ class PantryService:
                 if receipt_id:
                     item_data['last_receipt_id'] = receipt_id
 
+                purchase_date = reference_date or date.today()
+                item_data.update(
+                    self._depletion_fields(
+                        normalized_item.get("base_ingredient"),
+                        quantity,
+                        purchase_date=purchase_date,
+                    )
+                )
+
                 item_id = self.supabase.upsert_pantry_item(item_data)
 
                 logger.info(
@@ -182,7 +283,11 @@ class PantryService:
             if not household_id:
                 household_id = self._get_household_id_for_user(user_id)
             
-            items = self._get_pantry_items(user_id, household_id)
+            items = [
+                item
+                for item in self._get_pantry_items(user_id, household_id)
+                if not item.get("deleted_at")
+            ]
             
             # Group by base_ingredient
             grouped = {}
@@ -439,14 +544,45 @@ class PantryService:
     def _normalize_base_key(base_ingredient: Optional[str]) -> str:
         return (base_ingredient or "").strip().lower()
 
+    @staticmethod
+    def _is_live_pantry_row(item: Dict) -> bool:
+        return item.get("deleted_at") is None
+
+    def _find_exact_pantry_match(
+        self,
+        pantry_items: List[Dict],
+        base_ingredient: Optional[str],
+        variant: Any,
+        unit: str,
+    ) -> Optional[Dict]:
+        """Prefer a live row; resurrect a soft-deleted twin only when none is live."""
+        dead = None
+        for item in pantry_items:
+            if (
+                item.get("base_ingredient") != base_ingredient
+                or item.get("variant") != variant
+                or item.get("unit") != unit
+            ):
+                continue
+            if self._is_live_pantry_row(item):
+                return item
+            if dead is None:
+                dead = item
+        return dead
+
     def _find_pantry_by_base(
         self, pantry_items: List[Dict], base_ingredient: str
     ) -> Optional[Dict]:
         key = self._normalize_base_key(base_ingredient)
+        dead = None
         for item in pantry_items:
-            if self._normalize_base_key(item.get("base_ingredient")) == key:
+            if self._normalize_base_key(item.get("base_ingredient")) != key:
+                continue
+            if self._is_live_pantry_row(item):
                 return item
-        return None
+            if dead is None:
+                dead = item
+        return dead
 
     async def batch_add_or_merge_items(
         self,
@@ -456,6 +592,7 @@ class PantryService:
         source: str,
         *,
         set_template_confirmed: bool = False,
+        today: Optional[date] = None,
     ) -> Dict[str, Any]:
         """
         Shared batch path for staples template, future search (L2), and voice (L3).
@@ -468,7 +605,9 @@ class PantryService:
         if not household_id:
             household_id = self._get_household_id_for_user(user_id)
 
-        working = list(self._get_pantry_items(user_id, household_id))
+        working = list(
+            self._get_pantry_items(user_id, household_id, include_deleted=True)
+        )
         inserted = 0
         merged = 0
 
@@ -481,7 +620,21 @@ class PantryService:
             ex = self._find_pantry_by_base(working, bi)
             if ex:
                 merged += 1
-                updates: Dict[str, Any] = {}
+                if ex.get("deleted_at") is not None:
+                    purchase_date = today or date.today()
+                    new_quantity = max(ex.get("quantity") or 0, 1)
+                    updates = self._resurrect_fields(
+                        ex, new_quantity, purchase_date=purchase_date
+                    )
+                    if set_template_confirmed:
+                        updates["template_confirmed"] = True
+                    self.supabase.update_pantry_item_fields(ex["id"], updates)
+                    ex["deleted_at"] = None
+                    ex["quantity"] = new_quantity
+                    ex["quantity_remaining"] = None
+                    continue
+
+                updates = {}
                 if set_template_confirmed:
                     updates["template_confirmed"] = True
                 if updates:
@@ -504,6 +657,11 @@ class PantryService:
             }
             if set_template_confirmed:
                 item_data["template_confirmed"] = True
+
+            purchase_date = today or date.today()
+            item_data.update(
+                self._depletion_fields(bi, 1.0, purchase_date=purchase_date)
+            )
 
             new_id = self.supabase.upsert_pantry_item(item_data)
             inserted += 1
@@ -627,7 +785,6 @@ class PantryService:
         """
         Confirm staples template selection: merge or insert rows, then receipt enrichment.
         """
-        _ = today
         household_id = self._get_household_id_for_user(user_id)
         template_rows = self.supabase.get_staples_template_rows(active_only=True)
         by_base = {self._normalize_base_key(r["base_ingredient"]): r for r in template_rows}
@@ -651,6 +808,7 @@ class PantryService:
             canonical_items,
             source="template",
             set_template_confirmed=True,
+            today=today,
         )
 
         staple_bases = {

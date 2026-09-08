@@ -3,23 +3,30 @@ import AdaptiveModal from './AdaptiveModal'
 import ConfidenceIndicator from './ConfidenceIndicator'
 import IngredientCorrection from './IngredientCorrection'
 import { api } from '../services/apiClient'
+import { pantryIngredientNamesMatch } from '../utils/pantryIngredientMatch'
 
 function findPantryVariantForIngredient(pantryData, ing) {
   if (!pantryData?.grouped || !ing) return null
   const needle = String(ing.name || '')
     .toLowerCase()
     .trim()
-  const orig = String(ing.original || '').toLowerCase()
+  const orig = String(ing.original || '')
+    .toLowerCase()
+    .trim()
   if (!needle && !orig) return null
 
   for (const g of pantryData.grouped) {
-    const base = String(g.base_ingredient || '').toLowerCase()
+    const base = g.base_ingredient
     for (const v of g.variants || []) {
-      const nn = String(v.normalized_name || '').toLowerCase()
-      if (nn && needle === nn) return v
-      if (base && needle === base) return v
-      if (base && needle.length >= 3 && (needle.includes(base) || base.includes(needle))) return v
-      if (orig && nn && orig.includes(nn.slice(0, Math.min(12, nn.length)))) return v
+      const names = [base, v.normalized_name]
+      if (
+        names.some(
+          (n) =>
+            pantryIngredientNamesMatch(n, needle) || pantryIngredientNamesMatch(n, orig)
+        )
+      ) {
+        return v
+      }
     }
   }
   return null
@@ -146,7 +153,7 @@ function SuggestionDetailModal({
     async (itemId, action) => {
       if (!userId) return
       await api.correctPantryItem(userId, itemId, action)
-      onIngredientCorrected?.()
+      onIngredientCorrected?.(action)
     },
     [userId, onIngredientCorrected]
   )
@@ -219,17 +226,21 @@ function SuggestionDetailModal({
                   {rows.map(({ ingredient, flag, variant, key }) => {
                     const open = expandedKey === key
                     const canCorrect = Boolean(variant?.id)
+                    const variantConfidence = variant?.confidence
+                    const showConfidence =
+                      flag ||
+                      (variantConfidence != null && Number(variantConfidence) >= 0.2)
                     const rowInner = (
                       <>
                         <span className="text-sage-light min-w-0 flex-1">
                           {ingredient.original || ingredient.name}
                         </span>
-                        {flag ? (
+                        {showConfidence ? (
                           <span className="flex items-center gap-2 shrink-0">
                             <ConfidenceIndicator
-                              confidence={flag.confidence}
-                              isSoftRequired={flag.is_soft_required}
-                              isUseSoon={flag.is_use_soon}
+                              confidence={flag?.confidence ?? variantConfidence}
+                              isSoftRequired={flag?.is_soft_required ?? false}
+                              isUseSoon={flag?.is_use_soon ?? Boolean(variant?.use_soon)}
                               size="sm"
                             />
                           </span>

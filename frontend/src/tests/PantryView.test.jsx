@@ -69,10 +69,21 @@ vi.mock('../components/PantryItem', async () => {
       const isFaded = (item.confidence ?? 0) < 0.2
       const displayName = item.normalized_name || item.base_ingredient || ''
       const label = getStatusLabel(item)
+      const q = item?.quantity
+      const unit = String(item?.unit || '').trim()
+      const quantityLine =
+        q != null && q !== '' && Number(q) > 0
+          ? unit
+            ? `${Number.isInteger(Number(q)) ? String(q) : String(q)} ${unit}`
+            : String(q)
+          : null
       return (
         <div className={isFaded ? 'opacity-50' : ''} data-testid="pantry-item-stub">
           <div className="flex items-start justify-between gap-3">
-            <span>{displayName}</span>
+            <div>
+              <span>{displayName}</span>
+              {quantityLine ? <span>{quantityLine}</span> : null}
+            </div>
             <span>{label}</span>
           </div>
           <button type="button" data-testid="pantry-motion-div" onClick={() => onToggleCorrection?.()}>
@@ -293,10 +304,10 @@ describe('PantryView', () => {
         onRemove={vi.fn()}
       />
     )
+    expect(screen.getByText(/2\s*lb/)).toBeInTheDocument()
     expect(document.querySelector('input[type="number"]')).toBeNull()
     expect(screen.queryByTitle('Increase')).toBeNull()
     expect(screen.queryByTitle('Decrease')).toBeNull()
-    expect(screen.queryByText(/2\.00\s*lb/)).toBeNull()
   })
 
   it('SEARCH_FILTERS_BEFORE_GROUPING', async () => {

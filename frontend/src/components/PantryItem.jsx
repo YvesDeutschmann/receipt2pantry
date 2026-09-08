@@ -3,6 +3,16 @@ import { motion, useMotionValue, animate } from 'framer-motion'
 import IngredientCorrection from './IngredientCorrection'
 import { getStatusLabel, getStatusLabelClassName } from '../utils/pantryConfidence'
 
+function formatPantryQuantity(item) {
+  const q = item?.quantity
+  if (q == null || q === '') return null
+  const n = Number(q)
+  if (!Number.isFinite(n) || n <= 0) return null
+  const unit = String(item.unit || '').trim()
+  const qtyStr = Number.isInteger(n) ? String(n) : String(n)
+  return unit ? `${qtyStr} ${unit}` : qtyStr
+}
+
 function PantryItem({
   item,
   onCorrection,
@@ -14,6 +24,7 @@ function PantryItem({
   const dragMoved = useRef(false)
 
   const displayName = item.normalized_name || item.base_ingredient || ''
+  const quantityLine = formatPantryQuantity(item)
   const statusLabel = getStatusLabel(item)
   const statusClass = getStatusLabelClassName(item)
   const isFaded = (item.confidence ?? 0) < 0.2
@@ -54,7 +65,12 @@ function PantryItem({
       >
         <div className="p-3 min-h-touch">
           <div className="flex items-start justify-between gap-3">
-            <span className="text-cream font-medium leading-snug flex-1 min-w-0">{displayName}</span>
+            <div className="flex-1 min-w-0">
+              <span className="text-cream font-medium leading-snug block">{displayName}</span>
+              {quantityLine ? (
+                <span className="text-xs text-sage-light mt-0.5 block">{quantityLine}</span>
+              ) : null}
+            </div>
             <span className={`text-sm shrink-0 ${statusClass}`}>{statusLabel}</span>
           </div>
           {correctionOpen ? (

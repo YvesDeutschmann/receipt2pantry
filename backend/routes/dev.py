@@ -4,6 +4,8 @@ import json
 import re
 import time
 from collections import defaultdict
+from copy import deepcopy
+from datetime import date, datetime, time as dt_time, timezone
 
 from flask import Blueprint, current_app, jsonify, request
 from pathlib import Path
@@ -62,6 +64,36 @@ def reset_dev_log_rate_limit_for_tests() -> None:
 
 def get_supabase_service():
     return current_app.config.get("SUPABASE_SERVICE")
+
+
+def freshen_mock_receipt_dates(receipts, *, today=None):
+    """Rewrite fixture purchase dates to `today` so depletion scores as in-stock.
+
+    JSON fixtures keep historical `order_date`s for shape tests. The DEV load
+    path must not ingest those as purchase_date or PERISHABLE/CONSUMABLE rows
+    land in LIKELY GONE.
+    """
+    if not isinstance(receipts, list):
+        return receipts
+    anchor = today or date.today()
+    iso_date = anchor.isoformat()
+    iso_dt = (
+        datetime.combine(anchor, dt_time(12, 0), tzinfo=timezone.utc)
+        .isoformat()
+        .replace("+00:00", "Z")
+    )
+    out = deepcopy(receipts)
+    for rec in out:
+        if not isinstance(rec, dict):
+            continue
+        rec["order_date"] = iso_date
+        if "date" in rec:
+            prev = rec.get("date")
+            if isinstance(prev, str) and "T" in prev:
+                rec["date"] = iso_dt
+            else:
+                rec["date"] = iso_date
+    return out
 
 
 @dev_bp.route("/dev/log", methods=["POST", "GET", "OPTIONS"])
@@ -219,7 +251,9 @@ def load_mock_receipts():
         all_errors: list = []
 
         if provider in ("safeway", "all"):
-            safeway_recs = _load_fixture_list("safeway_receipts.json")
+            safeway_recs = freshen_mock_receipt_dates(
+                _load_fixture_list("safeway_receipts.json")
+            )
             r = _store_and_process_fetched_receipts(user_id, "safeway", safeway_recs)
             total_stored += r.get("receipts_stored", 0)
             total_items += r.get("items_added_to_pantry", 0)
@@ -227,7 +261,9 @@ def load_mock_receipts():
             all_errors.extend(r.get("errors", []))
 
         if provider in ("costco", "all"):
-            costco_recs = _load_fixture_list("costco_receipts.json")
+            costco_recs = freshen_mock_receipt_dates(
+                _load_fixture_list("costco_receipts.json")
+            )
             r = _store_and_process_fetched_receipts(user_id, "costco", costco_recs)
             total_stored += r.get("receipts_stored", 0)
             total_items += r.get("items_added_to_pantry", 0)

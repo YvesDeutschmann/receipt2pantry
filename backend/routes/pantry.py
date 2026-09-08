@@ -41,6 +41,17 @@ def get_supabase_service():
     return current_app.config.get("SUPABASE_SERVICE")
 
 
+def get_suggestion_service():
+    """Phase 3: ranked recipe suggestions (cache invalidation on pantry changes)."""
+    return current_app.config.get("SUGGESTION_SERVICE")
+
+
+def _invalidate_suggestion_cache(user_id: str, household_id: Optional[str]) -> None:
+    svc = get_suggestion_service()
+    if svc:
+        svc.invalidate_suggestion_cache(user_id, household_id)
+
+
 def get_normalization_service():
     """Optional normalization service for receipt matching."""
     return current_app.config.get("NORMALIZATION_SERVICE")
@@ -680,11 +691,14 @@ def pantry_cook():
         return jsonify({"error": "Database service not available"}), 503
 
     body = request.get_json() or {}
-    mismatch = _reject_household_scope_mismatch(
-        supabase, user_id, _optional_household_id_body(body)
-    )
+    household_id = _optional_household_id_body(body)
+    mismatch = _reject_household_scope_mismatch(supabase, user_id, household_id)
     if mismatch:
         return mismatch
+    if not household_id:
+        hh = supabase.get_user_household(user_id)
+        hid = hh.get("id") if isinstance(hh, dict) else None
+        household_id = str(hid) if hid else None
 
     if (
         "recipe_id" not in body
@@ -719,7 +733,7 @@ def pantry_cook():
 
     try:
         client = supabase.admin_client or supabase.client
-        process_cook_event(
+        touched = process_cook_event(
             client,
             user_id,
             recipe_id_str,
@@ -727,9 +741,23 @@ def pantry_cook():
             ingredients,
             today=date.today(),
             recipe_name=body.get("recipe_name", ""),
-            household_id=body.get("household_id"),
+            household_id=household_id,
         )
-        return jsonify({"ok": True})
+        pool_suggestion_id = body.get("pool_suggestion_id")
+        try:
+            if pool_suggestion_id and household_id:
+                store = current_app.config.get("POOL_STORE_SERVICE")
+                if store:
+                    store.update_status(
+                        str(pool_suggestion_id), str(household_id), "swiped"
+                    )
+        except Exception as swipe_err:
+            logger.warning("pool swipe after cook failed: %s", swipe_err)
+        try:
+            _invalidate_suggestion_cache(user_id, household_id)
+        except Exception as cache_err:
+            logger.warning("suggestion cache invalidate after cook failed: %s", cache_err)
+        return jsonify({"ok": True, "touched": touched})
     except Exception as e:
         logger.error(f"Error processing cook event: {e}")
         return jsonify({"error": str(e)}), 500
@@ -958,13 +986,15 @@ def pantry_item_correction(item_id):
                     "confidence_override_expires": expires,
                 }
             ).eq("id", item_id).execute()
+            _invalidate_suggestion_cache(user_id, item.get("household_id"))
             return jsonify({"ok": True})
 
         reason = "USER_REMOVED" if action == "used_it_up" else "NEVER_HAD"
         purchase = _to_date(item.get("purchase_date"))
+        owner_id = item.get("user_id") or user_id
         _rpc_soft_delete_pantry_item(
             c,
-            user_id=user_id,
+            user_id=str(owner_id),
             pantry_item_id=str(item_id),
             item_name=item.get("base_ingredient") or item.get("normalized_name") or "",
             depletion_class=item.get("depletion_class") or "STAPLE",
@@ -974,6 +1004,7 @@ def pantry_item_correction(item_id):
             was_cooked=False,
             put_back_count=int(item.get("put_back_count") or 0),
         )
+        _invalidate_suggestion_cache(user_id, item.get("household_id"))
         return jsonify({"ok": True})
     except Exception as e:
         logger.error(f"Error applying pantry correction: {e}")

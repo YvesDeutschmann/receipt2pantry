@@ -9,7 +9,8 @@ from __future__ import annotations
 import json
 from datetime import date, datetime, time, timezone
 from decimal import Decimal
-from typing import Any, Dict, List, Optional, Tuple
+from difflib import SequenceMatcher
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from backend.utils.logger import get_logger
 
@@ -21,6 +22,13 @@ USE_SOON_DAYS = 2
 
 # Meat/fish put-back limit (application-level; matches depletion docs)
 MAX_PUT_BACK_SUBCLASSES = frozenset({"raw_meat", "raw_fish"})
+
+_USE_SOON_CLEAR_FIELDS = {
+    "use_soon": False,
+    "use_soon_expires": None,
+    "confidence_override": None,
+    "confidence_override_expires": None,
+}
 
 
 def _deleted_at_for_day(today: date) -> datetime:
@@ -78,6 +86,14 @@ def _active_confidence_override(pantry_item: dict, today: date) -> Optional[floa
     return None
 
 
+def resolve_depletion_class(pantry_item: dict, classification: dict) -> str:
+    return (
+        pantry_item.get("depletion_class")
+        or classification.get("depletion_class")
+        or "STAPLE"
+    ).upper()
+
+
 def compute_confidence(
     pantry_item: dict,
     user_prefs: dict,
@@ -99,7 +115,7 @@ def compute_confidence(
     if active is not None:
         return _round_confidence(active)
 
-    depletion_class = (pantry_item.get("depletion_class") or "").upper()
+    depletion_class = resolve_depletion_class(pantry_item, classification)
     depletion_mult = float(user_prefs.get("depletion_multiplier") or 1.0)
     eng = float(engagement_multiplier or 1.0)
     denom = depletion_mult * eng
@@ -416,35 +432,40 @@ def process_cook_event(
     today: date,
     recipe_name: str = "",
     household_id: Optional[str] = None,
-) -> None:
+) -> List[Dict]:
     """
     Apply cook event: UNIT_ITEM decrements; PERISHABLE/CONSUMABLE get cook association only.
     recipe_ingredients: Spoonacular-shaped dicts with at least name, amount; optional unit, is_primary.
+
+    Returns the list of pantry rows touched (matched ingredients), for honest client feedback.
     """
     c = _client(client)
-    pantry_rows = (
-        c.table("pantry_items")
-        .select("*")
-        .eq("user_id", user_id)
-        .is_("deleted_at", "null")
-        .execute()
-    )
+    query = c.table("pantry_items").select("*").is_("deleted_at", "null")
+    if household_id:
+        query = query.eq("household_id", household_id)
+    else:
+        query = query.eq("user_id", user_id)
+    pantry_rows = query.execute()
     pantry_list: List[Dict] = pantry_rows.data if pantry_rows.data else []
     touched: List[Dict] = []
+    touched_ids: Set[str] = set()
 
     for ing in recipe_ingredients:
         name = (ing.get("name") or "").strip().lower()
         if not name:
             continue
         amount = _to_float(ing.get("amount"))
-        is_primary = bool(ing.get("is_primary", False))
 
-        match = find_pantry_match(pantry_list, name)
+        match = find_pantry_match_for_cook(pantry_list, name)
         if not match:
             continue
 
-        dclass = (match.get("depletion_class") or "").upper()
-        pid = match["id"]
+        pid = str(match["id"])
+        if pid in touched_ids:
+            continue
+        touched_ids.add(pid)
+
+        dclass = resolve_depletion_class(match, {})
 
         if dclass == "UNIT_ITEM":
             rem = match.get("quantity_remaining")
@@ -455,26 +476,19 @@ def process_cook_event(
                 rem = _to_float(rem)
             new_rem = max(0.0, rem - amount)
             if new_rem <= 0:
-                _soft_delete_cooked(c, user_id, match, today=today)
+                _soft_delete_cooked(c, match, today=today)
             else:
-                c.table("pantry_items").update(
-                    {"quantity_remaining": new_rem}
-                ).eq("id", pid).execute()
+                payload: Dict[str, Any] = {"quantity_remaining": new_rem}
+                if match.get("use_soon"):
+                    payload.update(_USE_SOON_CLEAR_FIELDS)
+                c.table("pantry_items").update(payload).eq("id", pid).execute()
                 match["quantity_remaining"] = new_rem
-        else:
-            if is_primary and match.get("use_soon"):
-                c.table("pantry_items").update(
-                    {
-                        "use_soon": False,
-                        "use_soon_expires": None,
-                        "confidence_override": None,
-                        "confidence_override_expires": None,
-                    }
-                ).eq("id", pid).execute()
+        elif match.get("use_soon"):
+            c.table("pantry_items").update(_USE_SOON_CLEAR_FIELDS).eq("id", pid).execute()
 
         touched.append(
             {
-                "pantry_item_id": str(pid),
+                "pantry_item_id": pid,
                 "base_ingredient": match.get("base_ingredient"),
                 "depletion_class": dclass,
             }
@@ -490,6 +504,7 @@ def process_cook_event(
     if household_id:
         log_data["household_id"] = household_id
     c.table("cooking_log").insert(log_data).execute()
+    return touched
 
 
 def _find_pantry_match(pantry_list: List[Dict], recipe_ingredient_name: str) -> Optional[Dict]:
@@ -523,17 +538,47 @@ def _find_pantry_match(pantry_list: List[Dict], recipe_ingredient_name: str) -> 
     return None
 
 
+def find_pantry_match_for_cook(
+    pantry_list: List[Dict], ingredient_name: str
+) -> Optional[Dict]:
+    """Conservative match first, then difflib ratio > 0.8 (skipped when either name < 5 chars)."""
+    m = _find_pantry_match(pantry_list, ingredient_name)
+    if m:
+        return m
+    n = (ingredient_name or "").lower().strip()
+    if not n:
+        return None
+    best: Optional[Dict] = None
+    best_score = 0.0
+    for p in pantry_list:
+        base = (p.get("base_ingredient") or "").lower().strip()
+        if not base:
+            continue
+        if min(len(base), len(n)) < 5:
+            continue
+        ratio = SequenceMatcher(None, base, n).ratio()
+        if ratio > best_score:
+            best_score = ratio
+            best = p
+    if best is not None and best_score > 0.8:
+        return best
+    return None
+
+
 # Public alias (suggestion_service and tests import this name on purpose).
 find_pantry_match = _find_pantry_match
 
 
-def _soft_delete_cooked(client: Any, user_id: str, item: Dict, *, today: date) -> None:
+def _soft_delete_cooked(client: Any, item: Dict, *, today: date) -> None:
     c = _client(client)
     pid = item["id"]
+    owner_id = item.get("user_id")
+    if not owner_id:
+        raise ValueError(f"pantry item {pid} missing user_id for soft delete")
     purchase = _to_date(item.get("purchase_date"))
     _rpc_soft_delete_pantry_item(
         c,
-        user_id=user_id,
+        user_id=str(owner_id),
         pantry_item_id=str(pid),
         item_name=item.get("base_ingredient") or "",
         depletion_class=item.get("depletion_class") or "UNIT_ITEM",

@@ -180,4 +180,75 @@ describe('SuggestionDetailModal', () => {
     const btn = screen.getByRole('button', { name: /Recording/i })
     expect(btn).toBeDisabled()
   })
+
+  it('shows_variant_confidence_when_ingredient_flags_empty', async () => {
+    render(
+      <SuggestionDetailModal
+        isOpen
+        onClose={() => {}}
+        recipe={poolRecipe}
+        loading={false}
+        userId="user-1"
+        pantryData={{
+          grouped: [
+            {
+              base_ingredient: 'pasta',
+              variants: [
+                {
+                  id: 'pantry-pasta',
+                  normalized_name: 'pasta',
+                  confidence: 0.85,
+                  use_soon: false,
+                },
+              ],
+            },
+          ],
+        }}
+        onCookedIt={vi.fn()}
+      />
+    )
+    await waitFor(() => {
+      expect(screen.getByText('pasta')).toBeInTheDocument()
+    })
+    expect(screen.getByTestId('confidence')).toBeInTheDocument()
+    expect(screen.queryByText('—')).not.toBeInTheDocument()
+  })
+
+  it('does_not_attribute_rice_vinegar_or_ice_to_pantry_rice', async () => {
+    render(
+      <SuggestionDetailModal
+        isOpen
+        onClose={() => {}}
+        recipe={{
+          ...poolRecipe,
+          extendedIngredients: [
+            { name: 'rice vinegar', original: 'rice vinegar' },
+            { name: 'ice', original: 'ice' },
+          ],
+        }}
+        loading={false}
+        userId="user-1"
+        pantryData={{
+          grouped: [
+            {
+              base_ingredient: 'rice',
+              variants: [
+                {
+                  id: 'pantry-rice',
+                  normalized_name: 'rice',
+                  confidence: 0.9,
+                  use_soon: false,
+                },
+              ],
+            },
+          ],
+        }}
+        onCookedIt={vi.fn()}
+      />
+    )
+    await waitFor(() => {
+      expect(screen.getByText('rice vinegar')).toBeInTheDocument()
+    })
+    expect(screen.queryByTestId('confidence')).not.toBeInTheDocument()
+  })
 })

@@ -59,6 +59,11 @@ class ReceiptProcessor:
             if not household_id:
                 household = self.supabase.get_user_household(user_id)
                 household_id = household["id"] if household else None
+
+            receipt = self.supabase.get_receipt(receipt_id)
+            reference_date = self.pantry._parse_receipt_order_date(
+                receipt.get("order_date") if receipt else None
+            )
             
             # 1. Get receipt items
             items = self.supabase.get_receipt_items(receipt_id)
@@ -142,7 +147,8 @@ class ReceiptProcessor:
                         quantity=quantity,
                         unit=unit,
                         receipt_id=receipt_id,
-                        household_id=household_id
+                        household_id=household_id,
+                        reference_date=reference_date,
                     )
                     
                     items_processed += 1

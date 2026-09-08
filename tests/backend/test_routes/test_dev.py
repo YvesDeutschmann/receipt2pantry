@@ -70,6 +70,70 @@ def test_load_mock_receipts_still_403_when_dev_log_flag_on(prod_client):
     assert response.status_code == 403
 
 
+def test_freshen_mock_receipt_dates_rewrites_order_date_without_mutating_source():
+    from datetime import date
+
+    from backend.routes.dev import freshen_mock_receipt_dates
+
+    original = [
+        {
+            "order_id": "dev-mock-SW-001",
+            "order_date": "2026-01-10",
+            "date": "2026-01-10T11:00:00.000Z",
+            "items": [{"name": "Organic Bananas"}],
+        },
+        {
+            "order_id": "dev-mock-CC-001",
+            "order_date": "2026-04-18",
+            "date": "2026-04-18",
+            "items": [{"name": "Quinoa"}],
+        },
+    ]
+    today = date(2026, 9, 8)
+    out = freshen_mock_receipt_dates(original, today=today)
+
+    assert original[0]["order_date"] == "2026-01-10"
+    assert original[1]["date"] == "2026-04-18"
+    assert out[0]["order_date"] == "2026-09-08"
+    assert out[0]["date"].startswith("2026-09-08T")
+    assert out[1]["order_date"] == "2026-09-08"
+    assert out[1]["date"] == "2026-09-08"
+
+
+def test_load_mock_receipts_freshens_dates_before_store(debug_client, mocker):
+    from datetime import date
+
+    captured = []
+
+    def fake_store(_user_id, provider, receipts):
+        captured.append((provider, receipts))
+        return {
+            "receipts_stored": len(receipts),
+            "receipt_ids": [f"{provider}-1"],
+            "errors": [],
+            "items_added_to_pantry": 1,
+        }
+
+    mocker.patch(
+        "backend.routes.providers._store_and_process_fetched_receipts",
+        side_effect=fake_store,
+    )
+    debug_client.application.config["SUPABASE_SERVICE"] = mocker.MagicMock()
+
+    response = debug_client.post(
+        "/api/dev/load-mock-receipts",
+        json={"provider": "all", "reset": False},
+        headers={"X-User-Id": "user-1"},
+    )
+    assert response.status_code == 200
+    assert {p for p, _ in captured} == {"safeway", "costco"}
+    today = date.today().isoformat()
+    for _provider, recs in captured:
+        assert recs
+        for rec in recs:
+            assert rec["order_date"] == today
+
+
 def test_dev_log_rejects_oversized_body(prod_client):
     prod_client.application.config["DEV_LOG_ENABLED"] = True
     response = prod_client.post(
@@ -147,3 +211,11 @@ def test_dev_log_uses_fly_client_ip_when_present(prod_client):
         headers={"Fly-Client-IP": "203.0.113.50"},
     )
     assert response.status_code == 429
+
+
+@pytest.fixture
+def debug_client():
+    app = create_app(ProdLikeConfig())
+    app.config.update({"TESTING": True, "DEBUG": True, "DEV_LOG_ENABLED": False})
+    with app.test_client() as client:
+        yield client

@@ -35,7 +35,9 @@ Where the brief and the code disagree, the **code is treated as ground truth** f
 
 ## 1. The MVP North Star
 
-> **A busy parent connects one grocery account, confirms a staples list in under 2 minutes, and gets a trustworthy "What's for Dinner" answer based on what they actually have — then keeps coming back because the pantry stays accurate without manual upkeep.**
+> **A busy parent connects one grocery account, confirms a staples list in under 2 minutes, and gets a trustworthy "What's for Dinner" answer based on what they probably have — then keeps coming back because suggestions stay honest without logging every meal.**
+
+The pantry will go stale on ambient consumption (breakfast eggs, snacks, cooking outside the app). That is accepted. Accuracy means calibrated uncertainty and conservative tiers, not a complete inventory. Canonical claims: [`docs/PRODUCT_BRIEF.md`](PRODUCT_BRIEF.md) (*Pantry premise*).
 
 Everything in the MVP either (a) makes that sentence true, or (b) is cut. The single critical path we must guarantee is:
 
