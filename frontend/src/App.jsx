@@ -14,6 +14,8 @@ import { FEATURES } from './config/features'
 import Auth from './pages/Auth'
 import ProtectedRoute from './components/ProtectedRoute'
 import OnboardingRoute from './components/OnboardingRoute'
+import HouseholdFork from './pages/onboarding/HouseholdFork'
+import JoinHousehold from './pages/onboarding/JoinHousehold'
 import HouseholdSize from './pages/onboarding/HouseholdSize'
 import DietaryRestrictions from './pages/onboarding/DietaryRestrictions'
 import BridgeScreen from './pages/onboarding/BridgeScreen'
@@ -29,7 +31,9 @@ function AppRoutes() {
     <Routes>
             <Route path="/auth" element={<Auth />} />
             <Route path="/onboarding" element={<OnboardingRoute />}>
-              <Route index element={<HouseholdSize />} />
+              <Route index element={<HouseholdFork />} />
+              <Route path="join" element={<JoinHousehold />} />
+              <Route path="size" element={<HouseholdSize />} />
               <Route path="dietary" element={<DietaryRestrictions />} />
               <Route path="bridge" element={<BridgeScreen />} />
               <Route path="pantry-setup" element={<StaplesTemplate />} />

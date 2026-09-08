@@ -355,6 +355,15 @@ export const api = {
     return response.data
   },
 
+  mergeDietaryRestrictions: async (userId, dietaryRestrictions) => {
+    const response = await apiClient.post(
+      '/households/dietary/merge',
+      { dietary_restrictions: dietaryRestrictions },
+      { headers: { 'X-User-Id': userId } }
+    )
+    return response.data
+  },
+
   joinHousehold: async (userId, joinCode) => {
     const response = await apiClient.post('/households/join',
       { join_code: joinCode },

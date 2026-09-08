@@ -296,6 +296,7 @@ Code readiness notes:
 - DEV=PROD hygiene during beta (finding 3.2): freeze schema pushes; backup before `db push`; keep Fly `debug` off.
 - Minimal CI beyond Fly deploy (finding 3.6 plan).
 - Optional `flask-limiter` on expensive routes after dashboard spend caps (finding 3.7).
+- **Household sharing — member `PUT /households/profile` can replace entire allergy array** (safety/trust). Join path uses merge-only; profile PUT unchanged. See [`household-sharing-open-items.md`](../household-sharing-open-items.md).
 
 ---
 

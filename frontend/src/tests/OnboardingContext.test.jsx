@@ -25,12 +25,16 @@ vi.mock('../contexts/AuthContext', () => ({
 
 const mockGetHousehold = vi.fn()
 const mockCreateHousehold = vi.fn()
+const mockJoinHousehold = vi.fn()
+const mockMergeDietaryRestrictions = vi.fn(() => Promise.resolve({}))
 const mockUpdateHouseholdProfile = vi.fn(() => Promise.resolve({}))
 
 vi.mock('../services/apiClient', () => ({
   api: {
     getHousehold: (...args) => mockGetHousehold(...args),
     createHousehold: (...args) => mockCreateHousehold(...args),
+    joinHousehold: (...args) => mockJoinHousehold(...args),
+    mergeDietaryRestrictions: (...args) => mockMergeDietaryRestrictions(...args),
     updateHouseholdProfile: (...args) => mockUpdateHouseholdProfile(...args),
   },
 }))
@@ -300,5 +304,91 @@ describe('OnboardingContext', () => {
     rerender()
 
     expect(result.current).toBe(beforeBump)
+  })
+
+  it('test_does_not_auto_create_household_on_load', async () => {
+    mockGetHousehold.mockResolvedValue({ household: null })
+
+    const { result } = await renderOnboardingHook({
+      wrapper: createWrapper(),
+    })
+
+    expect(result.current.householdResolved).toBe(true)
+    expect(result.current.householdId).toBeNull()
+    expect(mockCreateHousehold).not.toHaveBeenCalled()
+  })
+
+  it('test_completeJoin_sets_onboarding_without_cold_start_pantry_template', async () => {
+    const { result } = await renderOnboardingHook({
+      wrapper: createWrapper(),
+    })
+
+    await act(async () => {
+      await result.current.completeJoin()
+    })
+
+    expect(mockUpdateUser).toHaveBeenCalledTimes(1)
+    const payload = mockUpdateUser.mock.calls[0][0]
+    expect(payload.data.onboarding_completed_at).toBeDefined()
+    expect(payload.data.cold_start_pantry_template_completed_at).toBeUndefined()
+    expect(payload.data.cold_start_step).toBe(2)
+  })
+
+  it('test_completeJoinDietary_merges_additions_not_size_put', async () => {
+    mockGetHousehold.mockResolvedValue({
+      household: {
+        id: 'household-join',
+        role: 'member',
+        size: 4,
+        dietary_restrictions: ['peanuts'],
+      },
+    })
+
+    const { result } = await renderOnboardingHook({
+      wrapper: createWrapper(),
+    })
+
+    act(() => {
+      result.current.toggleRestriction('shellfish')
+    })
+
+    await act(async () => {
+      await result.current.completeJoinDietary()
+    })
+
+    expect(mockMergeDietaryRestrictions).toHaveBeenCalledWith(
+      '00000000-0000-4000-8000-000000000001',
+      ['shellfish']
+    )
+    expect(mockUpdateHouseholdProfile).not.toHaveBeenCalled()
+    expect(mockUpdateUser).toHaveBeenCalledTimes(1)
+  })
+
+  it('test_joinHouseholdByCode_does_not_call_createHousehold', async () => {
+    mockGetHousehold.mockResolvedValue({ household: null })
+    mockJoinHousehold.mockResolvedValue({
+      household: {
+        id: 'household-joined',
+        role: 'member',
+        size: 3,
+        dietary_restrictions: ['dairy'],
+      },
+    })
+
+    const { result } = await renderOnboardingHook({
+      wrapper: createWrapper(),
+    })
+
+    await act(async () => {
+      await result.current.joinHouseholdByCode('ABC123')
+    })
+
+    expect(mockJoinHousehold).toHaveBeenCalledWith(
+      '00000000-0000-4000-8000-000000000001',
+      'ABC123'
+    )
+    expect(mockCreateHousehold).not.toHaveBeenCalled()
+    expect(result.current.householdRole).toBe('member')
+    expect(result.current.isJoiner).toBe(true)
   })
 })

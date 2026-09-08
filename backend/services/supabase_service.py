@@ -1163,7 +1163,41 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Failed to get household members: {e}")
             raise DatabaseException(f"Failed to get household members: {e}")
-    
+
+    def merge_household_dietary_restrictions(
+        self, household_id: str, additions: List[str]
+    ) -> List[str]:
+        """
+        Atomically union-merge dietary restriction codes via Postgres RPC.
+
+        Args:
+            household_id: Household UUID
+            additions: Codes to append (deduped in SQL)
+
+        Returns:
+            Resulting dietary_restrictions array
+        """
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            response = client.rpc(
+                "merge_household_dietary_restrictions",
+                {
+                    "p_household_id": household_id,
+                    "p_additions": additions,
+                },
+            ).execute()
+            data = response.data
+            if data is None:
+                return []
+            if isinstance(data, list):
+                return data
+            return list(data) if data else []
+        except Exception as e:
+            logger.error(f"Failed to merge household dietary restrictions: {e}")
+            raise DatabaseException(
+                f"Failed to merge household dietary restrictions: {e}"
+            )
+
     def update_household(self, household_id: str, updates: Dict) -> None:
         """
         Update household details

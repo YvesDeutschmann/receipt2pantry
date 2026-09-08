@@ -542,3 +542,156 @@ class TestHouseholdService:
         with pytest.raises(ValidationException) as exc_info:
             household_service.update_household_profile("user-789", size=-1)
         assert "between 1 and 99" in str(exc_info.value)
+
+    def test_join_household_response_includes_size_and_diet(self, household_service, mock_supabase):
+        mock_supabase.get_user_household.return_value = None
+        mock_supabase.get_household_by_code.return_value = {
+            "id": "household-123",
+            "name": "Other Family",
+            "join_code": "ABC123",
+            "created_at": "2025-01-01T00:00:00Z",
+            "size": 4,
+            "dietary_restrictions": ["peanuts"],
+        }
+        mock_supabase.add_household_member.return_value = "member-id"
+
+        result = household_service.join_household("user-789", "ABC123")
+
+        assert result["size"] == 4
+        assert result["dietary_restrictions"] == ["peanuts"]
+
+    def test_join_household_idempotent_includes_size_and_diet(
+        self, household_service, mock_supabase
+    ):
+        hh = {
+            "id": "household-123",
+            "name": "Other Family",
+            "join_code": "ABC123",
+            "created_at": "2025-01-01T00:00:00Z",
+            "size": 3,
+            "dietary_restrictions": ["dairy"],
+        }
+        mock_supabase.get_user_household.return_value = {
+            "id": "household-123",
+            "name": "Other Family",
+            "role": "member",
+        }
+        mock_supabase.get_household_by_code.return_value = hh
+
+        result = household_service.join_household("user-789", "ABC123")
+
+        assert result["size"] == 3
+        assert result["dietary_restrictions"] == ["dairy"]
+        mock_supabase.add_household_member.assert_not_called()
+
+    def test_join_household_unique_violation_same_household_is_idempotent(
+        self, household_service, mock_supabase
+    ):
+        hh = {
+            "id": "household-123",
+            "name": "Other Family",
+            "join_code": "ABC123",
+            "created_at": "2025-01-01T00:00:00Z",
+            "size": 2,
+            "dietary_restrictions": [],
+        }
+        mock_supabase.get_user_household.side_effect = [
+            None,
+            {"id": "household-123", "role": "member"},
+        ]
+        mock_supabase.get_household_by_code.return_value = hh
+        mock_supabase.add_household_member.side_effect = DatabaseException(
+            "duplicate key value violates unique constraint 23505"
+        )
+
+        result = household_service.join_household("user-789", "ABC123")
+
+        assert result["id"] == "household-123"
+        assert result["role"] == "member"
+
+    def test_join_household_unique_violation_different_household_raises(
+        self, household_service, mock_supabase
+    ):
+        hh = {
+            "id": "household-123",
+            "name": "Other Family",
+            "join_code": "ABC123",
+            "created_at": "2025-01-01T00:00:00Z",
+        }
+        mock_supabase.get_user_household.side_effect = [
+            None,
+            {"id": "household-other", "role": "member"},
+        ]
+        mock_supabase.get_household_by_code.return_value = hh
+        mock_supabase.add_household_member.side_effect = DatabaseException(
+            "duplicate key value violates unique constraint 23505"
+        )
+
+        with pytest.raises(ValidationException) as exc_info:
+            household_service.join_household("user-789", "ABC123")
+        assert "already a member" in str(exc_info.value)
+
+    def test_merge_dietary_restrictions_unions_without_touching_size(
+        self, household_service, mock_supabase
+    ):
+        mock_supabase.get_user_household.return_value = {
+            "id": "household-123",
+            "name": "Test Family",
+            "join_code": "ABC123",
+            "role": "member",
+            "size": 3,
+            "dietary_restrictions": ["peanuts"],
+        }
+        mock_supabase.merge_household_dietary_restrictions.return_value = [
+            "peanuts",
+            "shellfish",
+        ]
+
+        result = household_service.merge_dietary_restrictions(
+            "user-789", ["shellfish", "shellfish"]
+        )
+
+        assert result["dietary_restrictions"] == ["peanuts", "shellfish"]
+        assert result["size"] == 3
+        mock_supabase.merge_household_dietary_restrictions.assert_called_once_with(
+            "household-123", ["shellfish"]
+        )
+        mock_supabase.update_household.assert_not_called()
+
+    def test_merge_dietary_restrictions_blank_additions_is_noop(
+        self, household_service, mock_supabase
+    ):
+        mock_supabase.get_user_household.return_value = {
+            "id": "household-123",
+            "name": "Test Family",
+            "join_code": "ABC123",
+            "role": "member",
+            "size": 2,
+            "dietary_restrictions": ["peanuts"],
+        }
+
+        result = household_service.merge_dietary_restrictions("user-789", ["", "  "])
+
+        assert result["dietary_restrictions"] == ["peanuts"]
+        mock_supabase.merge_household_dietary_restrictions.assert_not_called()
+
+    def test_member_put_profile_replaces_dietary_array(
+        self, household_service, mock_supabase
+    ):
+        """Documents open hole: any member can overwrite the full allergy list via PUT."""
+        mock_supabase.get_user_household.return_value = {
+            "id": "household-123",
+            "name": "Test Family",
+            "join_code": "ABC123",
+            "role": "member",
+            "size": 2,
+            "dietary_restrictions": ["peanuts", "dairy"],
+        }
+
+        household_service.update_household_profile(
+            "user-789", dietary_restrictions=["gluten"]
+        )
+
+        mock_supabase.update_household.assert_called_once_with(
+            "household-123", {"dietary_restrictions": ["gluten"]}
+        )

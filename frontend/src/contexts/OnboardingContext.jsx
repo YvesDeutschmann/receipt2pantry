@@ -15,6 +15,9 @@ const OnboardingContext = createContext(null)
 
 const DEFAULT_HOUSEHOLD_NAME = 'My Household'
 
+const ALREADY_MEMBER_ERROR =
+  'You are already a member of a household. Please leave your current household first.'
+
 /** Ordered onboarding sub-flow steps (cold-start arc). */
 export const ONBOARDING_STEP_NAMES = [
   'household_size',
@@ -22,6 +25,14 @@ export const ONBOARDING_STEP_NAMES = [
   'bridge',
   'staples',
 ]
+
+function hydrateFromHousehold(household, setters) {
+  setters.setHouseholdId(household.id)
+  setters.setHouseholdSize(household.size ?? 2)
+  setters.setDietaryRestrictions(household.dietary_restrictions ?? [])
+  setters.setHouseholdRole(household.role ?? null)
+  setters.setInitialDietaryRestrictions(household.dietary_restrictions ?? [])
+}
 
 /**
  * @param {object} props
@@ -40,18 +51,23 @@ export function OnboardingProvider({ children, renderProbeRef }) {
     if (provider === 'google') return 'google'
     return 'email'
   }, [user, session])
+
   const [householdId, setHouseholdId] = useState(null)
+  const [householdRole, setHouseholdRole] = useState(null)
   const [householdSize, setHouseholdSize] = useState(2)
   const [dietaryRestrictions, setDietaryRestrictions] = useState([])
+  const [initialDietaryRestrictions, setInitialDietaryRestrictions] = useState([])
   const [noRestrictions, setNoRestrictions] = useState(false)
   const [otherRestriction, setOtherRestriction] = useState('')
-  const [householdReady, setHouseholdReady] = useState(false)
+  const [householdResolved, setHouseholdResolved] = useState(false)
   const [householdLoading, setHouseholdLoading] = useState(true)
   const [householdError, setHouseholdError] = useState(null)
 
   const [completedUpTo, setCompletedUpTo] = useState(-1)
   const completionSentRef = useRef(false)
   const [, setRenderProbe] = useState(0)
+
+  const isJoiner = householdRole === 'member'
 
   useEffect(() => {
     if (renderProbeRef && typeof renderProbeRef === 'object') {
@@ -64,37 +80,49 @@ export function OnboardingProvider({ children, renderProbeRef }) {
     }
   }, [renderProbeRef])
 
+  const applyHousehold = useCallback((household) => {
+    if (household) {
+      hydrateFromHousehold(household, {
+        setHouseholdId,
+        setHouseholdSize,
+        setDietaryRestrictions,
+        setHouseholdRole,
+        setInitialDietaryRestrictions,
+      })
+    } else {
+      setHouseholdId(null)
+      setHouseholdRole(null)
+      setInitialDietaryRestrictions([])
+    }
+  }, [])
+
+  const refreshHousehold = useCallback(async () => {
+    if (!user?.id) return null
+    const { household } = await api.getHousehold(user.id)
+    applyHousehold(household)
+    return household
+  }, [user?.id, applyHousehold])
+
   useEffect(() => {
     if (!user?.id) {
       setHouseholdLoading(false)
+      setHouseholdResolved(false)
       return
     }
 
     let cancelled = false
 
-    async function ensureHousehold() {
+    async function loadHousehold() {
+      setHouseholdLoading(true)
+      setHouseholdError(null)
       try {
         const { household } = await api.getHousehold(user.id)
         if (cancelled) return
-
-        if (household) {
-          setHouseholdId(household.id)
-          setHouseholdSize(household.size ?? 2)
-          setDietaryRestrictions(household.dietary_restrictions ?? [])
-        } else {
-          const { household: created } = await api.createHousehold(
-            user.id,
-            DEFAULT_HOUSEHOLD_NAME,
-            2,
-            []
-          )
-          if (cancelled) return
-          setHouseholdId(created.id)
-        }
-        setHouseholdReady(true)
+        applyHousehold(household)
+        setHouseholdResolved(true)
       } catch (err) {
         if (!cancelled) {
-          setHouseholdError(err.message || 'Failed to set up household')
+          setHouseholdError(err.message || 'Failed to load household')
         }
       } finally {
         if (!cancelled) {
@@ -103,9 +131,51 @@ export function OnboardingProvider({ children, renderProbeRef }) {
       }
     }
 
-    ensureHousehold()
-    return () => { cancelled = true }
-  }, [user?.id])
+    loadHousehold()
+    return () => {
+      cancelled = true
+    }
+  }, [user?.id, applyHousehold])
+
+  const createHouseholdExplicit = useCallback(
+    async (name = DEFAULT_HOUSEHOLD_NAME) => {
+      if (!user?.id) throw new Error('Not signed in')
+      try {
+        const { household } = await api.createHousehold(user.id, name, 2, [])
+        applyHousehold(household)
+        setHouseholdResolved(true)
+        return household
+      } catch (err) {
+        const msg = err.response?.data?.error || err.message || ''
+        if (msg.includes('already a member')) {
+          const existing = await refreshHousehold()
+          if (existing) return existing
+        }
+        throw err
+      }
+    },
+    [user?.id, applyHousehold, refreshHousehold]
+  )
+
+  const joinHouseholdByCode = useCallback(
+    async (joinCode) => {
+      if (!user?.id) throw new Error('Not signed in')
+      try {
+        const { household } = await api.joinHousehold(user.id, joinCode)
+        applyHousehold(household)
+        setHouseholdResolved(true)
+        return household
+      } catch (err) {
+        const msg = err.response?.data?.error || err.message || ''
+        if (msg.includes('already a member')) {
+          const existing = await refreshHousehold()
+          if (existing) return existing
+        }
+        throw err
+      }
+    },
+    [user?.id, applyHousehold, refreshHousehold]
+  )
 
   const setSize = useCallback(
     (n) => {
@@ -161,6 +231,11 @@ export function OnboardingProvider({ children, renderProbeRef }) {
     return base
   }, [noRestrictions, dietaryRestrictions, otherRestriction])
 
+  const joinerDietaryAdditions = useMemo(() => {
+    const initial = new Set(initialDietaryRestrictions)
+    return dietaryRestrictionsEffective.filter((code) => !initial.has(code))
+  }, [initialDietaryRestrictions, dietaryRestrictionsEffective])
+
   const stepsComplete = useMemo(
     () =>
       Object.fromEntries(
@@ -213,6 +288,25 @@ export function OnboardingProvider({ children, renderProbeRef }) {
     [authLoading, getSignupMethod]
   )
 
+  const completeJoin = useCallback(
+    async (extra = {}) => {
+      if (authLoading) return
+      if (completionSentRef.current) return
+      completionSentRef.current = true
+      const now = new Date().toISOString()
+      await supabase.auth.updateUser({
+        data: {
+          onboarding_completed_at: now,
+          cold_start_step: 2,
+          signup_method: getSignupMethod(),
+          whats_for_dinner_unlocked: true,
+          ...extra,
+        },
+      })
+    },
+    [authLoading, getSignupMethod]
+  )
+
   const completeBridge = useCallback(
     async (extra = {}) => {
       if (authLoading) return false
@@ -241,19 +335,33 @@ export function OnboardingProvider({ children, renderProbeRef }) {
     ]
   )
 
+  const completeJoinDietary = useCallback(async () => {
+    if (!user?.id) throw new Error('Not signed in')
+    if (joinerDietaryAdditions.length > 0) {
+      await api.mergeDietaryRestrictions(user.id, joinerDietaryAdditions)
+    }
+    await completeJoin()
+  }, [user?.id, joinerDietaryAdditions, completeJoin])
+
   const value = useMemo(
     () => ({
       householdId,
+      householdRole,
+      isJoiner,
       householdSize,
       setHouseholdSize: setSize,
       dietaryRestrictions: dietaryRestrictionsEffective,
       rawDietaryRestrictions: dietaryRestrictions,
+      initialDietaryRestrictions,
+      joinerDietaryAdditions,
       noRestrictions,
       toggleRestriction,
       setRestrictionsAffirmativeNone,
       otherRestriction,
       setOtherRestriction: addOtherRestriction,
-      householdReady,
+      householdResolved,
+      /** @deprecated use householdResolved */
+      householdReady: householdResolved,
       householdLoading,
       householdError,
       stepsComplete,
@@ -261,20 +369,30 @@ export function OnboardingProvider({ children, renderProbeRef }) {
       completeStep,
       resetOnboarding,
       complete,
+      completeJoin,
+      completeJoinDietary,
       completeBridge,
+      createHouseholdExplicit,
+      joinHouseholdByCode,
+      refreshHousehold,
+      ALREADY_MEMBER_ERROR,
     }),
     [
       householdId,
+      householdRole,
+      isJoiner,
       householdSize,
       setSize,
       dietaryRestrictionsEffective,
       dietaryRestrictions,
+      initialDietaryRestrictions,
+      joinerDietaryAdditions,
       noRestrictions,
       toggleRestriction,
       setRestrictionsAffirmativeNone,
       otherRestriction,
       addOtherRestriction,
-      householdReady,
+      householdResolved,
       householdLoading,
       householdError,
       stepsComplete,
@@ -282,7 +400,12 @@ export function OnboardingProvider({ children, renderProbeRef }) {
       completeStep,
       resetOnboarding,
       complete,
+      completeJoin,
+      completeJoinDietary,
       completeBridge,
+      createHouseholdExplicit,
+      joinHouseholdByCode,
+      refreshHousehold,
     ]
   )
 

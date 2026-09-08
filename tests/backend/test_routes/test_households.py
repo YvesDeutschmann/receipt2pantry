@@ -385,3 +385,52 @@ class TestHouseholdRoutes:
         
         # Verify
         assert response.status_code == 403
+
+    # =========================================================================
+    # POST /api/households/dietary/merge tests
+    # =========================================================================
+
+    def test_merge_dietary_success(self, client_with_service, mock_household_service):
+        mock_household_service.merge_dietary_restrictions.return_value = {
+            "id": "household-123",
+            "name": "Test Family",
+            "dietary_restrictions": ["peanuts", "shellfish"],
+            "role": "member",
+        }
+
+        response = client_with_service.post(
+            "/api/households/dietary/merge",
+            data=json.dumps({"dietary_restrictions": ["shellfish"]}),
+            content_type="application/json",
+            headers={"X-User-Id": "user-789"},
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert "shellfish" in data["household"]["dietary_restrictions"]
+        mock_household_service.merge_dietary_restrictions.assert_called_once_with(
+            "user-789", dietary_restrictions=["shellfish"]
+        )
+
+    def test_merge_dietary_no_household(self, client_with_service, mock_household_service):
+        mock_household_service.merge_dietary_restrictions.side_effect = ValidationException(
+            "You are not a member of any household"
+        )
+
+        response = client_with_service.post(
+            "/api/households/dietary/merge",
+            data=json.dumps({"dietary_restrictions": ["shellfish"]}),
+            content_type="application/json",
+            headers={"X-User-Id": "user-789"},
+        )
+
+        assert response.status_code == 400
+
+    def test_merge_dietary_no_user_id(self, client_with_service):
+        response = client_with_service.post(
+            "/api/households/dietary/merge",
+            data=json.dumps({"dietary_restrictions": ["shellfish"]}),
+            content_type="application/json",
+        )
+
+        assert response.status_code == 401

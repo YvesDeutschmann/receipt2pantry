@@ -23,6 +23,7 @@
 - **Last-admin guard:** removing the last admin (or last member) must either block or promote another member — pin current behavior.
 - **Leave-household:** member leaves → pantry/recipes ownership policy must be explicit (row-level RLS governs, but service should not leak orphan records).
 - **Idempotent joins:** calling `join_household` twice with the same code + user is a no-op, not a duplicate membership row.
+- **Open security follow-up:** any member can `PUT /households/profile` and replace the full `dietary_restrictions` array (allergy wipe). Documented in [`household-sharing-open-items.md`](../../household-sharing-open-items.md); join onboarding uses merge-only.
 
 ---
 
