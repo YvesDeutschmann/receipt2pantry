@@ -1,14 +1,22 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
-import { api } from '../services/apiClient'
+import { api, postDevLog } from '../services/apiClient'
 import { useAuth } from '../contexts/AuthContext'
-import { emit, FunnelEvent } from '../services/funnelTelemetry'
+import { emit, emitRepeatable, FunnelEvent } from '../services/funnelTelemetry'
 import HealthCard from '../components/HealthCard'
 import IngredientCorrection from '../components/IngredientCorrection'
-import SuggestionDetailModal from '../components/SuggestionDetailModal'
+import SuggestionDetailModal, {
+  EXIT_CONFIRM_VIEW_THRESHOLD_MS,
+} from '../components/SuggestionDetailModal'
 import SuggestionRecipeCard from '../components/SuggestionRecipeCard'
 import PageHeader from '../components/PageHeader'
 import PullToRefresh from '../components/PullToRefresh'
 import { buildCookIngredients, isStapleRecipeId } from '../utils/buildCookIngredients'
+import {
+  clientCookLoopChecks,
+  compactCookLoopQaLog,
+  isDevCookLoopRecipe,
+  stashCookLoopReport,
+} from '../utils/cookLoopQa'
 
 const EMPTY_SUGGESTIONS = {
   use_soon_shelf: [],
@@ -137,6 +145,7 @@ function Recipes() {
   const [householdId, setHouseholdId] = useState(null)
   const [selectedRecipe, setSelectedRecipe] = useState(null)
   const [detailModalOpen, setDetailModalOpen] = useState(false)
+  const [exitConfirmRecipe, setExitConfirmRecipe] = useState(null)
   const [pantryData, setPantryData] = useState(null)
   const [usingPool, setUsingPool] = useState(false)
   const [cookingRecipeIds, setCookingRecipeIds] = useState(() => new Set())
@@ -150,6 +159,7 @@ function Recipes() {
   const firstCookEmitted = useRef(false)
   const cookInFlightRef = useRef(new Set())
   const cookedPoolIdsRef = useRef(new Set())
+  const exitConfirmSuppressedRef = useRef(new Set())
 
   const syncCookingUi = useCallback(() => {
     setCookingRecipeIds(new Set(cookInFlightRef.current))
@@ -334,6 +344,13 @@ function Recipes() {
         firstCookEmitted.current = true
         void emit(FunnelEvent.FIRST_COOK_LOGGED, userId)
       }
+      void emitRepeatable(FunnelEvent.COOK_LOGGED, userId, {
+        recipeId: String(recipeId),
+      })
+      setExitConfirmRecipe(null)
+      if (recipe.id) {
+        exitConfirmSuppressedRef.current.add(recipe.id)
+      }
 
       if (recipe._fromPool) {
         cookedPoolIdsRef.current.add(recipe.id)
@@ -376,6 +393,30 @@ function Recipes() {
       setUsingPool(fromPool)
       setSuggestions(updated)
       void fetchPantry()
+
+      if (isDevCookLoopRecipe(recipe)) {
+        void (async () => {
+          try {
+            let poolPayload = null
+            try {
+              poolPayload = await api.suggestions.getPool(userId, hh)
+            } catch {
+              /* pool optional for client check */
+            }
+            const clientChecks = clientCookLoopChecks(recipe, cookResult, poolPayload)
+            const report = await api.devCookLoopReport()
+            const merged = {
+              ...report,
+              client_checks: clientChecks,
+              ok: report.ok && clientChecks.every((c) => c.ok),
+            }
+            stashCookLoopReport(merged)
+            postDevLog('cookLoopQa', compactCookLoopQaLog(report, clientChecks))
+          } catch (qaErr) {
+            console.warn('Cook-loop QA observe failed:', qaErr)
+          }
+        })()
+      }
     } catch (err) {
       setError(err.response?.data?.error || COOK_PARTIAL_ERROR)
     } finally {
@@ -408,6 +449,35 @@ function Recipes() {
   const handleExpand = (recipe) => {
     setSelectedRecipe(recipe)
     setDetailModalOpen(true)
+    if (userId) {
+      void emitRepeatable(FunnelEvent.RECIPE_DETAIL_OPENED, userId, {
+        recipeId: String(recipe.recipeIdForCook || recipe.id || ''),
+      })
+    }
+  }
+
+  const handleDetailClose = (meta) => {
+    setDetailModalOpen(false)
+    const recipe = meta?.recipe
+    if (
+      recipe?.id &&
+      (meta?.viewDurationMs ?? 0) >= EXIT_CONFIRM_VIEW_THRESHOLD_MS &&
+      meta?.instructionsReached &&
+      !exitConfirmSuppressedRef.current.has(recipe.id) &&
+      !cookInFlightRef.current.has(recipe.id)
+    ) {
+      setExitConfirmRecipe(recipe)
+    } else {
+      setExitConfirmRecipe(null)
+    }
+    setSelectedRecipe(null)
+  }
+
+  const dismissExitConfirm = (recipeId) => {
+    if (recipeId) {
+      exitConfirmSuppressedRef.current.add(recipeId)
+    }
+    setExitConfirmRecipe(null)
   }
 
   const renderShelf = (key, title, subtitle, list) => {
@@ -428,6 +498,9 @@ function Recipes() {
             onExpand={handleExpand}
             cookDisabled={cookingRecipeIds.has(recipe.id)}
             cookBusy={cookingRecipeIds.has(recipe.id)}
+            pantryData={pantryData}
+            userId={userId}
+            onIngredientCorrected={handleIngredientCorrected}
           />
         ))}
       </section>
@@ -561,10 +634,7 @@ function Recipes() {
 
         <SuggestionDetailModal
           isOpen={detailModalOpen}
-          onClose={() => {
-            setDetailModalOpen(false)
-            setSelectedRecipe(null)
-          }}
+          onClose={handleDetailClose}
           recipe={selectedRecipe}
           loading={false}
           userId={userId}
@@ -573,11 +643,35 @@ function Recipes() {
           cookBusy={selectedCookBusy}
           onCookedIt={async (r) => {
             await handleCookedIt(r)
-            setDetailModalOpen(false)
-            setSelectedRecipe(null)
+            handleDetailClose({ recipe: r, viewDurationMs: 0, instructionsReached: false })
           }}
           onIngredientCorrected={handleIngredientCorrected}
         />
+
+        {exitConfirmRecipe && (
+          <div className="fixed bottom-0 inset-x-0 z-50 p-4 pb-safe pointer-events-none">
+            <div
+              className="max-w-lg mx-auto rounded-mise-md bg-forest-mid border border-sage/30 p-3 flex flex-wrap items-center gap-3 pointer-events-auto shadow-mise-lg"
+              role="status"
+            >
+              <p className="text-sm text-cream flex-1 min-w-[8rem]">Did you cook this?</p>
+              <button
+                type="button"
+                className="btn btn-primary text-sm py-2 px-4"
+                onClick={() => void handleCookedIt(exitConfirmRecipe)}
+              >
+                Yes, cooked it
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary text-sm py-2 px-4"
+                onClick={() => dismissExitConfirm(exitConfirmRecipe.id)}
+              >
+                Not this time
+              </button>
+            </div>
+          </div>
+        )}
 
         {userId ? (
           <HealthCard

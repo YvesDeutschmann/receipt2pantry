@@ -24,6 +24,8 @@ const {
   getDepth,
   swipeSuggestion,
   triggerGeneration,
+  devCookLoopReport,
+  postDevLog,
 } = vi.hoisted(() => ({
   getSuggestions: vi.fn(),
   markCooked: vi.fn(),
@@ -48,6 +50,10 @@ const {
   triggerGeneration: vi.fn(() =>
     Promise.resolve({ status: 'completed', suggestions_generated: 1 })
   ),
+  devCookLoopReport: vi.fn(() =>
+    Promise.resolve({ ok: true, mode: 'observe', checks: [] })
+  ),
+  postDevLog: vi.fn(),
 }))
 
 vi.mock('../contexts/AuthContext', () => ({
@@ -128,6 +134,7 @@ vi.mock('../services/apiClient', () => ({
     getPantry,
     getHealthCard,
     dismissHealthCard,
+    devCookLoopReport,
     getRecipeDetails: vi.fn(() =>
       Promise.resolve({
         extendedIngredients: [{ name: 'x', original: 'x' }],
@@ -142,6 +149,7 @@ vi.mock('../services/apiClient', () => ({
       triggerGeneration,
     },
   },
+  postDevLog,
 }))
 
 function recipeStub(overrides) {
@@ -170,6 +178,8 @@ describe('SuggestionScreen', () => {
     getDepth.mockClear()
     swipeSuggestion.mockClear()
     triggerGeneration.mockClear()
+    devCookLoopReport.mockClear()
+    postDevLog.mockClear()
     triggerGeneration.mockImplementation(() =>
       Promise.resolve({ status: 'completed', suggestions_generated: 1 })
     )
@@ -900,6 +910,52 @@ describe('SuggestionScreen', () => {
     await waitFor(() => expect(getPool.mock.calls.length).toBeGreaterThan(1))
     expect(screen.queryByText('Remount Soup')).not.toBeInTheDocument()
     expect(swipeSuggestion).not.toHaveBeenCalled()
+  })
+
+  it('DEV_COOK_LOOP_OBSERVE_LOGS_QA_AFTER_COOK', async () => {
+    getPool.mockResolvedValue({
+      pool: {
+        breakfast: [],
+        lunch: [],
+        dinner: [
+          {
+            id: 'sug-dev',
+            recipe_id: 'dev_cook_loop',
+            recipe_name: '[DEV] Cook-loop pasta',
+            recipe_data: {
+              title: '[DEV] Cook-loop pasta',
+              servings: 4,
+              extendedIngredients: [
+                { name: 'pasta' },
+                { name: 'tomatoes' },
+                { name: 'olive oil' },
+                { name: 'rice vinegar' },
+              ],
+            },
+            match_score: 0.9999,
+          },
+        ],
+      },
+      household_id: 'h1',
+    })
+    markCooked.mockResolvedValue({
+      ok: true,
+      touched: [
+        { base_ingredient: 'pasta' },
+        { base_ingredient: 'tomatoes' },
+        { base_ingredient: 'olive oil' },
+      ],
+    })
+    render(<Recipes />)
+    await screen.findByText('[DEV] Cook-loop pasta')
+    fireEvent.click(screen.getByRole('button', { name: /^Cooked it$/i }))
+    await waitFor(() => expect(devCookLoopReport).toHaveBeenCalled())
+    await waitFor(() =>
+      expect(postDevLog).toHaveBeenCalledWith(
+        'cookLoopQa',
+        expect.stringContaining('mode=observe')
+      )
+    )
   })
 })
 

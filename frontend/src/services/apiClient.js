@@ -417,6 +417,24 @@ export const api = {
     return response.data
   },
 
+  /** Dev only: seed cook-loop sandbox pantry + pool card */
+  devCookLoopReset: async () => {
+    const response = await apiClient.post('/dev/cook-loop/reset')
+    return response.data
+  },
+
+  /** Dev only: reset, server cook, graded report */
+  devCookLoopRun: async () => {
+    const response = await apiClient.post('/dev/cook-loop/run')
+    return response.data
+  },
+
+  /** Dev only: grade current state vs fixture */
+  devCookLoopReport: async () => {
+    const response = await apiClient.get('/dev/cook-loop/report')
+    return response.data
+  },
+
   // Pantry Management
   getPantry: async (userId, householdId = null) => {
     const params = householdId ? { household_id: householdId } : {}

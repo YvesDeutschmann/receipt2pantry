@@ -521,3 +521,35 @@ def test_is_join_code_unique_applies_uppercase_eq(mocker):
 
     assert chain_calls_eq(admin.chains, "join_code", "ABZ99")
 
+
+def test_reset_household_pantry_deletes_live_rows_only(mocker):
+    anon = PostgrestClientStub()
+    admin = PostgrestClientStub()
+    service = install_supabase_service_with_clients(mocker, anon, admin)
+
+    service.reset_household_pantry("hh-live")
+
+    ch = latest_chain_using_table(admin.chains, "pantry_items")
+    assert ch is not None
+    assert chain_calls_eq([ch], "household_id", "hh-live")
+    assert any(
+        step[0] == "is_" and step[1][:2] == ("deleted_at", "null") for step in ch
+    )
+    assert any(step[0] == "delete" for step in ch)
+    assert len(anon.chains) == 0
+
+
+def test_delete_recipe_cooking_log_scopes_household_and_recipe(mocker):
+    anon = PostgrestClientStub()
+    admin = PostgrestClientStub()
+    service = install_supabase_service_with_clients(mocker, anon, admin)
+
+    service.delete_recipe_cooking_log("hh-live", "dev_cook_loop")
+
+    ch = latest_chain_using_table(admin.chains, "cooking_log")
+    assert ch is not None
+    assert chain_calls_eq([ch], "household_id", "hh-live")
+    assert chain_calls_eq([ch], "recipe_id", "dev_cook_loop")
+    assert any(step[0] == "delete" for step in ch)
+    assert len(anon.chains) == 0
+
