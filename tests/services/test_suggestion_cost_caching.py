@@ -461,6 +461,46 @@ def test_suggestion_pool_first_skips_spoonacular(monkeypatch):
     assert "meta" in out
 
 
+def test_pool_use_soon_promotes_matching_card_without_spoonacular(monkeypatch):
+    _patch_suggestion_compute(monkeypatch)
+    supabase, pantry_service, _ = _suggestion_pantry_setup()
+    pantry_service._get_pantry_items.return_value = [
+        make_pantry_item(
+            base_ingredient="spinach",
+            id="p-spin",
+            use_soon=True,
+            use_soon_expires="2026-04-12",
+        )
+    ]
+    recipe_service = MagicMock()
+    pool_store = MagicMock()
+    pool_store.get_pool_depth.return_value = {
+        "breakfast": 0,
+        "lunch": 0,
+        "dinner": 1,
+    }
+    pool_store.get_pool_grouped_by_meal.return_value = {
+        "breakfast": [],
+        "lunch": [],
+        "dinner": [
+            {
+                **_pool_row(recipe_id="77", score=0.92, name="Spinach Pasta"),
+                "recipe_data": {"extendedIngredients": [{"name": "spinach"}]},
+            }
+        ],
+    }
+    svc = SuggestionService(
+        supabase, pantry_service, recipe_service, MagicMock(), pool_store=pool_store
+    )
+    out = svc.get_recipe_suggestions("user-1", "hh", today=TEST_DATE)
+    recipe_service.get_recipes_by_pantry.assert_not_called()
+    recipe_service.get_recipe_details.assert_not_called()
+    assert len(out["use_soon_shelf"]) == 1
+    assert out["use_soon_shelf"][0]["id"] == "77"
+    assert out["use_soon_shelf"][0]["tier"] == "use_soon"
+    assert len(out["cook_tonight"]) == 1
+
+
 def test_suggestion_pool_first_skips_result_cache(monkeypatch):
     _patch_suggestion_compute(monkeypatch)
     supabase, pantry_service, _ = _suggestion_pantry_setup()

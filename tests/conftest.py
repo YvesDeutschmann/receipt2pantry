@@ -126,6 +126,7 @@ def mock_supabase():
     mock = Mock(spec=SupabaseService)
     mock.client = MagicMock()
     mock.admin_client = MagicMock()
+    mock.get_item_classifications_by_names.return_value = {}
     return mock
 
 

@@ -6,9 +6,18 @@
 
 ## Product Promise
 
-Suggest meals users can actually cook tonight based on what they have.
+Suggest meals users can actually cook tonight based on what they **probably** have.
 
 The depletion system exists to make that promise trustworthy. A wrong suggestion — confidently recommending something the user doesn't have — is worse than a conservative one. When in doubt, be uncertain rather than wrong.
+
+**The pantry is a belief system, not a complete inventory.** Product-facing claims, copy constraints, and the split between app-mediated cooking vs ambient consumption are defined in [`docs/PRODUCT_BRIEF.md`](../../PRODUCT_BRIEF.md) (section *Pantry premise*). This document must not contradict that premise.
+
+Implications that bind engineering here:
+
+- Ambient consumption (breakfast, snacks, cooking outside the app) is unobservable. Do not design features whose success depends on users reporting it.
+- Re-purchase cadence is the ground-truth signal for household burn rate. Cook events are an optional accelerant for meals cooked *in* the app.
+- `UNIT_ITEM` with no cook event must still degrade over time (consumable-style fallback). Missing events must not leave a row at high confidence forever.
+- Recipe dismissals / "I don't have this" are high-value belief updates about the pantry, not only ranking downweights.
 
 ---
 

@@ -122,6 +122,135 @@ def test_upsert_pantry_item_requires_service_role(mocker):
         )
 
 
+def test_upsert_pantry_item_forwards_depletion_fields(mocker):
+    """upsert_pantry_item RPC receives depletion_class and purchase_date in p_item."""
+    anon = PostgrestClientStub()
+    admin = PostgrestClientStub()
+    admin.set_default_response_data("pantry-1")
+    service = install_supabase_service_with_clients(mocker, anon, admin)
+
+    item_data = {
+        "user_id": "user-1",
+        "household_id": "hh-1",
+        "base_ingredient": "spinach",
+        "normalized_name": "spinach",
+        "depletion_class": "PERISHABLE",
+        "purchase_date": "2026-04-10T00:00:00+00:00",
+    }
+    service.upsert_pantry_item(item_data)
+
+    rpc_steps = [
+        step for chain in admin.chains for step in chain if step[0] == "rpc"
+    ]
+    assert rpc_steps[0][1][1]["p_item"]["depletion_class"] == "PERISHABLE"
+    assert rpc_steps[0][1][1]["p_item"]["purchase_date"] == "2026-04-10T00:00:00+00:00"
+
+
+def test_upsert_pantry_item_unwraps_list_rpc_payload(mocker):
+    anon = PostgrestClientStub()
+    admin = PostgrestClientStub()
+    admin.set_default_response_data(["pantry-1"])
+    service = install_supabase_service_with_clients(mocker, anon, admin)
+
+    result = service.upsert_pantry_item(
+        {
+            "user_id": "user-1",
+            "household_id": "hh-1",
+            "base_ingredient": "salt",
+            "normalized_name": "salt",
+        }
+    )
+    assert result == "pantry-1"
+
+
+def _chain_has_filter(ch, method: str, column: str) -> bool:
+    return any(
+        step[0] == method and step[1] and step[1][0] == column for step in ch
+    )
+
+
+def test_get_user_pantry_filters_deleted_at_null(mocker):
+    anon = PostgrestClientStub()
+    admin = PostgrestClientStub()
+    admin.set_default_response_data([])
+    service = install_supabase_service_with_clients(mocker, anon, admin)
+
+    service.get_user_pantry("uid-100")
+
+    ch = latest_chain_using_table(admin.chains, "pantry_items")
+    assert ch is not None
+    assert _chain_has_filter(ch, "is_", "deleted_at")
+    assert _chain_has_filter(ch, "gt", "quantity")
+
+
+def test_get_household_pantry_filters_deleted_at_null(mocker):
+    anon = PostgrestClientStub()
+    admin = PostgrestClientStub()
+    admin.set_default_response_data([])
+    service = install_supabase_service_with_clients(mocker, anon, admin)
+
+    service.get_household_pantry("hh-1")
+
+    ch = latest_chain_using_table(admin.chains, "pantry_items")
+    assert ch is not None
+    assert _chain_has_filter(ch, "is_", "deleted_at")
+    assert _chain_has_filter(ch, "gt", "quantity")
+
+
+def test_get_user_pantry_include_deleted_omits_deleted_filter(mocker):
+    anon = PostgrestClientStub()
+    admin = PostgrestClientStub()
+    admin.set_default_response_data([])
+    service = install_supabase_service_with_clients(mocker, anon, admin)
+
+    service.get_user_pantry("uid-100", include_deleted=True)
+
+    ch = latest_chain_using_table(admin.chains, "pantry_items")
+    assert ch is not None
+    assert not _chain_has_filter(ch, "is_", "deleted_at")
+    assert not _chain_has_filter(ch, "gt", "quantity")
+
+
+def test_get_household_pantry_include_deleted_omits_deleted_and_quantity_filters(
+    mocker,
+):
+    anon = PostgrestClientStub()
+    admin = PostgrestClientStub()
+    admin.set_default_response_data([])
+    service = install_supabase_service_with_clients(mocker, anon, admin)
+
+    service.get_household_pantry("hh-1", include_deleted=True)
+
+    ch = latest_chain_using_table(admin.chains, "pantry_items")
+    assert ch is not None
+    assert not _chain_has_filter(ch, "is_", "deleted_at")
+    assert not _chain_has_filter(ch, "gt", "quantity")
+
+
+def test_get_receipt_returns_first_row(mocker):
+    anon = PostgrestClientStub()
+    admin = PostgrestClientStub()
+    admin.set_default_response_data(
+        [{"id": "receipt-99", "order_date": "2025-01-15"}]
+    )
+    service = install_supabase_service_with_clients(mocker, anon, admin)
+
+    row = service.get_receipt("receipt-99")
+
+    assert row["order_date"] == "2025-01-15"
+    assert chain_calls_eq(admin.chains, "id", "receipt-99")
+    assert len(anon.chains) == 0
+
+
+def test_get_receipt_returns_none_when_empty(mocker):
+    anon = PostgrestClientStub()
+    admin = PostgrestClientStub()
+    admin.set_default_response_data([])
+    service = install_supabase_service_with_clients(mocker, anon, admin)
+
+    assert service.get_receipt("missing") is None
+
+
 # --- Group A — client selection ---
 
 

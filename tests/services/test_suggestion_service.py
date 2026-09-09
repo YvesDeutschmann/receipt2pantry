@@ -1068,6 +1068,17 @@ def test_cache_invalidate_on_dismiss():
     svc.invalidate_suggestion_cache("u1", "hh")
 
 
+def test_invalidate_suggestion_cache_clears_all_household_members():
+    svc = SuggestionService(MagicMock(), MagicMock(), MagicMock(), MagicMock())
+    svc._result_cache["caller:hh:abc"] = ({"ok": 1}, 1.0)
+    svc._result_cache["housemate:hh:def"] = ({"ok": 2}, 1.0)
+    svc._result_cache["other:other-hh:xyz"] = ({"ok": 3}, 1.0)
+    svc.invalidate_suggestion_cache("caller", "hh")
+    assert "caller:hh:abc" not in svc._result_cache
+    assert "housemate:hh:def" not in svc._result_cache
+    assert "other:other-hh:xyz" in svc._result_cache
+
+
 def test_dismiss_marks_pool_row_swiped_by_recipe_id():
     supabase = MagicMock()
     pantry_service = MagicMock()

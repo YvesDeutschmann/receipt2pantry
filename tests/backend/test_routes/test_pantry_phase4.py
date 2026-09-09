@@ -37,6 +37,13 @@ class TestPantryCook:
     ):
         mock_date.today.return_value = TEST_DATE
         mock_supabase_service.admin_client = MagicMock()
+        mock_cook.return_value = [
+            {
+                "pantry_item_id": "p1",
+                "base_ingredient": "chicken breast",
+                "depletion_class": "PERISHABLE",
+            }
+        ]
         resp = client_phase4.post(
             "/api/pantry/cook",
             data=json.dumps(
@@ -54,7 +61,10 @@ class TestPantryCook:
             headers={"X-User-Id": "user-1"},
         )
         assert resp.status_code == 200
-        assert json.loads(resp.data) == {"ok": True}
+        data = json.loads(resp.data)
+        assert data["ok"] is True
+        assert len(data["touched"]) == 1
+        assert data["touched"][0]["base_ingredient"] == "chicken breast"
         mock_cook.assert_called_once()
         call_kw = mock_cook.call_args
         assert call_kw[0][1] == "user-1"
@@ -120,6 +130,7 @@ class TestPantryCook:
     ):
         mock_date.today.return_value = TEST_DATE
         mock_supabase_service.admin_client = MagicMock()
+        mock_cook.return_value = []
         resp = client_phase4.post(
             "/api/pantry/cook",
             data=json.dumps(
@@ -134,10 +145,125 @@ class TestPantryCook:
             headers={"X-User-Id": "user-1"},
         )
         assert resp.status_code == 200
-        assert json.loads(resp.data) == {"ok": True}
+        assert json.loads(resp.data) == {"ok": True, "touched": []}
         mock_cook.assert_called_once()
         assert mock_cook.call_args[0][2] == "staple_omelette"
         assert mock_cook.call_args[0][4] == []
+
+
+    @patch("backend.routes.pantry.process_cook_event")
+    @patch("backend.routes.pantry.date")
+    def test_COOK_ENDPOINT_POOL_SWIPE(
+        self, mock_date, mock_cook, client_phase4, mock_supabase_service, app
+    ):
+        mock_date.today.return_value = TEST_DATE
+        mock_supabase_service.admin_client = MagicMock()
+        mock_supabase_service.get_user_household.return_value = {"id": "hh-1"}
+        mock_cook.return_value = []
+        pool_store = MagicMock()
+        app.config["POOL_STORE_SERVICE"] = pool_store
+        resp = client_phase4.post(
+            "/api/pantry/cook",
+            data=json.dumps(
+                {
+                    "recipe_id": "12345",
+                    "recipe_name": "Soup",
+                    "servings": 2,
+                    "ingredients": [{"name": "carrot", "amount": 1}],
+                    "household_id": "hh-1",
+                    "pool_suggestion_id": "sug-1",
+                }
+            ),
+            content_type="application/json",
+            headers={"X-User-Id": "user-1"},
+        )
+        assert resp.status_code == 200
+        pool_store.update_status.assert_called_once_with("sug-1", "hh-1", "swiped")
+
+    @patch("backend.routes.pantry.process_cook_event")
+    @patch("backend.routes.pantry.date")
+    def test_COOK_SWIPE_FAILURE_STILL_RETURNS_OK(
+        self, mock_date, mock_cook, client_phase4, mock_supabase_service, app
+    ):
+        mock_date.today.return_value = TEST_DATE
+        mock_supabase_service.admin_client = MagicMock()
+        mock_supabase_service.get_user_household.return_value = {"id": "hh-1"}
+        mock_cook.return_value = []
+        pool_store = MagicMock()
+        pool_store.update_status.side_effect = RuntimeError("network")
+        app.config["POOL_STORE_SERVICE"] = pool_store
+        resp = client_phase4.post(
+            "/api/pantry/cook",
+            data=json.dumps(
+                {
+                    "recipe_id": "12345",
+                    "recipe_name": "Soup",
+                    "servings": 2,
+                    "ingredients": [{"name": "carrot", "amount": 1}],
+                    "household_id": "hh-1",
+                    "pool_suggestion_id": "sug-1",
+                }
+            ),
+            content_type="application/json",
+            headers={"X-User-Id": "user-1"},
+        )
+        assert resp.status_code == 200
+        assert json.loads(resp.data)["ok"] is True
+
+    @patch("backend.routes.pantry.process_cook_event")
+    @patch("backend.routes.pantry.date")
+    def test_COOK_RESOLVES_HOUSEHOLD_WHEN_BODY_OMITS_IT(
+        self, mock_date, mock_cook, client_phase4, mock_supabase_service
+    ):
+        mock_date.today.return_value = TEST_DATE
+        mock_supabase_service.admin_client = MagicMock()
+        mock_supabase_service.get_user_household.return_value = {"id": "hh-1"}
+        mock_cook.return_value = []
+        resp = client_phase4.post(
+            "/api/pantry/cook",
+            data=json.dumps(
+                {
+                    "recipe_id": "12345",
+                    "recipe_name": "Soup",
+                    "servings": 2,
+                    "ingredients": [{"name": "carrot", "amount": 1}],
+                }
+            ),
+            content_type="application/json",
+            headers={"X-User-Id": "user-1"},
+        )
+        assert resp.status_code == 200
+        assert mock_cook.call_args.kwargs["household_id"] == "hh-1"
+
+    @patch("backend.routes.pantry.process_cook_event")
+    @patch("backend.routes.pantry.date")
+    def test_COOK_INVALIDATES_SUGGESTION_CACHE(
+        self, mock_date, mock_cook, client_phase4, mock_supabase_service, app
+    ):
+        mock_date.today.return_value = TEST_DATE
+        mock_supabase_service.admin_client = MagicMock()
+        mock_supabase_service.get_user_household.return_value = {"id": "hh-1"}
+        mock_cook.return_value = []
+        suggestion_svc = MagicMock()
+        app.config["SUGGESTION_SERVICE"] = suggestion_svc
+        resp = client_phase4.post(
+            "/api/pantry/cook",
+            data=json.dumps(
+                {
+                    "recipe_id": "12345",
+                    "recipe_name": "Soup",
+                    "servings": 2,
+                    "ingredients": [{"name": "carrot", "amount": 1}],
+                    "household_id": "hh-1",
+                }
+            ),
+            content_type="application/json",
+            headers={"X-User-Id": "user-1"},
+        )
+        assert resp.status_code == 200
+        suggestion_svc.invalidate_suggestion_cache.assert_called_once_with(
+            "user-1", "hh-1"
+        )
 
 
 class TestGraveyard:
@@ -531,6 +657,33 @@ class TestCorrections:
 
     @patch("backend.routes.pantry._rpc_soft_delete_pantry_item")
     @patch("backend.routes.pantry.date")
+    def test_CORRECTION_USED_IT_UP_HOUSEMATE_ROW(
+        self, mock_date, mock_rpc, client_phase4, mock_pantry_service, mock_supabase_service
+    ):
+        mock_date.today.return_value = TEST_DATE
+        mock_supabase_service.admin_client = MagicMock()
+        mock_supabase_service.get_pantry_item_by_id.return_value = {
+            "id": "item-1",
+            "user_id": "housemate",
+            "base_ingredient": "salt",
+            "normalized_name": "Salt",
+            "depletion_class": "CONSUMABLE",
+            "purchase_date": "2026-04-01",
+            "put_back_count": 0,
+            "deleted_at": None,
+        }
+        resp = client_phase4.post(
+            "/api/pantry/items/item-1/correction",
+            data=json.dumps({"action": "used_it_up"}),
+            content_type="application/json",
+            headers={"X-User-Id": "partner"},
+        )
+        assert resp.status_code == 200
+        mock_rpc.assert_called_once()
+        assert mock_rpc.call_args[1]["user_id"] == "housemate"
+
+    @patch("backend.routes.pantry._rpc_soft_delete_pantry_item")
+    @patch("backend.routes.pantry.date")
     def test_CORRECTION_NEVER_HAD_IT(
         self, mock_date, mock_rpc, client_phase4, mock_pantry_service, mock_supabase_service
     ):
@@ -555,6 +708,33 @@ class TestCorrections:
         assert resp.status_code == 200
         kwargs = mock_rpc.call_args[1]
         assert kwargs["reason"] == "NEVER_HAD"
+
+    @patch("backend.routes.pantry.date")
+    def test_CORRECTION_INVALIDATES_SUGGESTION_CACHE(
+        self, mock_date, client_phase4, mock_supabase_service, app
+    ):
+        mock_date.today.return_value = TEST_DATE
+        mock_supabase_service.admin_client = MagicMock()
+        mock_supabase_service.get_pantry_item_by_id.return_value = {
+            "id": "item-1",
+            "user_id": "user-1",
+            "household_id": "hh-1",
+            "base_ingredient": "salt",
+            "normalized_name": "Salt",
+            "deleted_at": None,
+        }
+        suggestion_svc = MagicMock()
+        app.config["SUGGESTION_SERVICE"] = suggestion_svc
+        resp = client_phase4.post(
+            "/api/pantry/items/item-1/correction",
+            data=json.dumps({"action": "still_have_it"}),
+            content_type="application/json",
+            headers={"X-User-Id": "user-1"},
+        )
+        assert resp.status_code == 200
+        suggestion_svc.invalidate_suggestion_cache.assert_called_once_with(
+            "user-1", "hh-1"
+        )
 
     def test_CORRECTION_INVALID_ACTION(
         self, client_phase4, mock_supabase_service

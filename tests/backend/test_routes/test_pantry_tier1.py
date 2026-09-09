@@ -170,6 +170,7 @@ class TestGroupBAtomicMultiTable:
     ):
         mock_date.today.return_value = TEST_DATE
         mock_supabase_tier1.admin_client = MagicMock()
+        mock_cook.return_value = []
         resp = client_tier1.post(
             "/api/pantry/cook",
             data=json.dumps(
@@ -212,9 +213,11 @@ class TestGroupBAtomicMultiTable:
                 "put_back_count": 0,
             }
         ]
-        admin.table.return_value.select.return_value.eq.return_value.is_.return_value.execute.return_value = Mock(
-            data=pantry_row
-        )
+        sel_chain = Mock()
+        sel_chain.is_.return_value = sel_chain
+        sel_chain.eq.return_value = sel_chain
+        sel_chain.execute.return_value = Mock(data=pantry_row)
+        admin.table.return_value.select.return_value = sel_chain
         with patch(
             "backend.services.confidence_engine._rpc_soft_delete_pantry_item",
             side_effect=RuntimeError("simulated rpc failure"),

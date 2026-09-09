@@ -2,7 +2,7 @@
 
 import copy
 from datetime import date, datetime, time, timezone
-from unittest.mock import Mock
+from unittest.mock import Mock, patch
 
 import pytest
 
@@ -12,10 +12,12 @@ from backend.services.confidence_engine import (
     _find_pantry_match,
     compute_confidence,
     find_pantry_match,
+    find_pantry_match_for_cook,
     get_calibrated_days_supply,
     get_engagement_multiplier,
     process_cook_event,
     process_put_back,
+    resolve_depletion_class,
     run_expiry_cleanup,
 )
 from backend.services.suggestion_service import get_tier
@@ -1276,7 +1278,7 @@ def test_cook_clears_use_soon_and_confidence_override():
         "u1",
         "recipe-1",
         2,
-        [{"name": "spinach", "amount": 1.0, "is_primary": True}],
+        [{"name": "spinach", "amount": 1.0}],
         today=TEST_DATE,
     )
     pt.update.assert_called_once()
@@ -1297,6 +1299,164 @@ def test_find_pantry_match_boneless_chicken_breast():
     m = _find_pantry_match(pantry, "boneless chicken breast")
     assert m is not None
     assert m["base_ingredient"] == "chicken breast"
+
+
+def test_find_pantry_match_for_cook_rice_not_rice_vinegar():
+    pantry = [{"base_ingredient": "rice", "id": "1"}]
+    assert find_pantry_match_for_cook(pantry, "rice vinegar") is None
+
+
+def test_find_pantry_match_for_cook_tomatoes_matches_tomato():
+    pantry = [{"base_ingredient": "tomato", "id": "1"}]
+    m = find_pantry_match_for_cook(pantry, "tomatoes")
+    assert m is not None
+    assert m["base_ingredient"] == "tomato"
+
+
+def test_find_pantry_match_for_cook_ice_not_rice():
+    pantry = [{"base_ingredient": "rice", "id": "1"}]
+    assert find_pantry_match_for_cook(pantry, "ice") is None
+
+
+def test_cook_dedupes_plural_aliases_on_same_unit_item():
+    pantry_rows = [
+        {
+            "id": "p1",
+            "user_id": "u1",
+            "base_ingredient": "tomato",
+            "depletion_class": "UNIT_ITEM",
+            "quantity_purchased": 2,
+            "quantity_remaining": None,
+            "put_back_count": 0,
+            "purchase_date": "2026-04-01",
+            "use_soon": False,
+        }
+    ]
+    client = _plain_supabase_mock()
+    sel_chain = Mock()
+    sel_chain.eq.return_value = sel_chain
+    sel_chain.is_.return_value = sel_chain
+    sel_chain.execute.return_value = Mock(data=pantry_rows)
+    upd_chain = Mock()
+    upd_chain.eq.return_value = upd_chain
+    upd_chain.execute.return_value = Mock(data=[])
+    pt = Mock()
+    pt.select.return_value = sel_chain
+    pt.update.return_value = upd_chain
+    log = Mock()
+    log.insert.return_value = log
+    log.execute.return_value = Mock(data=[{"id": "log1"}])
+
+    def tbl(name):
+        if name == "pantry_items":
+            return pt
+        if name == "cooking_log":
+            return log
+        return Mock()
+
+    client.table.side_effect = tbl
+    with patch(
+        "backend.services.confidence_engine._rpc_soft_delete_pantry_item"
+    ) as soft_delete:
+        touched = process_cook_event(
+            client,
+            "u1",
+            "recipe-1",
+            1,
+            [
+                {"name": "tomato", "amount": 1.0},
+                {"name": "tomatoes", "amount": 1.0},
+            ],
+            today=TEST_DATE,
+        )
+        soft_delete.assert_not_called()
+    assert len(touched) == 1
+    assert touched[0]["pantry_item_id"] == "p1"
+    update_payload = pt.update.call_args[0][0]
+    assert update_payload["quantity_remaining"] == 1.0
+    assert pt.update.call_count == 1
+
+
+def test_cook_zero_matches_returns_empty_touched():
+    client = _plain_supabase_mock()
+    sel_chain = Mock()
+    sel_chain.eq.return_value = sel_chain
+    sel_chain.is_.return_value = sel_chain
+    sel_chain.execute.return_value = Mock(data=[])
+    pt = Mock()
+    pt.select.return_value = sel_chain
+    log = Mock()
+    log.insert.return_value = log
+    log.execute.return_value = Mock(data=[{"id": "log1"}])
+
+    def tbl(name):
+        if name == "pantry_items":
+            return pt
+        if name == "cooking_log":
+            return log
+        return Mock()
+
+    client.table.side_effect = tbl
+    touched = process_cook_event(
+        client,
+        "u1",
+        "recipe-1",
+        1,
+        [{"name": "garlic", "amount": 1.0}],
+        today=TEST_DATE,
+        household_id="hh-1",
+    )
+    assert touched == []
+    sel_chain.eq.assert_any_call("household_id", "hh-1")
+
+
+def test_cook_soft_delete_uses_row_owner_user_id():
+    pantry_rows = [
+        {
+            "id": "h1",
+            "user_id": "housemate",
+            "base_ingredient": "canned chickpeas",
+            "depletion_class": "UNIT_ITEM",
+            "quantity_purchased": 1,
+            "quantity_remaining": None,
+            "put_back_count": 0,
+            "purchase_date": "2026-04-01",
+            "use_soon": False,
+        }
+    ]
+    client = _plain_supabase_mock()
+    sel_chain = Mock()
+    sel_chain.eq.return_value = sel_chain
+    sel_chain.is_.return_value = sel_chain
+    sel_chain.execute.return_value = Mock(data=pantry_rows)
+    pt = Mock()
+    pt.select.return_value = sel_chain
+    log = Mock()
+    log.insert.return_value = log
+    log.execute.return_value = Mock(data=[{"id": "log1"}])
+    rpc = Mock()
+    rpc.execute.return_value = Mock(data=[{"id": "dh1"}])
+    client.rpc.return_value = rpc
+
+    def tbl(name):
+        if name == "pantry_items":
+            return pt
+        if name == "cooking_log":
+            return log
+        return Mock()
+
+    client.table.side_effect = tbl
+    process_cook_event(
+        client,
+        "caller",
+        "recipe-1",
+        1,
+        [{"name": "canned chickpeas", "amount": 1.0}],
+        today=TEST_DATE,
+        household_id="hh-1",
+    )
+    kw = client.rpc.call_args[0][1]
+    assert kw["p_user_id"] == "housemate"
 
 
 def test_process_put_back_blocked_raw_meat_second_time():
@@ -2108,3 +2268,20 @@ def test_public_reexport_of_find_pantry_match():
     assert ce.find_pantry_match is ce._find_pantry_match
     pantry = [{"base_ingredient": "salt", "id": "1"}]
     assert find_pantry_match(pantry, "salt") == _find_pantry_match(pantry, "salt")
+
+
+def test_resolve_depletion_class_falls_back_to_classification_then_staple():
+    row = make_pantry_item(depletion_class=None)
+    cls = make_classification(depletion_class="PERISHABLE")
+    assert resolve_depletion_class(row, cls) == "PERISHABLE"
+    assert resolve_depletion_class(make_pantry_item(depletion_class=None), {}) == "STAPLE"
+
+
+def test_perishable_inserted_today_scores_0_95(default_user_prefs):
+    cls = make_classification(sub_class="leafy_green", grace_buffer_days=3)
+    item = make_pantry_item(
+        depletion_class="PERISHABLE",
+        purchase_date=TEST_DATE.isoformat(),
+        available_until=days_after(TEST_DATE, 5),
+    )
+    assert compute_confidence(item, default_user_prefs, cls, today=TEST_DATE) == 0.95

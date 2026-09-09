@@ -295,6 +295,7 @@ describe('apiClient', () => {
         servings: 4,
         ingredients,
         householdId: 'hh-2',
+        poolSuggestionId: 'sug-9',
       })
       expect(inst.post).toHaveBeenCalledWith(
         '/pantry/cook',
@@ -304,6 +305,7 @@ describe('apiClient', () => {
           servings: 4,
           ingredients,
           household_id: 'hh-2',
+          pool_suggestion_id: 'sug-9',
         },
         expect.objectContaining({
           headers: expect.objectContaining({ 'X-User-Id': 'user-x' }),

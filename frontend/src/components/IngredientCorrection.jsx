@@ -3,6 +3,7 @@ function IngredientCorrection({
   ingredientName,
   onCorrection,
   onDismiss,
+  showNeverHadIt = true,
 }) {
   if (itemId == null || itemId === '') {
     return null
@@ -33,13 +34,15 @@ function IngredientCorrection({
         >
           Used it up
         </button>
-        <button
-          type="button"
-          className="text-xs px-2 py-1 rounded border border-sage/30 text-sage-light hover:bg-forest-light"
-          onClick={() => void handle('never_had_it')}
-        >
-          Never had it
-        </button>
+        {showNeverHadIt ? (
+          <button
+            type="button"
+            className="text-xs px-2 py-1 rounded border border-sage/30 text-sage-light hover:bg-forest-light"
+            onClick={() => void handle('never_had_it')}
+          >
+            Never had it
+          </button>
+        ) : null}
       </div>
     </div>
   )

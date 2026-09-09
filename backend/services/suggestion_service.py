@@ -9,7 +9,7 @@ import json
 import time
 from datetime import date
 from difflib import SequenceMatcher
-from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Set, Tuple
 
 from backend.config import Config
 from backend.services.recipe_meal_filter import is_appropriate_for_meal, is_treat
@@ -17,6 +17,7 @@ from backend.services.confidence_engine import (
     _find_pantry_match,
     _to_date,
     compute_confidence,
+    find_pantry_match_for_cook,
     get_calibrated_days_supply,
     get_engagement_multiplier,
 )
@@ -94,6 +95,43 @@ def _pool_fallback_suggestion_result(
     return None
 
 
+def _pool_row_to_suggestion_card(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+    recipe_id = row.get("recipe_id")
+    if recipe_id is None:
+        return None
+    raw_score = row.get("match_score")
+    score = float(raw_score) if raw_score is not None else 0.0
+    if score >= 0.90:
+        tier = "cook_tonight"
+    elif score >= 0.70:
+        tier = "probably_have"
+    else:
+        tier = "check_first"
+    return {
+        "id": str(recipe_id),
+        "title": row.get("recipe_name") or "",
+        "image": row.get("recipe_image"),
+        "tier": tier,
+        "ingredient_flags": [],
+        "score": score,
+        "trigger_ingredient": None,
+    }
+
+
+def _ingredient_names_from_pool_row(row: Dict[str, Any]) -> List[str]:
+    data = row.get("recipe_data")
+    if not isinstance(data, dict):
+        return []
+    names: List[str] = []
+    for ing in data.get("extendedIngredients") or []:
+        if not isinstance(ing, dict):
+            continue
+        n = (ing.get("name") or "").strip()
+        if n:
+            names.append(n)
+    return names
+
+
 def _pool_grouped_to_suggestion_result(
     grouped: Dict[str, List[Dict]],
 ) -> Dict[str, List[Dict]]:
@@ -106,27 +144,10 @@ def _pool_grouped_to_suggestion_result(
     }
     for rows in grouped.values():
         for row in rows:
-            recipe_id = row.get("recipe_id")
-            if recipe_id is None:
+            card = _pool_row_to_suggestion_card(row)
+            if not card:
                 continue
-            raw_score = row.get("match_score")
-            score = float(raw_score) if raw_score is not None else 0.0
-            if score >= 0.90:
-                tier = "cook_tonight"
-            elif score >= 0.70:
-                tier = "probably_have"
-            else:
-                tier = "check_first"
-            card = {
-                "id": str(recipe_id),
-                "title": row.get("recipe_name") or "",
-                "image": row.get("recipe_image"),
-                "tier": tier,
-                "ingredient_flags": [],
-                "score": score,
-                "trigger_ingredient": None,
-            }
-            results[tier].append(card)
+            results[card["tier"]].append(card)
     for key in ("cook_tonight", "probably_have", "check_first"):
         results[key].sort(key=lambda r: float(r.get("score") or 0.0), reverse=True)
     return results
@@ -222,11 +243,64 @@ class SuggestionService:
         return [p for p in items if not p.get("deleted_at")]
 
     def invalidate_suggestion_cache(self, user_id: str, household_id: Optional[str]) -> None:
-        """Clear cached SuggestionResult for a user (e.g. after dismiss)."""
-        prefix = f"{user_id}:{household_id or ''}:"
-        keys = [k for k in self._result_cache if k.startswith(prefix)]
+        """Clear cached SuggestionResult for a user, or every member of a household."""
+        if household_id:
+            needle = f":{household_id}:"
+            keys = [k for k in self._result_cache if needle in k]
+        else:
+            prefix = f"{user_id}:"
+            keys = [k for k in self._result_cache if k.startswith(prefix)]
         for k in keys:
             self._result_cache.pop(k, None)
+
+    def _active_use_soon_items(
+        self, user_id: str, household_id: Optional[str], today: date
+    ) -> List[Dict]:
+        pantry = self._load_active_pantry(user_id, household_id)
+        active: List[Dict] = []
+        for p in pantry:
+            if not p.get("use_soon"):
+                continue
+            exp = _to_date(p.get("use_soon_expires"))
+            if exp is None or exp >= today:
+                active.append(p)
+        return active
+
+    def _attach_use_soon_when_pool_active(
+        self,
+        user_id: str,
+        household_id: Optional[str],
+        result: Dict[str, List[Dict]],
+        grouped: Dict[str, List[Dict]],
+        *,
+        today: date,
+    ) -> None:
+        """Promote pool cards that use flagged pantry items. Never calls Spoonacular."""
+        try:
+            use_soon_items = self._active_use_soon_items(user_id, household_id, today)
+            if not use_soon_items:
+                return
+            seen: Set[str] = set()
+            shelf: List[Dict] = []
+            for rows in grouped.values():
+                for row in rows:
+                    card = _pool_row_to_suggestion_card(row)
+                    if not card or card["id"] in seen:
+                        continue
+                    names = _ingredient_names_from_pool_row(row)
+                    if not any(
+                        find_pantry_match_for_cook(use_soon_items, n) for n in names
+                    ):
+                        continue
+                    seen.add(card["id"])
+                    card["tier"] = "use_soon"
+                    shelf.append(card)
+            result["use_soon_shelf"] = shelf
+        except Exception:
+            logger.warning(
+                "use_soon shelf attach failed; returning pool without it",
+                exc_info=True,
+            )
 
     def fetch_candidate_recipes(
         self,
@@ -308,6 +382,13 @@ class SuggestionService:
                     )
                     pool_threshold = _confidence_threshold_for_pantry_size(
                         pantry_count
+                    )
+                    self._attach_use_soon_when_pool_active(
+                        user_id,
+                        household_id,
+                        result,
+                        grouped,
+                        today=today,
                     )
                     return _attach_meta(
                         result,

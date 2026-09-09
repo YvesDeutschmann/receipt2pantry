@@ -62,6 +62,17 @@ vi.mock('../components/HealthCard', () => ({
   default: () => null,
 }))
 
+vi.mock('../components/PullToRefresh', () => ({
+  default: ({ onRefresh, children }) => (
+    <div>
+      <button type="button" onClick={() => void onRefresh()}>
+        Pull refresh
+      </button>
+      {children}
+    </div>
+  ),
+}))
+
 vi.mock('framer-motion', async () => {
   const actual = await vi.importActual('framer-motion')
   return {
@@ -159,6 +170,9 @@ describe('SuggestionScreen', () => {
     getDepth.mockClear()
     swipeSuggestion.mockClear()
     triggerGeneration.mockClear()
+    triggerGeneration.mockImplementation(() =>
+      Promise.resolve({ status: 'completed', suggestions_generated: 1 })
+    )
     getHousehold.mockResolvedValue({ household: { id: 'h1' } })
     getPantry.mockResolvedValue({ grouped: [] })
     getHealthCard.mockResolvedValue({ show: false, items: [] })
@@ -295,7 +309,10 @@ describe('SuggestionScreen', () => {
     let afterCook = false
     markCooked.mockImplementation(async () => {
       afterCook = true
-      return { ok: true }
+      return {
+        ok: true,
+        touched: [{ pantry_item_id: 'p1', base_ingredient: 'salt', depletion_class: 'STAPLE' }],
+      }
     })
     const withRecipe = {
       use_soon_shelf: [],
@@ -329,7 +346,29 @@ describe('SuggestionScreen', () => {
     await waitFor(() => {
       expect(getSuggestions.mock.calls.length).toBeGreaterThanOrEqual(2)
     })
-    expect(await screen.findByText('Nice! Pantry updated.')).toBeInTheDocument()
+    expect(await screen.findByText('Used salt from your pantry.')).toBeInTheDocument()
+  })
+
+  it('COOKED_IT_EMPTY_TOUCHED_SHOWS_NO_MATCH_MESSAGE', async () => {
+    markCooked.mockResolvedValue({ ok: true, touched: [] })
+    getSuggestions.mockImplementation(() =>
+      Promise.resolve({
+        use_soon_shelf: [],
+        cook_tonight: [
+          recipeStub({
+            id: 'c1',
+            ingredient_flags: [{ ingredient_name: 'salt', confidence: 0.8 }],
+          }),
+        ],
+        probably_have: [],
+        check_first: [],
+      })
+    )
+    render(<Recipes />)
+    fireEvent.click(await screen.findByRole('button', { name: /Cooked it/i }))
+    expect(
+      await screen.findByText('Logged. Nothing in your pantry matched this recipe.')
+    ).toBeInTheDocument()
   })
 
   it('DISMISS_REMOVES_CARD_OPTIMISTICALLY', async () => {
@@ -394,7 +433,7 @@ describe('SuggestionScreen', () => {
     render(<Recipes />)
     await screen.findByText('Ready to cook')
     await screen.findByText('Pool Pasta')
-    expect(getSuggestions).not.toHaveBeenCalled()
+    expect(getSuggestions).toHaveBeenCalled()
   })
 
   it('POOL_FIRST_LOAD_NO_SPINNER_AFTER_CONTENT', async () => {
@@ -494,7 +533,13 @@ describe('SuggestionScreen', () => {
     })
     markCooked.mockImplementation(async () => {
       afterCook = true
-      return { ok: true }
+      return {
+        ok: true,
+        touched: [
+          { pantry_item_id: 'p1', base_ingredient: 'chicken breast', depletion_class: 'PERISHABLE' },
+          { pantry_item_id: 'p2', base_ingredient: 'parmesan', depletion_class: 'STAPLE' },
+        ],
+      }
     })
     swipeSuggestion.mockResolvedValue({ ok: true })
 
@@ -507,15 +552,13 @@ describe('SuggestionScreen', () => {
         'user-1',
         expect.objectContaining({
           recipeId: '500',
+          poolSuggestionId: 'sug-pool-1',
           ingredients: [
             { name: 'chicken breast', amount: 1, unit: 'serving' },
             { name: 'parmesan', amount: 1, unit: 'serving' },
           ],
         })
       )
-    })
-    await waitFor(() => {
-      expect(swipeSuggestion).toHaveBeenCalledWith('user-1', 'sug-pool-1', 'h1')
     })
     await waitFor(() => {
       expect(screen.queryByText('Chicken Parm')).not.toBeInTheDocument()
@@ -539,8 +582,7 @@ describe('SuggestionScreen', () => {
       },
       household_id: 'h1',
     }))
-    markCooked.mockResolvedValue({ ok: true })
-    swipeSuggestion.mockResolvedValue({ ok: true })
+    markCooked.mockResolvedValue({ ok: true, touched: [] })
 
     render(<Recipes />)
     await screen.findByText('Omelette')
@@ -551,11 +593,12 @@ describe('SuggestionScreen', () => {
         'user-1',
         expect.objectContaining({
           recipeId: 'staple_omelette',
+          poolSuggestionId: 'sug-staple',
           ingredients: [],
         })
       )
     })
-    expect(swipeSuggestion).toHaveBeenCalledWith('user-1', 'sug-staple', 'h1')
+    expect(swipeSuggestion).not.toHaveBeenCalled()
   })
 
   it('POOL_COOK_EMPTY_BOM_SKIPS_MARKCOOKED', async () => {
@@ -590,7 +633,7 @@ describe('SuggestionScreen', () => {
     markCooked.mockImplementation(
       () =>
         new Promise((resolve) => {
-          resolveCook = () => resolve({ ok: true })
+          resolveCook = () => resolve({ ok: true, touched: [] })
         })
     )
     getPool.mockImplementation(async () => ({
@@ -607,7 +650,6 @@ describe('SuggestionScreen', () => {
       },
       household_id: 'h1',
     }))
-    swipeSuggestion.mockResolvedValue({ ok: true })
 
     render(<Recipes />)
     await screen.findByText('Dup Test')
@@ -617,7 +659,7 @@ describe('SuggestionScreen', () => {
     expect(markCooked).toHaveBeenCalledTimes(1)
     resolveCook()
     await waitFor(() => {
-      expect(swipeSuggestion).toHaveBeenCalledTimes(1)
+      expect(swipeSuggestion).not.toHaveBeenCalled()
     })
   })
 
@@ -661,8 +703,7 @@ describe('SuggestionScreen', () => {
       pool: { dinner: [poolRow] },
       household_id: 'h1',
     }))
-    markCooked.mockResolvedValue({ ok: true })
-    swipeSuggestion.mockRejectedValue(new Error('swipe down'))
+    markCooked.mockResolvedValue({ ok: true, touched: [] })
 
     render(<Recipes />)
     await screen.findByText('Swipe Fail')
@@ -671,20 +712,17 @@ describe('SuggestionScreen', () => {
     await waitFor(() => {
       expect(markCooked).toHaveBeenCalled()
     })
+    expect(swipeSuggestion).not.toHaveBeenCalled()
     await waitFor(() => {
       expect(screen.queryByText('Swipe Fail')).not.toBeInTheDocument()
     })
   })
 
-  it('POOL_COOK_ORDERING_SWIPE_BEFORE_REFILL', async () => {
+  it('POOL_COOK_ORDERING_REFILL_AFTER_MARKCOOKED', async () => {
     const callOrder = []
     markCooked.mockImplementation(async () => {
       callOrder.push('markCooked')
-      return { ok: true }
-    })
-    swipeSuggestion.mockImplementation(async () => {
-      callOrder.push('swipe')
-      return { ok: true }
+      return { ok: true, touched: [] }
     })
     getDepth.mockImplementation(async () => {
       callOrder.push('getDepth')
@@ -713,11 +751,155 @@ describe('SuggestionScreen', () => {
     fireEvent.click(screen.getByRole('button', { name: /^Cooked it$/i }))
 
     await waitFor(() => {
-      expect(callOrder.indexOf('swipe')).toBeGreaterThan(callOrder.indexOf('markCooked'))
-      expect(callOrder.indexOf('getDepth')).toBeGreaterThan(callOrder.indexOf('swipe'))
-      const poolAfterSwipe = callOrder.filter((c) => c === 'getPool').length
-      expect(poolAfterSwipe).toBeGreaterThan(1)
+      expect(callOrder.indexOf('markCooked')).toBeGreaterThanOrEqual(0)
+      expect(callOrder.indexOf('getDepth')).toBeGreaterThan(callOrder.indexOf('markCooked'))
+      const poolAfterCook = callOrder.filter((c) => c === 'getPool').length
+      expect(poolAfterCook).toBeGreaterThan(1)
     })
+    expect(swipeSuggestion).not.toHaveBeenCalled()
+  })
+
+  it('POST_COOK_PERISHABLE_PROMPT_SUPPRESSES_HEALTH_CARD', async () => {
+    markCooked.mockResolvedValue({
+      ok: true,
+      touched: [
+        { pantry_item_id: 'p1', base_ingredient: 'spinach', depletion_class: 'PERISHABLE' },
+      ],
+    })
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        recipeStub({
+          id: 'c1',
+          title: 'Spinach Pasta',
+          extendedIngredients: [{ name: 'spinach', original: 'spinach' }],
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
+    render(<Recipes />)
+    await screen.findByText('Spinach Pasta')
+    fireEvent.click(screen.getByRole('button', { name: /Cooked it/i }))
+    await waitFor(() => {
+      expect(screen.getByText('Still have these?')).toBeInTheDocument()
+      expect(screen.getByText('spinach')).toBeInTheDocument()
+    })
+    expect(getHealthCard).not.toHaveBeenCalled()
+  })
+
+  it('POOL_SHOWS_USE_SOON_ABOVE_READY_TO_COOK', async () => {
+    getPool.mockResolvedValue({
+      pool: {
+        dinner: [
+          {
+            id: 'sug-1',
+            recipe_id: '500',
+            recipe_name: 'Pool Pasta',
+            recipe_image: null,
+            recipe_data: { title: 'Pool Pasta' },
+            match_score: 0.9,
+          },
+        ],
+      },
+      household_id: 'h1',
+    })
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [
+        recipeStub({
+          id: 'us1',
+          title: 'Spinach Soup',
+          tier: 'use_soon',
+          ingredient_flags: [
+            { ingredient_name: 'spinach', is_use_soon: true, confidence: 0.5 },
+          ],
+        }),
+      ],
+      cook_tonight: [],
+      probably_have: [],
+      check_first: [],
+    })
+    render(<Recipes />)
+    const useSoonHeader = await screen.findByText("Use before it's gone")
+    const readyHeader = await screen.findByText('Ready to cook')
+    expect(
+      useSoonHeader.compareDocumentPosition(readyHeader) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy()
+    expect(screen.getByText('Spinach Soup')).toBeInTheDocument()
+    expect(screen.getByText('Pool Pasta')).toBeInTheDocument()
+  })
+
+  it('PULL_REFRESH_AWAITS_GENERATION_THEN_RELOADS', async () => {
+    let resolveGen
+    triggerGeneration.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveGen = resolve
+        })
+    )
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [recipeStub({ id: 'c1', title: 'Old Card' })],
+      probably_have: [],
+      check_first: [],
+    })
+    render(<Recipes />)
+    await screen.findByText('Old Card')
+    const poolCallsBefore = getPool.mock.calls.length
+    fireEvent.click(screen.getByRole('button', { name: /Pull refresh/i }))
+    await waitFor(() => {
+      expect(triggerGeneration).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({ triggerReason: 'manual_refresh' })
+      )
+    })
+    expect(getPool.mock.calls.length).toBe(poolCallsBefore)
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [recipeStub({ id: 'c2', title: 'New Card' })],
+      probably_have: [],
+      check_first: [],
+    })
+    resolveGen({ status: 'completed', suggestions_generated: 1 })
+    await screen.findByText('New Card')
+  })
+
+  it('POOL_COOK_CARD_GONE_AFTER_REMOUNT', async () => {
+    let afterCook = false
+    getPool.mockImplementation(async () => {
+      if (afterCook) {
+        return { pool: { breakfast: [], lunch: [], dinner: [] }, household_id: 'h1' }
+      }
+      return {
+        pool: {
+          breakfast: [],
+          lunch: [],
+          dinner: [
+            {
+              id: 'sug-remount',
+              recipe_id: '500',
+              recipe_name: 'Remount Soup',
+              recipe_data: { extendedIngredients: [{ name: 'carrot' }] },
+              match_score: 0.9,
+            },
+          ],
+        },
+        household_id: 'h1',
+      }
+    })
+    markCooked.mockImplementation(async () => {
+      afterCook = true
+      return { ok: true, touched: [] }
+    })
+    const { unmount } = render(<Recipes />)
+    await screen.findByText('Remount Soup')
+    fireEvent.click(screen.getByRole('button', { name: /^Cooked it$/i }))
+    await waitFor(() => expect(markCooked).toHaveBeenCalledTimes(1))
+    unmount()
+    render(<Recipes />)
+    await waitFor(() => expect(getPool.mock.calls.length).toBeGreaterThan(1))
+    expect(screen.queryByText('Remount Soup')).not.toBeInTheDocument()
+    expect(swipeSuggestion).not.toHaveBeenCalled()
   })
 })
 

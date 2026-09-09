@@ -13,7 +13,7 @@ Hand-curated JSON used to exercise the same ingestion path as the native apps, w
 
 ## Usage
 
-- **Backend:** `POST /api/dev/load-mock-receipts` (Flask `debug` only) reads these files and runs `store_fetched_receipts` + pantry processing.
+- **Backend:** `POST /api/dev/load-mock-receipts` (Flask `debug` only) reads these files and runs `store_fetched_receipts` + pantry processing. The route rewrites each receipt `order_date` (and `date`) to today so perishable/consumable rows score as in-stock; JSON files on disk stay historical.
 - **Frontend (DEV):** The same data is copied to `frontend/src/devFixtures/`; mock buttons import it and call `ingestReceipts` / `storeCostcoReceipts`.
 
 ## Keeping in sync

@@ -548,7 +548,7 @@ export const api = {
     return response.data
   },
 
-  markCooked: async (userId, { recipeId, recipeName, servings, ingredients, householdId }) => {
+  markCooked: async (userId, { recipeId, recipeName, servings, ingredients, householdId, poolSuggestionId }) => {
     const response = await apiClient.post(
       '/pantry/cook',
       {
@@ -557,6 +557,7 @@ export const api = {
         servings,
         ingredients,
         household_id: householdId,
+        pool_suggestion_id: poolSuggestionId,
       },
       { headers: { 'X-User-Id': userId } }
     )

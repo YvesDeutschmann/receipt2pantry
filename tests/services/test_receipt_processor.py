@@ -2,7 +2,10 @@
 
 import pytest
 from unittest.mock import AsyncMock, Mock
+from datetime import date
+
 from backend.services.receipt_processor import ReceiptProcessor
+from backend.services.pantry_service import PantryService
 from backend.utils.exceptions import DatabaseException
 
 
@@ -24,6 +27,7 @@ class TestReceiptProcessor:
         """Test successful receipt processing"""
         # Setup
         mock_supabase.get_user_household.return_value = sample_household
+        mock_supabase.get_receipt.return_value = {}
         mock_supabase.get_receipt_items.return_value = sample_receipt_items
         # Return a list of normalized products (one per item)
         mock_normalization_service.normalize_products_batch.return_value = [
@@ -90,6 +94,7 @@ class TestReceiptProcessor:
         """Test receipt processing with some item errors"""
         # Setup
         mock_supabase.get_user_household.return_value = sample_household
+        mock_supabase.get_receipt.return_value = {}
         mock_supabase.get_receipt_items.return_value = sample_receipt_items
         # Return a list of normalized products (one per item)
         mock_normalization_service.normalize_products_batch.return_value = [
@@ -692,4 +697,35 @@ class TestGroupG_ParityRegression:
         with pytest.raises(DatabaseException):
             await processor.process_receipt(test_receipt_id, test_user_id)
 
+    @pytest.mark.asyncio
+    async def test_process_receipt_passes_order_date_as_reference_date(
+        self,
+        mock_supabase,
+        mock_normalization_service,
+        mock_pantry_service,
+        sample_household,
+        sample_receipt_items,
+        sample_normalized_product,
+        test_receipt_id,
+        test_user_id,
+    ):
+        mock_supabase.get_user_household.return_value = sample_household
+        mock_supabase.get_receipt.return_value = {"order_date": "2025-01-15"}
+        mock_supabase.get_receipt_items.return_value = sample_receipt_items
+        mock_normalization_service.normalize_products_batch.return_value = [
+            sample_normalized_product,
+            sample_normalized_product,
+        ]
+        mock_pantry_service.add_to_pantry = AsyncMock(return_value="pantry-1")
+        mock_pantry_service._parse_receipt_order_date = PantryService(
+            mock_supabase
+        )._parse_receipt_order_date
+
+        processor = ReceiptProcessor(
+            mock_supabase, mock_normalization_service, mock_pantry_service
+        )
+        await processor.process_receipt(test_receipt_id, test_user_id)
+
+        for call in mock_pantry_service.add_to_pantry.await_args_list:
+            assert call.kwargs.get("reference_date") == date(2025, 1, 15)
 

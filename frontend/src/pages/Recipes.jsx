@@ -3,6 +3,7 @@ import { api } from '../services/apiClient'
 import { useAuth } from '../contexts/AuthContext'
 import { emit, FunnelEvent } from '../services/funnelTelemetry'
 import HealthCard from '../components/HealthCard'
+import IngredientCorrection from '../components/IngredientCorrection'
 import SuggestionDetailModal from '../components/SuggestionDetailModal'
 import SuggestionRecipeCard from '../components/SuggestionRecipeCard'
 import PageHeader from '../components/PageHeader'
@@ -19,6 +20,22 @@ const EMPTY_SUGGESTIONS = {
 const COOK_PARTIAL_ERROR =
   'Cook may be partially recorded. Check your pantry before logging again.'
 const OPEN_RECIPE_MESSAGE = 'Open the recipe to log what you used.'
+
+function cookConfirmationMessage(touched) {
+  if (!touched?.length) {
+    return 'Logged. Nothing in your pantry matched this recipe.'
+  }
+  const names = touched
+    .map((item) => item.base_ingredient)
+    .filter(Boolean)
+  if (names.length === 0) {
+    return 'Logged. Pantry updated.'
+  }
+  if (names.length === 1) {
+    return `Used ${names[0]} from your pantry.`
+  }
+  return `Used ${names.slice(0, 3).join(', ')} from your pantry.`
+}
 
 /** Map suggestion_pool row to recipe card shape. */
 function normalizePoolRow(row) {
@@ -80,6 +97,12 @@ async function fetchSuggestionsPayload(userId, householdId, cookedPoolIds = new 
   } catch (e) {
     console.warn('Suggestion pool unavailable:', e)
   }
+  let liveData = EMPTY_SUGGESTIONS
+  try {
+    liveData = await api.getSuggestions(userId, householdId)
+  } catch (e) {
+    console.warn('Live suggestions unavailable:', e)
+  }
   const pool = poolPayload?.pool
   const cookFromPool = flattenPoolToCookTonight(pool, cookedPoolIds)
   if (cookFromPool.length > 0) {
@@ -87,18 +110,18 @@ async function fetchSuggestionsPayload(userId, householdId, cookedPoolIds = new 
       usingPool: true,
       suggestions: {
         ...EMPTY_SUGGESTIONS,
+        use_soon_shelf: liveData.use_soon_shelf || [],
         cook_tonight: cookFromPool,
       },
     }
   }
-  const data = await api.getSuggestions(userId, householdId)
   return {
     usingPool: false,
     suggestions: {
-      use_soon_shelf: data.use_soon_shelf || [],
-      cook_tonight: data.cook_tonight || [],
-      probably_have: data.probably_have || [],
-      check_first: data.check_first || [],
+      use_soon_shelf: liveData.use_soon_shelf || [],
+      cook_tonight: liveData.cook_tonight || [],
+      probably_have: liveData.probably_have || [],
+      check_first: liveData.check_first || [],
     },
   }
 }
@@ -109,6 +132,7 @@ function Recipes() {
   const [healthCardVisible, setHealthCardVisible] = useState(false)
   const [healthCardItems, setHealthCardItems] = useState([])
   const [cookedConfirmation, setCookedConfirmation] = useState(null)
+  const [postCookPerishables, setPostCookPerishables] = useState([])
   const [error, setError] = useState(null)
   const [householdId, setHouseholdId] = useState(null)
   const [selectedRecipe, setSelectedRecipe] = useState(null)
@@ -219,6 +243,20 @@ function Recipes() {
     }
   }, [userId, householdId])
 
+  const regeneratePoolThenReload = useCallback(async () => {
+    if (userId) {
+      try {
+        await api.suggestions.triggerGeneration(userId, {
+          triggerReason: 'manual_refresh',
+          householdId,
+        })
+      } catch {
+        /* still reload whatever pool is currently unused */
+      }
+    }
+    await loadSuggestions()
+  }, [userId, householdId, loadSuggestions])
+
   useEffect(() => {
     void fetchHousehold()
   }, [fetchHousehold])
@@ -230,7 +268,30 @@ function Recipes() {
   }, [userId, householdId, loadSuggestions, fetchPantry])
 
   const handleRefreshPull = async () => {
-    await loadSuggestions()
+    await regeneratePoolThenReload()
+  }
+
+  const handlePostCookCorrection = async (itemId, action) => {
+    if (!userId) return
+    await api.correctPantryItem(userId, itemId, action)
+    setPostCookPerishables((prev) =>
+      prev.filter((item) => String(item.pantry_item_id) !== String(itemId))
+    )
+    if (action === 'used_it_up' || action === 'never_had_it') {
+      await regeneratePoolThenReload()
+    } else {
+      await loadSuggestions()
+    }
+    void fetchPantry()
+  }
+
+  const handleIngredientCorrected = async (action) => {
+    if (action === 'used_it_up' || action === 'never_had_it') {
+      await regeneratePoolThenReload()
+    } else {
+      await loadSuggestions()
+    }
+    void fetchPantry()
   }
 
   const handleCookedIt = async (recipe) => {
@@ -250,13 +311,24 @@ function Recipes() {
     }
 
     const recipeId = recipe.recipeIdForCook || recipe.id
+    let hh = householdId
+    if (!hh) {
+      try {
+        const response = await api.getHousehold(userId)
+        hh = response.household?.id || null
+        if (hh) setHouseholdId(hh)
+      } catch {
+        /* server cook path also resolves household */
+      }
+    }
     try {
-      await api.markCooked(userId, {
+      const cookResult = await api.markCooked(userId, {
         recipeId,
         recipeName: recipe.title,
         servings: recipe.servings || 4,
         ingredients,
-        householdId,
+        householdId: hh,
+        poolSuggestionId: recipe._fromPool ? recipe.id : undefined,
       })
       if (!firstCookEmitted.current) {
         firstCookEmitted.current = true
@@ -272,34 +344,38 @@ function Recipes() {
           }
           return next
         })
-        try {
-          await api.suggestions.swipe(userId, recipe.id, householdId)
-        } catch (swipeErr) {
-          console.warn('swipe after cook failed', swipeErr)
-        }
         void maybeTriggerLowWatermarkRefill()
       }
 
-      setCookedConfirmation('Nice! Pantry updated.')
+      setCookedConfirmation(cookConfirmationMessage(cookResult?.touched))
       setTimeout(() => setCookedConfirmation(null), 2500)
+
+      const perishableTouched = (cookResult?.touched || []).filter(
+        (item) => String(item.depletion_class || '').toUpperCase() === 'PERISHABLE'
+      )
+      if (perishableTouched.length > 0) {
+        setPostCookPerishables(perishableTouched)
+      } else {
+        setPostCookPerishables([])
+        try {
+          const hc = await api.getHealthCard(userId, hh)
+          if (hc.show && hc.items?.length > 0) {
+            setHealthCardItems(hc.items)
+            setHealthCardVisible(true)
+          }
+        } catch {
+          /* health card is non-critical */
+        }
+      }
 
       const { usingPool: fromPool, suggestions: updated } = await fetchSuggestionsPayload(
         userId,
-        householdId,
+        hh,
         cookedPoolIdsRef.current
       )
       setUsingPool(fromPool)
       setSuggestions(updated)
       void fetchPantry()
-      try {
-        const hc = await api.getHealthCard(userId, householdId)
-        if (hc.show && hc.items?.length > 0) {
-          setHealthCardItems(hc.items)
-          setHealthCardVisible(true)
-        }
-      } catch {
-        /* health card is non-critical */
-      }
     } catch (err) {
       setError(err.response?.data?.error || COOK_PARTIAL_ERROR)
     } finally {
@@ -381,6 +457,34 @@ function Recipes() {
           </div>
         )}
 
+        {postCookPerishables.length > 0 && (
+          <div className="mb-4 p-4 rounded-mise-md bg-forest-mid border border-sage/30">
+            <h3 className="text-sm font-display font-semibold text-cream mb-3">
+              Still have these?
+            </h3>
+            <ul className="space-y-3">
+              {postCookPerishables.map((item) => (
+                <li key={item.pantry_item_id}>
+                  <IngredientCorrection
+                    itemId={String(item.pantry_item_id)}
+                    ingredientName={item.base_ingredient}
+                    showNeverHadIt={false}
+                    onCorrection={handlePostCookCorrection}
+                    onDismiss={() => {
+                      setPostCookPerishables((prev) =>
+                        prev.filter(
+                          (row) =>
+                            String(row.pantry_item_id) !== String(item.pantry_item_id)
+                        )
+                      )
+                    }}
+                  />
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {error && (
           <div className="mb-6 p-4 border border-[var(--color-error)] rounded-mise-md text-[var(--color-error)] bg-[var(--color-error)]/10">
             {error}
@@ -426,6 +530,12 @@ function Recipes() {
             </div>
           ) : (
             <div className="w-full max-w-lg mx-auto">
+              {renderShelf(
+                'use_soon',
+                "Use before it's gone",
+                useSoonShelfSubtitle(suggestions.use_soon_shelf),
+                suggestions.use_soon_shelf
+              )}
               {usingPool ? (
                 renderShelf(
                   'cook_tonight',
@@ -435,12 +545,6 @@ function Recipes() {
                 )
               ) : (
                 <>
-                  {renderShelf(
-                    'use_soon',
-                    'Use before it\'s gone',
-                    useSoonShelfSubtitle(suggestions.use_soon_shelf),
-                    suggestions.use_soon_shelf
-                  )}
                   {renderShelf('cook_tonight', 'Cook tonight', null, suggestions.cook_tonight)}
                   {renderShelf(
                     'probably_have',
@@ -472,10 +576,7 @@ function Recipes() {
             setDetailModalOpen(false)
             setSelectedRecipe(null)
           }}
-          onIngredientCorrected={() => {
-            void loadSuggestions()
-            void fetchPantry()
-          }}
+          onIngredientCorrected={handleIngredientCorrected}
         />
 
         {userId ? (
