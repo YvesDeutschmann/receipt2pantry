@@ -11,6 +11,17 @@ from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+STAPLE_RECIPE_IDS = frozenset(
+    {
+        "staple_omelette",
+        "staple_scrambled_eggs",
+        "staple_cereal",
+        "staple_pbj",
+        "staple_grilled_cheese",
+        "staple_toast",
+    }
+)
+
 
 class MealPlanService:
     """Service for managing meal planning wizard and meal plans"""

@@ -18,6 +18,7 @@ from backend.services.confidence_engine import (
     process_cook_event,
     process_put_back,
 )
+from backend.services.meal_plan_service import STAPLE_RECIPE_IDS
 from backend.utils.exceptions import (
     ValidationException,
     DatabaseException,
@@ -701,21 +702,27 @@ def pantry_cook():
         return jsonify({"error": "servings must be at least 1"}), 400
 
     ingredients = body.get("ingredients")
-    if not isinstance(ingredients, list) or len(ingredients) == 0:
-        return jsonify({"error": "ingredients must be a non-empty list"}), 400
-    for i, ing in enumerate(ingredients):
-        if not isinstance(ing, dict):
-            return jsonify({"error": f"ingredients[{i}] must be an object"}), 400
-        name = ing.get("name")
-        if name is None or str(name).strip() == "":
-            return jsonify({"error": f"ingredients[{i}] must have a name"}), 400
+    if not isinstance(ingredients, list):
+        return jsonify({"error": "ingredients must be a list"}), 400
+
+    recipe_id_str = str(body["recipe_id"]).strip()
+    if len(ingredients) == 0:
+        if recipe_id_str not in STAPLE_RECIPE_IDS:
+            return jsonify({"error": "ingredients must be a non-empty list"}), 400
+    else:
+        for i, ing in enumerate(ingredients):
+            if not isinstance(ing, dict):
+                return jsonify({"error": f"ingredients[{i}] must be an object"}), 400
+            name = ing.get("name")
+            if name is None or str(name).strip() == "":
+                return jsonify({"error": f"ingredients[{i}] must have a name"}), 400
 
     try:
         client = supabase.admin_client or supabase.client
         process_cook_event(
             client,
             user_id,
-            str(body["recipe_id"]),
+            recipe_id_str,
             servings,
             ingredients,
             today=date.today(),

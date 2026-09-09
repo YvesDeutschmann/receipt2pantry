@@ -24,6 +24,12 @@ class TestConfig(Config):
     OPENAI_TIMEOUT = 60
 
 
+@pytest.fixture(autouse=True)
+def use_dev_x_user_id_auth(monkeypatch):
+    """Route tests send X-User-Id. JWT mode ignores that header when the secret is set."""
+    monkeypatch.delenv("SUPABASE_JWT_SECRET", raising=False)
+
+
 @pytest.fixture
 def app():
     """Create application for testing"""

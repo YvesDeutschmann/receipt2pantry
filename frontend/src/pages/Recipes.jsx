@@ -7,6 +7,7 @@ import SuggestionDetailModal from '../components/SuggestionDetailModal'
 import SuggestionRecipeCard from '../components/SuggestionRecipeCard'
 import PageHeader from '../components/PageHeader'
 import PullToRefresh from '../components/PullToRefresh'
+import { buildCookIngredients, isStapleRecipeId } from '../utils/buildCookIngredients'
 
 const EMPTY_SUGGESTIONS = {
   use_soon_shelf: [],
@@ -14,6 +15,10 @@ const EMPTY_SUGGESTIONS = {
   probably_have: [],
   check_first: [],
 }
+
+const COOK_PARTIAL_ERROR =
+  'Cook may be partially recorded. Check your pantry before logging again.'
+const OPEN_RECIPE_MESSAGE = 'Open the recipe to log what you used.'
 
 /** Map suggestion_pool row to recipe card shape. */
 function normalizePoolRow(row) {
@@ -26,17 +31,19 @@ function normalizePoolRow(row) {
     image: row.recipe_image || data.image,
     tier: 'cook_tonight',
     servings: data.servings || 4,
+    extendedIngredients: data.extendedIngredients || [],
     ingredient_flags: [],
     _fromPool: true,
     match_score: row.match_score,
   }
 }
 
-function flattenPoolToCookTonight(pool) {
+function flattenPoolToCookTonight(pool, cookedPoolIds = new Set()) {
   const p = pool || {}
   const rows = [...(p.breakfast || []), ...(p.lunch || []), ...(p.dinner || [])]
   return rows
     .map(normalizePoolRow)
+    .filter((r) => !cookedPoolIds.has(r.id))
     .sort((a, b) => (b.match_score || 0) - (a.match_score || 0))
 }
 
@@ -66,7 +73,7 @@ function useSoonShelfSubtitle(shelfRecipes) {
   return `Recipes using your ${names[0]} and ${names[1]}`
 }
 
-async function fetchSuggestionsPayload(userId, householdId) {
+async function fetchSuggestionsPayload(userId, householdId, cookedPoolIds = new Set()) {
   let poolPayload = null
   try {
     poolPayload = await api.suggestions?.getPool?.(userId, householdId)
@@ -74,7 +81,7 @@ async function fetchSuggestionsPayload(userId, householdId) {
     console.warn('Suggestion pool unavailable:', e)
   }
   const pool = poolPayload?.pool
-  const cookFromPool = flattenPoolToCookTonight(pool)
+  const cookFromPool = flattenPoolToCookTonight(pool, cookedPoolIds)
   if (cookFromPool.length > 0) {
     return {
       usingPool: true,
@@ -108,6 +115,7 @@ function Recipes() {
   const [detailModalOpen, setDetailModalOpen] = useState(false)
   const [pantryData, setPantryData] = useState(null)
   const [usingPool, setUsingPool] = useState(false)
+  const [cookingRecipeIds, setCookingRecipeIds] = useState(() => new Set())
 
   const { user } = useAuth()
   const userId = user?.id
@@ -116,6 +124,12 @@ function Recipes() {
   const lowWatermarkInFlightRef = useRef(false)
   const firstSuggestionEmitted = useRef(false)
   const firstCookEmitted = useRef(false)
+  const cookInFlightRef = useRef(new Set())
+  const cookedPoolIdsRef = useRef(new Set())
+
+  const syncCookingUi = useCallback(() => {
+    setCookingRecipeIds(new Set(cookInFlightRef.current))
+  }, [])
 
   const fetchPantry = useCallback(async () => {
     if (!userId) return
@@ -171,7 +185,8 @@ function Recipes() {
     try {
       const { usingPool: fromPool, suggestions: next } = await fetchSuggestionsPayload(
         userId,
-        householdId
+        householdId,
+        cookedPoolIdsRef.current
       )
       initialLoadDoneRef.current = true
       setUsingPool(fromPool)
@@ -219,16 +234,21 @@ function Recipes() {
   }
 
   const handleCookedIt = async (recipe) => {
-    if (!userId) return
-    const flags = recipe.ingredient_flags || []
-    const ingredients =
-      flags.length > 0
-        ? flags.map((f) => ({
-            name: f.ingredient_name,
-            amount: 1,
-            unit: 'serving',
-          }))
-        : [{ name: recipe.title || 'meal', amount: 1, unit: 'serving' }]
+    if (!userId || !recipe?.id) return
+    const cardId = recipe.id
+    if (cookInFlightRef.current.has(cardId)) return
+
+    cookInFlightRef.current.add(cardId)
+    syncCookingUi()
+
+    const ingredients = buildCookIngredients(recipe)
+    if (ingredients.length === 0 && !isStapleRecipeId(recipe)) {
+      setError(OPEN_RECIPE_MESSAGE)
+      cookInFlightRef.current.delete(cardId)
+      syncCookingUi()
+      return
+    }
+
     const recipeId = recipe.recipeIdForCook || recipe.id
     try {
       await api.markCooked(userId, {
@@ -242,11 +262,31 @@ function Recipes() {
         firstCookEmitted.current = true
         void emit(FunnelEvent.FIRST_COOK_LOGGED, userId)
       }
+
+      if (recipe._fromPool) {
+        cookedPoolIdsRef.current.add(recipe.id)
+        setSuggestions((prev) => {
+          const next = { ...prev }
+          for (const key of Object.keys(next)) {
+            next[key] = next[key].filter((r) => r.id !== recipe.id)
+          }
+          return next
+        })
+        try {
+          await api.suggestions.swipe(userId, recipe.id, householdId)
+        } catch (swipeErr) {
+          console.warn('swipe after cook failed', swipeErr)
+        }
+        void maybeTriggerLowWatermarkRefill()
+      }
+
       setCookedConfirmation('Nice! Pantry updated.')
       setTimeout(() => setCookedConfirmation(null), 2500)
+
       const { usingPool: fromPool, suggestions: updated } = await fetchSuggestionsPayload(
         userId,
-        householdId
+        householdId,
+        cookedPoolIdsRef.current
       )
       setUsingPool(fromPool)
       setSuggestions(updated)
@@ -261,7 +301,10 @@ function Recipes() {
         /* health card is non-critical */
       }
     } catch (err) {
-      setError(err.response?.data?.error || 'Failed to record cook event.')
+      setError(err.response?.data?.error || COOK_PARTIAL_ERROR)
+    } finally {
+      cookInFlightRef.current.delete(cardId)
+      syncCookingUi()
     }
   }
 
@@ -307,6 +350,8 @@ function Recipes() {
             onCookedIt={handleCookedIt}
             onDismiss={handleDismiss}
             onExpand={handleExpand}
+            cookDisabled={cookingRecipeIds.has(recipe.id)}
+            cookBusy={cookingRecipeIds.has(recipe.id)}
           />
         ))}
       </section>
@@ -319,6 +364,8 @@ function Recipes() {
       (suggestions.probably_have?.length || 0) +
       (suggestions.check_first?.length || 0) >
     0
+
+  const selectedCookBusy = selectedRecipe ? cookingRecipeIds.has(selectedRecipe.id) : false
 
   return (
     <PullToRefresh onRefresh={handleRefreshPull}>
@@ -418,6 +465,8 @@ function Recipes() {
           loading={false}
           userId={userId}
           pantryData={pantryData}
+          cookDisabled={selectedCookBusy}
+          cookBusy={selectedCookBusy}
           onCookedIt={async (r) => {
             await handleCookedIt(r)
             setDetailModalOpen(false)
@@ -441,7 +490,8 @@ function Recipes() {
             onItemUpdated={async () => {
               const { usingPool: fromPool, suggestions: updated } = await fetchSuggestionsPayload(
                 userId,
-                householdId
+                householdId,
+                cookedPoolIdsRef.current
               )
               setUsingPool(fromPool)
               setSuggestions(updated)

@@ -462,6 +462,263 @@ describe('SuggestionScreen', () => {
       )
     })
   })
+
+  it('POOL_COOK_SENDS_REAL_BOM_AND_SWIPES', async () => {
+    let afterCook = false
+    getPool.mockImplementation(async () => {
+      if (afterCook) {
+        return { pool: { breakfast: [], lunch: [], dinner: [] }, household_id: 'h1' }
+      }
+      return {
+        pool: {
+          breakfast: [],
+          lunch: [],
+          dinner: [
+            {
+              id: 'sug-pool-1',
+              recipe_id: '500',
+              recipe_name: 'Chicken Parm',
+              recipe_image: null,
+              recipe_data: {
+                extendedIngredients: [
+                  { name: 'chicken breast' },
+                  { name: 'parmesan' },
+                ],
+              },
+              match_score: 0.9,
+            },
+          ],
+        },
+        household_id: 'h1',
+      }
+    })
+    markCooked.mockImplementation(async () => {
+      afterCook = true
+      return { ok: true }
+    })
+    swipeSuggestion.mockResolvedValue({ ok: true })
+
+    render(<Recipes />)
+    await screen.findByText('Chicken Parm')
+    fireEvent.click(screen.getByRole('button', { name: /^Cooked it$/i }))
+
+    await waitFor(() => {
+      expect(markCooked).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({
+          recipeId: '500',
+          ingredients: [
+            { name: 'chicken breast', amount: 1, unit: 'serving' },
+            { name: 'parmesan', amount: 1, unit: 'serving' },
+          ],
+        })
+      )
+    })
+    await waitFor(() => {
+      expect(swipeSuggestion).toHaveBeenCalledWith('user-1', 'sug-pool-1', 'h1')
+    })
+    await waitFor(() => {
+      expect(screen.queryByText('Chicken Parm')).not.toBeInTheDocument()
+    })
+  })
+
+  it('POOL_COOK_STAPLE_EMPTY_INGREDIENTS', async () => {
+    getPool.mockImplementation(async () => ({
+      pool: {
+        breakfast: [],
+        lunch: [],
+        dinner: [
+          {
+            id: 'sug-staple',
+            recipe_id: 'staple_omelette',
+            recipe_name: 'Omelette',
+            recipe_data: {},
+            match_score: 1,
+          },
+        ],
+      },
+      household_id: 'h1',
+    }))
+    markCooked.mockResolvedValue({ ok: true })
+    swipeSuggestion.mockResolvedValue({ ok: true })
+
+    render(<Recipes />)
+    await screen.findByText('Omelette')
+    fireEvent.click(screen.getByRole('button', { name: /^Cooked it$/i }))
+
+    await waitFor(() => {
+      expect(markCooked).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({
+          recipeId: 'staple_omelette',
+          ingredients: [],
+        })
+      )
+    })
+    expect(swipeSuggestion).toHaveBeenCalledWith('user-1', 'sug-staple', 'h1')
+  })
+
+  it('POOL_COOK_EMPTY_BOM_SKIPS_MARKCOOKED', async () => {
+    getPool.mockImplementation(async () => ({
+      pool: {
+        dinner: [
+          {
+            id: 'sug-thin',
+            recipe_id: '600',
+            recipe_name: 'Mystery Meal',
+            recipe_data: {},
+            match_score: 0.5,
+          },
+        ],
+      },
+      household_id: 'h1',
+    }))
+
+    render(<Recipes />)
+    await screen.findByText('Mystery Meal')
+    fireEvent.click(screen.getByRole('button', { name: /^Cooked it$/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/Open the recipe to log what you used/)).toBeInTheDocument()
+    })
+    expect(markCooked).not.toHaveBeenCalled()
+    expect(swipeSuggestion).not.toHaveBeenCalled()
+  })
+
+  it('POOL_COOK_DOUBLE_TAP_SINGLE_MARKCOOKED', async () => {
+    let resolveCook
+    markCooked.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveCook = () => resolve({ ok: true })
+        })
+    )
+    getPool.mockImplementation(async () => ({
+      pool: {
+        dinner: [
+          {
+            id: 'sug-dup',
+            recipe_id: '700',
+            recipe_name: 'Dup Test',
+            recipe_data: { extendedIngredients: [{ name: 'rice' }] },
+            match_score: 0.9,
+          },
+        ],
+      },
+      household_id: 'h1',
+    }))
+    swipeSuggestion.mockResolvedValue({ ok: true })
+
+    render(<Recipes />)
+    await screen.findByText('Dup Test')
+    const btn = screen.getByRole('button', { name: /^Cooked it$/i })
+    fireEvent.click(btn)
+    fireEvent.click(btn)
+    expect(markCooked).toHaveBeenCalledTimes(1)
+    resolveCook()
+    await waitFor(() => {
+      expect(swipeSuggestion).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('POOL_COOK_MARKCOOKED_FAILURE_NO_SWIPE', async () => {
+    markCooked.mockRejectedValue(new Error('network'))
+    getPool.mockImplementation(async () => ({
+      pool: {
+        dinner: [
+          {
+            id: 'sug-fail',
+            recipe_id: '800',
+            recipe_name: 'Fail Test',
+            recipe_data: { extendedIngredients: [{ name: 'salt' }] },
+            match_score: 0.9,
+          },
+        ],
+      },
+      household_id: 'h1',
+    }))
+
+    render(<Recipes />)
+    await screen.findByText('Fail Test')
+    fireEvent.click(screen.getByRole('button', { name: /^Cooked it$/i }))
+
+    await waitFor(() => {
+      expect(screen.getByText(/partially recorded/)).toBeInTheDocument()
+    })
+    expect(swipeSuggestion).not.toHaveBeenCalled()
+    expect(screen.getByText('Fail Test')).toBeInTheDocument()
+  })
+
+  it('POOL_COOK_SWIPE_FAILURE_CARD_STAYS_GONE', async () => {
+    const poolRow = {
+      id: 'sug-swipe-fail',
+      recipe_id: '900',
+      recipe_name: 'Swipe Fail',
+      recipe_data: { extendedIngredients: [{ name: 'pasta' }] },
+      match_score: 0.9,
+    }
+    getPool.mockImplementation(async () => ({
+      pool: { dinner: [poolRow] },
+      household_id: 'h1',
+    }))
+    markCooked.mockResolvedValue({ ok: true })
+    swipeSuggestion.mockRejectedValue(new Error('swipe down'))
+
+    render(<Recipes />)
+    await screen.findByText('Swipe Fail')
+    fireEvent.click(screen.getByRole('button', { name: /^Cooked it$/i }))
+
+    await waitFor(() => {
+      expect(markCooked).toHaveBeenCalled()
+    })
+    await waitFor(() => {
+      expect(screen.queryByText('Swipe Fail')).not.toBeInTheDocument()
+    })
+  })
+
+  it('POOL_COOK_ORDERING_SWIPE_BEFORE_REFILL', async () => {
+    const callOrder = []
+    markCooked.mockImplementation(async () => {
+      callOrder.push('markCooked')
+      return { ok: true }
+    })
+    swipeSuggestion.mockImplementation(async () => {
+      callOrder.push('swipe')
+      return { ok: true }
+    })
+    getDepth.mockImplementation(async () => {
+      callOrder.push('getDepth')
+      return { depth: { breakfast: 1, lunch: 5, dinner: 5 }, household_id: 'h1' }
+    })
+    getPool.mockImplementation(async () => {
+      callOrder.push('getPool')
+      return {
+        pool: {
+          dinner: [
+            {
+              id: 'sug-order',
+              recipe_id: '950',
+              recipe_name: 'Order Test',
+              recipe_data: { extendedIngredients: [{ name: 'beans' }] },
+              match_score: 0.9,
+            },
+          ],
+        },
+        household_id: 'h1',
+      }
+    })
+
+    render(<Recipes />)
+    await screen.findByText('Order Test')
+    fireEvent.click(screen.getByRole('button', { name: /^Cooked it$/i }))
+
+    await waitFor(() => {
+      expect(callOrder.indexOf('swipe')).toBeGreaterThan(callOrder.indexOf('markCooked'))
+      expect(callOrder.indexOf('getDepth')).toBeGreaterThan(callOrder.indexOf('swipe'))
+      const poolAfterSwipe = callOrder.filter((c) => c === 'getPool').length
+      expect(poolAfterSwipe).toBeGreaterThan(1)
+    })
+  })
 })
 
 describe('ConfidenceIndicator', () => {
