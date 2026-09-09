@@ -525,13 +525,13 @@ function Recipes() {
         />
 
         {cookedConfirmation && (
-          <div className="mb-4 p-3 rounded-mise-md bg-forest-light text-cream text-center text-sm border border-forest-light">
+          <div className="mb-4 p-3 rounded-meald-md bg-forest-light text-cream text-center text-sm border border-forest-light">
             {cookedConfirmation}
           </div>
         )}
 
         {postCookPerishables.length > 0 && (
-          <div className="mb-4 p-4 rounded-mise-md bg-forest-mid border border-sage/30">
+          <div className="mb-4 p-4 rounded-meald-md bg-forest-mid border border-sage/30">
             <h3 className="text-sm font-display font-semibold text-cream mb-3">
               Still have these?
             </h3>
@@ -559,7 +559,7 @@ function Recipes() {
         )}
 
         {error && (
-          <div className="mb-6 p-4 border border-[var(--color-error)] rounded-mise-md text-[var(--color-error)] bg-[var(--color-error)]/10">
+          <div className="mb-6 p-4 border border-[var(--color-error)] rounded-meald-md text-[var(--color-error)] bg-[var(--color-error)]/10">
             {error}
             <button
               type="button"
@@ -651,7 +651,7 @@ function Recipes() {
         {exitConfirmRecipe && (
           <div className="fixed bottom-0 inset-x-0 z-50 p-4 pb-safe pointer-events-none">
             <div
-              className="max-w-lg mx-auto rounded-mise-md bg-forest-mid border border-sage/30 p-3 flex flex-wrap items-center gap-3 pointer-events-auto shadow-mise-lg"
+              className="max-w-lg mx-auto rounded-meald-md bg-forest-mid border border-sage/30 p-3 flex flex-wrap items-center gap-3 pointer-events-auto shadow-meald-lg"
               role="status"
             >
               <p className="text-sm text-cream flex-1 min-w-[8rem]">Did you cook this?</p>

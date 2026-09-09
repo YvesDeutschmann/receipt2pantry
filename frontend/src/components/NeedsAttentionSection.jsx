@@ -28,7 +28,7 @@ export default function NeedsAttentionSection() {
   return (
     <section
       aria-labelledby="needs-attention-heading"
-      className="mb-8 rounded-mise-lg border border-[var(--color-warning)]/40 bg-forest-light p-5"
+      className="mb-8 rounded-meald-lg border border-[var(--color-warning)]/40 bg-forest-light p-5"
     >
       <h2 id="needs-attention-heading" className="text-cream font-display font-semibold mb-3">
         Needs attention
@@ -39,7 +39,7 @@ export default function NeedsAttentionSection() {
           return (
             <li
               key={provider}
-              className="flex items-start justify-between gap-3 rounded-mise-md border border-forest-mid/60 bg-forest px-4 py-3"
+              className="flex items-start justify-between gap-3 rounded-meald-md border border-forest-mid/60 bg-forest px-4 py-3"
             >
               <p className="text-sm text-cream flex-1 min-w-0">
                 {label} needs reconnect to keep your pantry up to date.

@@ -52,7 +52,7 @@ function BridgeScreen() {
         {error && (
           <div
             role="alert"
-            className="rounded-mise-md border border-[var(--color-error)] px-3 py-2 text-sm text-[var(--color-error)] bg-[var(--color-error)]/10 mb-6"
+            className="rounded-meald-md border border-[var(--color-error)] px-3 py-2 text-sm text-[var(--color-error)] bg-[var(--color-error)]/10 mb-6"
           >
             {error}
           </div>

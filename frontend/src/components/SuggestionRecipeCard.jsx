@@ -66,7 +66,7 @@ function SuggestionRecipeCard({
   })
 
   return (
-    <div className="relative mb-4 overflow-hidden rounded-mise-lg">
+    <div className="relative mb-4 overflow-hidden rounded-meald-lg">
       <div
         className="absolute inset-0 bg-red-600/90 flex items-center justify-end pr-6 pointer-events-none z-0 transition-opacity"
         style={{ opacity: behindOpacity }}
@@ -75,7 +75,7 @@ function SuggestionRecipeCard({
       </div>
 
       <motion.div
-        className={`relative z-10 rounded-mise-lg shadow-mise-lg overflow-hidden cursor-grab active:cursor-grabbing ${tierCardClass(
+        className={`relative z-10 rounded-meald-lg shadow-meald-lg overflow-hidden cursor-grab active:cursor-grabbing ${tierCardClass(
           recipe.tier
         )}`}
         style={{ x }}
@@ -123,7 +123,7 @@ function SuggestionRecipeCard({
 
           <button
             type="button"
-            className="mt-4 bg-terra text-cream font-semibold rounded-mise-md py-3 w-full disabled:opacity-50 disabled:cursor-not-allowed"
+            className="mt-4 bg-terra text-cream font-semibold rounded-meald-md py-3 w-full disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={cookDisabled}
             onClick={(e) => {
               e.stopPropagation()

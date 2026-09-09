@@ -34,7 +34,7 @@ function PantryItem({
   }
 
   return (
-    <div className="relative overflow-hidden rounded-mise-md border border-forest-light/80">
+    <div className="relative overflow-hidden rounded-meald-md border border-forest-light/80">
       <div className="absolute inset-0 flex items-center justify-end pr-4 bg-[var(--color-error)]/90 text-cream text-sm font-medium pointer-events-none">
         Remove
       </div>

@@ -1,6 +1,6 @@
-# Mise Depletion System — Master Design Document
+# Meald Depletion System — Master Design Document
 
-> This document defines the product intent, core constraints, and design decisions for the Mise pantry depletion system. All phase documents reference this file. Constraints listed here cannot be violated without updating this document first.
+> This document defines the product intent, core constraints, and design decisions for the Meald pantry depletion system. All phase documents reference this file. Constraints listed here cannot be violated without updating this document first.
 
 ---
 
@@ -233,7 +233,7 @@ recipe_score += 1.0  if recipe uses SOME use_soon items
 
 - Never surface meat or fish in the "use soon" shelf without the disclaimer: "Check before cooking — this was past its use-by date"
 - Raw meat and fish: one put-back cycle maximum (see above)
-- ToS must include explicit disclaimer that Mise does not guarantee ingredient freshness and users are solely responsible for assessing food safety
+- ToS must include explicit disclaimer that Meald does not guarantee ingredient freshness and users are solely responsible for assessing food safety
 - The app's legal exposure is low but the reputational risk (viral complaint) is higher — design against the scenario, not just the liability
 
 ---

@@ -202,7 +202,7 @@ function SuggestionDetailModal({
 
             <div className="grid grid-cols-2 gap-4">
               {display.readyInMinutes != null && (
-                <div className="bg-forest-light p-3 rounded-mise-md">
+                <div className="bg-forest-light p-3 rounded-meald-md">
                   <div className="text-sm text-sage-light">Ready In</div>
                   <div className="text-lg font-display font-semibold text-cream">
                     {display.readyInMinutes} minutes
@@ -210,7 +210,7 @@ function SuggestionDetailModal({
                 </div>
               )}
               {(display.servings != null || recipe?.servings != null) && (
-                <div className="bg-forest-light p-3 rounded-mise-md">
+                <div className="bg-forest-light p-3 rounded-meald-md">
                   <div className="text-sm text-sage-light">Servings</div>
                   <div className="text-lg font-display font-semibold text-cream">
                     {display.servings ?? recipe?.servings ?? 4}
@@ -315,7 +315,7 @@ function SuggestionDetailModal({
         {display && (
           <button
             type="button"
-            className="w-full bg-terra text-cream font-semibold rounded-mise-md py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="w-full bg-terra text-cream font-semibold rounded-meald-md py-3 disabled:opacity-50 disabled:cursor-not-allowed"
             disabled={cookDisabled}
             onClick={() => onCookedIt(display)}
           >

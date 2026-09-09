@@ -108,7 +108,7 @@ export default function PantryCheckSheet({
           <motion.div
             role="dialog"
             aria-labelledby="pantry-check-title"
-            className="fixed bottom-0 left-0 right-0 z-[90] max-h-[70vh] overflow-y-auto rounded-t-2xl bg-forest-mid border-t border-sage/25 shadow-mise-lg pb-safe"
+            className="fixed bottom-0 left-0 right-0 z-[90] max-h-[70vh] overflow-y-auto rounded-t-2xl bg-forest-mid border-t border-sage/25 shadow-meald-lg pb-safe"
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             exit={{ y: '100%' }}
@@ -121,7 +121,7 @@ export default function PantryCheckSheet({
               <button
                 type="button"
                 onClick={handleAbandonPrompt}
-                className="p-2 text-sage-light hover:text-cream rounded-mise-md"
+                className="p-2 text-sage-light hover:text-cream rounded-meald-md"
                 aria-label="Close"
               >
                 <X className="w-5 h-5" />
@@ -140,7 +140,7 @@ export default function PantryCheckSheet({
                 return (
                   <li
                     key={key}
-                    className="rounded-mise-md border border-sage/25 bg-forest/40 p-3"
+                    className="rounded-meald-md border border-sage/25 bg-forest/40 p-3"
                   >
                     <p className="text-sm text-cream font-medium mb-2 line-clamp-2">{label}</p>
                     {sub && (

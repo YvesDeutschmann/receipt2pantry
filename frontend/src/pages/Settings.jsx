@@ -119,9 +119,9 @@ function Settings() {
             </div>
           ) : household ? (
             <div className="space-y-4">
-              <div className="flex items-center justify-between p-4 bg-forest-light rounded-mise-md">
+              <div className="flex items-center justify-between p-4 bg-forest-light rounded-meald-md">
                 <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-forest rounded-mise-md">
+                  <div className="p-2 bg-forest rounded-meald-md">
                     <Users className="w-6 h-6 text-terra" />
                   </div>
                   <div>
@@ -144,7 +144,7 @@ function Settings() {
                   <p className="text-sm mb-2">
                     Invite others with your join code:
                   </p>
-                  <code className="inline-block px-3 py-1 bg-forest-mid border border-forest-light rounded-mise-sm font-mono text-lg tracking-widest text-cream">
+                  <code className="inline-block px-3 py-1 bg-forest-mid border border-forest-light rounded-meald-sm font-mono text-lg tracking-widest text-cream">
                     {household.join_code}
                   </code>
                 </div>
@@ -193,7 +193,7 @@ function Settings() {
           <div className="card hover:shadow-lg transition-shadow cursor-pointer">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <div className="p-2 bg-forest rounded-mise-md">
+                <div className="p-2 bg-forest rounded-meald-md">
                   <Store className="w-6 h-6 text-terra" />
                 </div>
                 <div>
@@ -269,7 +269,7 @@ function Settings() {
         <div className="card">
           <h2 className="text-xl font-display font-semibold mb-4 text-[var(--color-error)]">Danger Zone</h2>
           <div className="space-y-4">
-            <div className="flex items-center justify-between p-4 border border-[var(--color-error)] rounded-mise-md">
+            <div className="flex items-center justify-between p-4 border border-[var(--color-error)] rounded-meald-md">
               <div>
                 <p className="font-medium text-cream">Delete Account</p>
                 <p className="text-sm text-sage-light">
@@ -286,7 +286,7 @@ function Settings() {
         {showDevTools && (
           <div className="card border-dashed border-[var(--color-error)]/50">
             <h2 className="text-sm font-medium text-[var(--color-error)] mb-2">Dev Tools</h2>
-            <div className="mb-6 p-3 rounded-mise-md bg-forest-light/50 space-y-3 w-full max-w-xl">
+            <div className="mb-6 p-3 rounded-meald-md bg-forest-light/50 space-y-3 w-full max-w-xl">
               <h3 className="text-sm font-medium text-cream">Dev: API base URL</h3>
               <p className="text-xs text-sage-light">
                 Effective:{' '}
@@ -421,7 +421,7 @@ function Settings() {
                 </p>
               ) : null}
             </div>
-            <div className="mb-6 p-3 rounded-mise-md bg-forest-light/50 space-y-2 w-full max-w-xl">
+            <div className="mb-6 p-3 rounded-meald-md bg-forest-light/50 space-y-2 w-full max-w-xl">
               <h3 className="text-sm font-medium text-cream">Dev: Costco token diagnostics</h3>
               <p className="text-xs text-sage-light">
                 Auto-captures MSAL census checkpoints and <code>/token</code> exchange metadata
@@ -444,7 +444,7 @@ function Settings() {
                 </span>
               </label>
             </div>
-            <div className="mb-6 p-3 rounded-mise-md bg-forest-light/50 space-y-2 w-full max-w-xl">
+            <div className="mb-6 p-3 rounded-meald-md bg-forest-light/50 space-y-2 w-full max-w-xl">
               <h3 className="text-sm font-medium text-cream">Dev: WebView cleanup</h3>
               <p className="text-xs text-sage-light">
                 Force-close tracked InAppBrowser instances (orphan cleanup). Last resort on device:{' '}
@@ -556,7 +556,7 @@ function Settings() {
             {devMockMessage && (
               <p className="text-xs text-sage-light mt-2 max-w-prose wrap-break-word">{devMockMessage}</p>
             )}
-            <div className="mt-4 p-3 rounded-mise-md bg-forest-light/50 space-y-2 w-full max-w-xl">
+            <div className="mt-4 p-3 rounded-meald-md bg-forest-light/50 space-y-2 w-full max-w-xl">
               <h3 className="text-sm font-medium text-cream">Dev: Cook-loop sandbox</h3>
               <p className="text-xs text-sage-light">
                 Seeds paired pantry + pool card for <code className="text-cream">dev_cook_loop</code>.

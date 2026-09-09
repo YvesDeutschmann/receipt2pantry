@@ -127,7 +127,7 @@ function DietaryRestrictions() {
               key={code}
               type="button"
               onClick={() => handleChipClick(code)}
-              className={`min-h-touch rounded-mise-md px-4 py-3 text-left text-sm font-medium transition-colors ${
+              className={`min-h-touch rounded-meald-md px-4 py-3 text-left text-sm font-medium transition-colors ${
                 isSelected(code)
                   ? 'bg-terra/20 text-terra-light border-2 border-terra'
                   : 'bg-forest-light text-sage-light border-2 border-transparent hover:border-forest-mid'
@@ -154,7 +154,7 @@ function DietaryRestrictions() {
         <button
           type="button"
           onClick={handleNoRestrictionsClick}
-          className="w-full py-3 rounded-mise-md border-2 border-forest-light text-sage-light hover:border-sage hover:text-cream transition-colors text-sm font-medium mb-6"
+          className="w-full py-3 rounded-meald-md border-2 border-forest-light text-sage-light hover:border-sage hover:text-cream transition-colors text-sm font-medium mb-6"
         >
           No dietary restrictions
         </button>

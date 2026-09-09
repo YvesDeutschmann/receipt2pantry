@@ -19,7 +19,7 @@ function ProviderCard({ provider, status, onTest, onConfigure }) {
     <div className="card">
       <div className="flex items-center justify-between">
         <div className="flex items-center space-x-4">
-          <div className="w-12 h-12 bg-forest-light rounded-mise-md flex items-center justify-center">
+          <div className="w-12 h-12 bg-forest-light rounded-meald-md flex items-center justify-center">
             <span className="text-2xl font-bold text-terra">
               {provider.charAt(0).toUpperCase()}
             </span>

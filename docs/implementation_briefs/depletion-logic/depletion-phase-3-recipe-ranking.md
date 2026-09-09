@@ -1,6 +1,6 @@
-# Mise Depletion System — Phase 3: Recipe Suggestion Ranking
+# Meald Depletion System — Phase 3: Recipe Suggestion Ranking
 
-> **Reference:** Read `mise-depletion-master.md` before this document. Read the Phase 1 and Phase 2 Cursor plan docs (linked in their respective implementation history sections) for any decisions made during implementation that differ from spec. This document defines only the scope of Phase 3.
+> **Reference:** Read `meald-depletion-master.md` before this document. Read the Phase 1 and Phase 2 Cursor plan docs (linked in their respective implementation history sections) for any decisions made during implementation that differ from spec. This document defines only the scope of Phase 3.
 
 ---
 

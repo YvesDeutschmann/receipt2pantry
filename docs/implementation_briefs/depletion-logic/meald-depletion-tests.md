@@ -1,6 +1,6 @@
-# Mise Depletion System — Test Specification
+# Meald Depletion System — Test Specification
 
-> **Reference:** Read `mise-depletion-master.md` before this document. This spec covers all depletion logic across Phases 2 and 3. Phase 4 UI tests are defined separately at the bottom. Every scenario here maps to a named unit or integration test. All tests must pass before each phase is considered done.
+> **Reference:** Read `meald-depletion-master.md` before this document. This spec covers all depletion logic across Phases 2 and 3. Phase 4 UI tests are defined separately at the bottom. Every scenario here maps to a named unit or integration test. All tests must pass before each phase is considered done.
 
 ---
 

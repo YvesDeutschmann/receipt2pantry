@@ -111,7 +111,7 @@ export default function HealthCard({ userId, items, visible, onDismiss, onItemUp
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 30, opacity: 0 }}
           transition={{ duration: 0.25 }}
-          className="mt-6 bg-forest-mid border border-sage/30 rounded-mise-lg p-4"
+          className="mt-6 bg-forest-mid border border-sage/30 rounded-meald-lg p-4"
         >
           <div className="flex flex-wrap items-baseline justify-between gap-2 mb-4">
             <h3 className="text-lg font-display font-semibold text-cream">Quick pantry check</h3>
@@ -138,14 +138,14 @@ export default function HealthCard({ userId, items, visible, onDismiss, onItemUp
                       <>
                         <button
                           type="button"
-                          className="px-2.5 py-1 text-xs rounded-mise-md border border-emerald-600/50 text-emerald-200 hover:bg-emerald-900/20"
+                          className="px-2.5 py-1 text-xs rounded-meald-md border border-emerald-600/50 text-emerald-200 hover:bg-emerald-900/20"
                           onClick={() => handleStillHaveIt(row)}
                         >
                           Still have it
                         </button>
                         <button
                           type="button"
-                          className="px-2 py-1 text-sm text-sage-light hover:text-cream rounded-mise-md border border-sage/25"
+                          className="px-2 py-1 text-sm text-sage-light hover:text-cream rounded-meald-md border border-sage/25"
                           onClick={() => handleUsedUp(row)}
                           aria-label="Used it up"
                         >

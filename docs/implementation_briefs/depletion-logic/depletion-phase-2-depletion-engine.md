@@ -1,6 +1,6 @@
-# Mise Depletion System — Phase 2: Depletion Engine
+# Meald Depletion System — Phase 2: Depletion Engine
 
-> **Reference:** Read `mise-depletion-master.md` before this document. Read the Phase 1 Cursor plan doc (linked in the Phase 1 implementation history) for any schema decisions made during implementation that differ from the Phase 1 spec. This document defines only the scope of Phase 2.
+> **Reference:** Read `meald-depletion-master.md` before this document. Read the Phase 1 Cursor plan doc (linked in the Phase 1 implementation history) for any schema decisions made during implementation that differ from the Phase 1 spec. This document defines only the scope of Phase 2.
 
 ---
 

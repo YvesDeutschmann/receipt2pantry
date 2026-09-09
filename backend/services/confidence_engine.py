@@ -1,5 +1,5 @@
 """
-Mise depletion engine (Phase 2): confidence, calibration, expiry cleanup, cook events, put-back.
+Meald depletion engine (Phase 2): confidence, calibration, expiry cleanup, cook events, put-back.
 
 Computed confidence is never persisted (except user-initiated confidence_override fields).
 """

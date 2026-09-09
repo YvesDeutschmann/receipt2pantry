@@ -1,6 +1,6 @@
-# Mise Depletion System — Phase 4: UI Surfaces
+# Meald Depletion System — Phase 4: UI Surfaces
 
-> **Reference:** Read `mise-depletion-master.md` before this document. Read the Phase 1, 2, and 3 Cursor plan docs (linked in their respective implementation history sections) for any decisions made during implementation that differ from spec. This document defines only the scope of Phase 4.
+> **Reference:** Read `meald-depletion-master.md` before this document. Read the Phase 1, 2, and 3 Cursor plan docs (linked in their respective implementation history sections) for any decisions made during implementation that differ from spec. This document defines only the scope of Phase 4.
 
 ---
 

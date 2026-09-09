@@ -106,7 +106,7 @@ const ShoppingList = ({ userId, householdId }) => {
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-[var(--color-error)]/10 border border-[var(--color-error)] rounded-mise-md">
+        <div className="mb-4 p-4 bg-[var(--color-error)]/10 border border-[var(--color-error)] rounded-meald-md">
           <p className="text-[var(--color-error)]">{error}</p>
         </div>
       )}
@@ -133,7 +133,7 @@ const ShoppingList = ({ userId, householdId }) => {
                     {groupItems.map((item) => (
                       <li
                         key={item.id}
-                        className="flex items-center justify-between p-3 bg-forest-light rounded-mise-md hover:bg-forest-light/80 transition-colors"
+                        className="flex items-center justify-between p-3 bg-forest-light rounded-meald-md hover:bg-forest-light/80 transition-colors"
                       >
                         <div className="flex-1">
                           <div className="flex items-center gap-2">
@@ -167,7 +167,7 @@ const ShoppingList = ({ userId, householdId }) => {
                 {purchasedItems.map((item) => (
                   <li
                     key={item.id}
-                    className="flex items-center justify-between p-3 bg-forest-light rounded-mise-md"
+                    className="flex items-center justify-between p-3 bg-forest-light rounded-meald-md"
                   >
                     <div className="flex-1">
                       <div className="flex items-center gap-2">

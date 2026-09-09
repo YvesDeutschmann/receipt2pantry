@@ -61,7 +61,7 @@ function Providers() {
       />
 
       {!onboardingComplete && user?.user_metadata?.cold_start_step === 1 && (
-        <div className="mb-6 p-4 rounded-mise-md border border-sage/30 bg-forest-light">
+        <div className="mb-6 p-4 rounded-meald-md border border-sage/30 bg-forest-light">
           <p className="text-sm text-cream mb-3">
             When you&apos;re done connecting or syncing, continue to your pantry staples checklist.
           </p>
@@ -114,14 +114,14 @@ function Providers() {
                 <div className="flex gap-2">
                   {provider === 'costco' ? (
                     <div className="w-full space-y-3">
-                      <div className="p-3 bg-forest-light rounded-mise-md border border-forest-light">
+                      <div className="p-3 bg-forest-light rounded-meald-md border border-forest-light">
                         <p className="text-xs font-medium text-sage-light mb-2">One-Tap Sync</p>
                         <CostcoOneTapSync userId={userId} days={90} />
                       </div>
                     </div>
                   ) : provider === 'safeway' ? (
                     <div className="w-full space-y-3">
-                      <div className="p-3 bg-forest-light rounded-mise-md border border-forest-light">
+                      <div className="p-3 bg-forest-light rounded-meald-md border border-forest-light">
                         <p className="text-xs font-medium text-sage-light mb-2">Connect Safeway</p>
                         <SafewayConnectCard userId={userId} />
                       </div>

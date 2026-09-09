@@ -181,7 +181,7 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
               {household && activeTab === 'view' && (
                 <div className="space-y-4">
                   {/* Household Info */}
-                  <div className="bg-forest-light rounded-mise-md p-4">
+                  <div className="bg-forest-light rounded-meald-md p-4">
                     <div className="flex items-center justify-between">
                       <div>
                         <h3 className="font-medium text-cream">{household.name}</h3>
@@ -199,10 +199,10 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
 
                   {/* Join Code (owner only) */}
                   {household.role === 'owner' && (
-                    <div className="bg-forest-light rounded-mise-md p-4">
+                    <div className="bg-forest-light rounded-meald-md p-4">
                       <p className="text-sm text-sage-light mb-2">Share this code to invite members:</p>
                       <div className="flex items-center space-x-2">
-                        <code className="flex-1 bg-forest-mid px-3 py-2 rounded-mise-sm border border-forest-light font-mono text-lg text-center tracking-widest text-cream">
+                        <code className="flex-1 bg-forest-mid px-3 py-2 rounded-meald-sm border border-forest-light font-mono text-lg text-center tracking-widest text-cream">
                           {household.join_code}
                         </code>
                         <button
@@ -232,7 +232,7 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
                       {members.map((member) => (
                         <div
                           key={member.user_id}
-                          className="flex items-center justify-between p-3 bg-forest-light rounded-mise-md"
+                          className="flex items-center justify-between p-3 bg-forest-light rounded-meald-md"
                         >
                           <div className="flex items-center space-x-3">
                             <div className="w-8 h-8 bg-forest-mid rounded-full flex items-center justify-center border border-forest-light">
@@ -265,7 +265,7 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
                   <button
                     onClick={handleLeaveHousehold}
                     disabled={submitting}
-                    className="w-full mt-4 px-4 py-2 border border-[var(--color-error)] text-[var(--color-error)] rounded-mise-md hover:bg-[var(--color-error)]/10 transition-colors"
+                    className="w-full mt-4 px-4 py-2 border border-[var(--color-error)] text-[var(--color-error)] rounded-meald-md hover:bg-[var(--color-error)]/10 transition-colors"
                   >
                     {household.role === 'owner' && members.length === 1 
                       ? 'Delete Household' 

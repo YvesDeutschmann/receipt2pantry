@@ -192,7 +192,7 @@ Olive oil
 - **`probably_have`:** Muted opacity (`opacity-80`), lighter card background.
 - **`check_first`:** Warning callout below the title: "Confirm you still have: {recipe.trigger_ingredient}". Only show ONE ingredient name -- the `trigger_ingredient` field.
 
-**"Cooked it" button:** Prominent. Use Tailwind classes: `bg-terra text-cream font-semibold rounded-mise-md py-3 w-full`. Text: "Cooked it".
+**"Cooked it" button:** Prominent. Use Tailwind classes: `bg-terra text-cream font-semibold rounded-meald-md py-3 w-full`. Text: "Cooked it".
 
 **Swipe-to-dismiss:** Use `framer-motion` drag on the x-axis. On `onDragEnd`, if `info.offset.x < -100`, call `onDismiss(recipe)`. Reveal a red "Don't have this" panel behind the card during the swipe. Follow the same pattern as the existing `RecipeSwipeCard.jsx`.
 

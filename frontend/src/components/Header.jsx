@@ -40,7 +40,7 @@ function Header() {
 
   return (
     <>
-      <header className="bg-forest-mid shadow-mise-sm">
+      <header className="bg-forest-mid shadow-meald-sm">
         <div className="container mx-auto px-4">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-8">
@@ -90,7 +90,7 @@ function Header() {
               {/* Household Button */}
               <button
                 onClick={() => setHouseholdModalOpen(true)}
-                className="flex items-center space-x-2 px-3 py-2 rounded-mise-md hover:bg-forest-light transition-colors"
+                className="flex items-center space-x-2 px-3 py-2 rounded-meald-md hover:bg-forest-light transition-colors"
                 title="Manage Household"
               >
                 <svg 

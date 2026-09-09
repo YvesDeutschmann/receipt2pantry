@@ -144,7 +144,7 @@ function RecipeDetailModal({
 
               <div className="grid grid-cols-2 gap-4">
                 {recipe.readyInMinutes && (
-                  <div className="bg-forest-light p-3 rounded-mise-md">
+                  <div className="bg-forest-light p-3 rounded-meald-md">
                     <div className="text-sm text-sage-light">Ready In</div>
                     <div className="text-lg font-display font-semibold text-cream">
                       {recipe.readyInMinutes} minutes
@@ -152,7 +152,7 @@ function RecipeDetailModal({
                   </div>
                 )}
                 {recipe.servings && (
-                  <div className="bg-forest-light p-3 rounded-mise-md">
+                  <div className="bg-forest-light p-3 rounded-meald-md">
                     <div className="text-sm text-sage-light">Servings</div>
                     <div className="text-lg font-display font-semibold text-cream">{recipe.servings}</div>
                   </div>

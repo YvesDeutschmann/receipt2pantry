@@ -53,7 +53,7 @@ function DevMockCostcoBlock({ userId, onSyncSuccess, className = '' }) {
 
   return (
     <div
-      className={`p-3 border border-dashed border-terra/40 rounded-mise-md bg-terra/5 space-y-2 ${className}`}
+      className={`p-3 border border-dashed border-terra/40 rounded-meald-md bg-terra/5 space-y-2 ${className}`}
     >
       <p className="text-xs text-terra font-medium">Dev: mock sync (no Costco / WebView)</p>
       <button

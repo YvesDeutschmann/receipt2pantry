@@ -153,7 +153,7 @@ function Pantry() {
         </div>
 
         {error && (
-          <div className="mb-6 p-4 border border-[var(--color-error)] rounded-mise-md text-[var(--color-error)] bg-[var(--color-error)]/10">
+          <div className="mb-6 p-4 border border-[var(--color-error)] rounded-meald-md text-[var(--color-error)] bg-[var(--color-error)]/10">
             {error}
             <button type="button" onClick={() => setError(null)} className="ml-2 underline hover:no-underline">
               Dismiss
@@ -226,7 +226,7 @@ function Pantry() {
                 initial={{ y: 24, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 exit={{ y: 16, opacity: 0 }}
-                className="w-full max-w-sm rounded-mise-lg bg-forest-mid border border-sage/30 p-4 shadow-xl"
+                className="w-full max-w-sm rounded-meald-lg bg-forest-mid border border-sage/30 p-4 shadow-xl"
                 onClick={(e) => e.stopPropagation()}
               >
                 <p className="text-cream font-display font-semibold mb-3">Add to pantry</p>
@@ -244,7 +244,7 @@ function Pantry() {
                   </button>
                   <button
                     type="button"
-                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-mise-md border border-sage/30 text-cream hover:bg-forest-light"
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-meald-md border border-sage/30 text-cream hover:bg-forest-light"
                     onClick={() => {
                       setAddMenuOpen(false)
                       setVoiceOpen(true)

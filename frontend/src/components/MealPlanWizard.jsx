@@ -382,7 +382,7 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
         />
 
         {/* Modal */}
-        <div className="relative bg-forest-mid rounded-mise-lg text-left text-cream overflow-hidden shadow-mise-lg transform transition-all sm:my-8 sm:max-w-2xl sm:w-full max-h-[90vh] flex flex-col border border-forest-light/50">
+        <div className="relative bg-forest-mid rounded-meald-lg text-left text-cream overflow-hidden shadow-meald-lg transform transition-all sm:my-8 sm:max-w-2xl sm:w-full max-h-[90vh] flex flex-col border border-forest-light/50">
           {/* Header */}
           <div className="px-4 pt-5 pb-4 sm:p-6 border-b border-forest-light">
             <div className="flex items-center justify-between">
@@ -508,7 +508,7 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terra"></div>
                   </div>
                 ) : recipes.length === 0 ? (
-                  <div className="bg-forest-light border border-forest-light rounded-mise-md shadow-mise-sm p-6 mb-6">
+                  <div className="bg-forest-light border border-forest-light rounded-meald-md shadow-meald-sm p-6 mb-6">
                     <div className="text-center mb-6">
                       <div className="mb-4">
                         <svg className="mx-auto h-12 w-12 text-sage-light" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -617,7 +617,7 @@ const MealPlanWizard = ({ isOpen, onClose, onComplete, userId, householdId }) =>
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 20 }}
           className="fixed bottom-4 left-1/2 transform -translate-x-1/2 
-                      bg-forest-mid text-cream px-4 py-3 rounded-mise-md shadow-mise-lg 
+                      bg-forest-mid text-cream px-4 py-3 rounded-meald-md shadow-meald-lg 
                       flex items-center gap-3 z-[60] border border-forest-light"
         >
           <span>{toastMessage}</span>
