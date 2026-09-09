@@ -273,6 +273,40 @@ def update_profile():
         return jsonify({"error": str(e)}), 500
 
 
+@households_bp.route("/households/dietary/merge", methods=["POST"])
+def merge_dietary():
+    """
+    Union-merge dietary restriction codes onto the current household.
+
+    Request body:
+        - dietary_restrictions: string array of codes to add (optional)
+
+    Returns:
+        Updated household details (size unchanged)
+    """
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    service = get_household_service()
+    if not service:
+        return jsonify({"error": "Household service not available"}), 503
+
+    data = request.get_json() or {}
+    dietary_restrictions = data.get("dietary_restrictions")
+
+    try:
+        household = service.merge_dietary_restrictions(
+            user_id, dietary_restrictions=dietary_restrictions
+        )
+        return jsonify({"household": household})
+    except ValidationException as e:
+        return jsonify({"error": str(e)}), 400
+    except Exception as e:
+        logger.error(f"Error merging dietary restrictions: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
 @households_bp.route("/households/name", methods=["PUT"])
 def update_name():
     """

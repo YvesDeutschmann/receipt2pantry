@@ -18,6 +18,16 @@ logger = get_logger(__name__)
 JOIN_CODE_CHARS = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 JOIN_CODE_LENGTH = 6
 
+_ALREADY_MEMBER_MSG = (
+    "You are already a member of a household. "
+    "Please leave your current household first."
+)
+
+
+def _is_unique_violation(exc: Exception) -> bool:
+    msg = str(exc).lower()
+    return "23505" in msg or "unique" in msg or "duplicate" in msg
+
 
 class HouseholdService:
     """Service for managing household membership and sharing"""
@@ -46,6 +56,40 @@ class HouseholdService:
         
         # If we can't generate a unique code, raise an error
         raise DatabaseException("Failed to generate unique join code")
+
+    def _join_response(
+        self, household: Dict, role: str, existing_membership: Optional[Dict] = None
+    ) -> Dict:
+        """Build join/idempotent join payload with size and dietary_restrictions."""
+        return {
+            "id": household["id"],
+            "name": household["name"],
+            "join_code": household["join_code"],
+            "size": household.get("size", 2),
+            "dietary_restrictions": household.get("dietary_restrictions") or [],
+            "suggestion_meal_slots": household.get("suggestion_meal_slots")
+            or {"breakfast": True, "lunch": True, "dinner": True},
+            "role": role,
+            "created_at": household["created_at"],
+        }
+
+    def _add_member_or_resolve_race(
+        self, user_id: str, household: Dict, join_code: str
+    ) -> Dict:
+        """Insert membership; on unique violation return idempotent join payload."""
+        household_id = household["id"]
+        try:
+            self.supabase.add_household_member(household_id, user_id, "member")
+        except DatabaseException as exc:
+            if not _is_unique_violation(exc):
+                raise
+            current = self.supabase.get_user_household(user_id)
+            if current and current["id"] == household_id:
+                return self._join_response(household, current["role"], current)
+            raise ValidationException(_ALREADY_MEMBER_MSG) from exc
+
+        logger.info(f"User {user_id} joined household '{household['name']}'")
+        return self._join_response(household, "member")
     
     def create_household(
         self,
@@ -137,36 +181,13 @@ class HouseholdService:
         existing = self.supabase.get_user_household(user_id)
         if existing:
             if household and existing["id"] == household["id"]:
-                return {
-                    "id": household["id"],
-                    "name": household["name"],
-                    "join_code": household["join_code"],
-                    "suggestion_meal_slots": household.get("suggestion_meal_slots")
-                    or {"breakfast": True, "lunch": True, "dinner": True},
-                    "role": existing["role"],
-                    "created_at": household["created_at"],
-                }
-            raise ValidationException(
-                "You are already a member of a household. "
-                "Please leave your current household first."
-            )
+                return self._join_response(household, existing["role"], existing)
+            raise ValidationException(_ALREADY_MEMBER_MSG)
 
         if not household:
             raise ValidationException("Invalid join code. Please check and try again.")
 
-        self.supabase.add_household_member(household["id"], user_id, "member")
-        
-        logger.info(f"User {user_id} joined household '{household['name']}'")
-        
-        return {
-            "id": household["id"],
-            "name": household["name"],
-            "join_code": household["join_code"],
-            "suggestion_meal_slots": household.get("suggestion_meal_slots")
-            or {"breakfast": True, "lunch": True, "dinner": True},
-            "role": "member",
-            "created_at": household["created_at"]
-        }
+        return self._add_member_or_resolve_race(user_id, household, join_code)
     
     def leave_household(self, user_id: str) -> None:
         """
@@ -437,6 +458,57 @@ class HouseholdService:
             ),
             "suggestion_meal_slots": new_slots,
             "role": household["role"]
+        }
+
+    def merge_dietary_restrictions(
+        self, user_id: str, additions: Optional[List[str]] = None
+    ) -> Dict:
+        """
+        Union-merge dietary restriction codes onto the user's household.
+
+        Preserves existing codes; appends only new non-blank codes. Never writes size.
+        """
+        household = self.supabase.get_user_household(user_id)
+        if not household:
+            raise ValidationException("You are not a member of any household")
+
+        cleaned: List[str] = []
+        for code in additions or []:
+            if code is None:
+                continue
+            stripped = str(code).strip()
+            if stripped and stripped not in cleaned:
+                cleaned.append(stripped)
+
+        if not cleaned:
+            return {
+                "id": household["id"],
+                "name": household["name"],
+                "join_code": household["join_code"],
+                "size": household.get("size", 2),
+                "dietary_restrictions": household.get("dietary_restrictions") or [],
+                "suggestion_meal_slots": household.get("suggestion_meal_slots")
+                or {"breakfast": True, "lunch": True, "dinner": True},
+                "role": household["role"],
+            }
+
+        merged = self.supabase.merge_household_dietary_restrictions(
+            household["id"], cleaned
+        )
+
+        logger.info(
+            f"User {user_id} merged dietary restrictions into household {household['id']}"
+        )
+
+        return {
+            "id": household["id"],
+            "name": household["name"],
+            "join_code": household["join_code"],
+            "size": household.get("size", 2),
+            "dietary_restrictions": merged or [],
+            "suggestion_meal_slots": household.get("suggestion_meal_slots")
+            or {"breakfast": True, "lunch": True, "dinner": True},
+            "role": household["role"],
         }
 
 

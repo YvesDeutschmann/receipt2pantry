@@ -34,6 +34,19 @@ Requires `SUPABASE_URL`, `SUPABASE_PUBLIC_KEY`, and `SUPABASE_SECRET_KEY` in `.e
 
 **Debug API:** `POST /api/dev/cook-loop/reset`, `POST /api/dev/cook-loop/run`, `GET /api/dev/cook-loop/report` (Flask `debug` only). Reset deletes live pantry rows (`deleted_at IS NULL`) only.
 
+## Household join live test
+
+Dedicated QA users from migration `028_qa_share_test_users.sql` (`to-be-merged-user-1` / `to-be-merged-user-2`, UUIDs `…0003`–`…0006`). **Not for daily use.** CASCADE delete runs only against joiner household `…0006`.
+
+```bash
+HOUSEHOLD_JOIN_LIVE=1 \
+uv run pytest tests/services/test_household_join_live.py -q
+```
+
+Requires `SUPABASE_URL`, `SUPABASE_PUBLIC_KEY`, and `SUPABASE_SECRET_KEY` in `.env`. UUIDs are hardcoded in the test module (no env override). Do not run alongside the app on those households or under `pytest -n`.
+
+See also [`docs/implementation_briefs/household-sharing-open-items.md`](../../docs/implementation_briefs/household-sharing-open-items.md) for open follow-ups.
+
 ## Keeping in sync
 
 When the parser output shape changes, update the corresponding fixture arrays and the copy under `frontend/src/devFixtures/`.

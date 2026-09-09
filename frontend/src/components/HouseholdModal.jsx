@@ -83,7 +83,12 @@ function HouseholdModal({ isOpen, onClose, userId, onHouseholdChange }) {
   }
 
   const handleLeaveHousehold = async () => {
-    if (!confirm('Are you sure you want to leave this household?')) return
+    const isSoleOwnerDelete =
+      household?.role === 'owner' && members.length === 1
+    const confirmMessage = isSoleOwnerDelete
+      ? 'Delete this household permanently? All pantry items, receipts, and meal history will be removed and cannot be recovered.'
+      : 'Leave this household? You will lose access to the shared pantry. Items will stay with the household.'
+    if (!confirm(confirmMessage)) return
 
     setSubmitting(true)
     setError(null)

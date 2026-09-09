@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useOnboarding } from '../../contexts/OnboardingContext'
 
@@ -11,9 +11,22 @@ function getSizeLabel(n) {
 
 function HouseholdSize() {
   const navigate = useNavigate()
-  const { householdSize, setHouseholdSize, householdReady, householdLoading, householdError } = useOnboarding()
+  const {
+    householdId,
+    householdSize,
+    setHouseholdSize,
+    householdResolved,
+    householdLoading,
+    householdError,
+  } = useOnboarding()
   const [showManualInput, setShowManualInput] = useState(false)
   const [manualValue, setManualValue] = useState('')
+
+  useEffect(() => {
+    if (householdResolved && !householdLoading && !householdId) {
+      navigate('/onboarding', { replace: true })
+    }
+  }, [householdResolved, householdLoading, householdId, navigate])
 
   const size = Math.max(1, Math.min(99, householdSize))
   const atMin = size <= 1
@@ -45,7 +58,7 @@ function HouseholdSize() {
     navigate('/onboarding/dietary')
   }
 
-  if (householdLoading) {
+  if (householdLoading || !householdResolved) {
     return (
       <div className="min-h-screen bg-forest flex flex-col items-center justify-center px-4">
         <div className="animate-spin rounded-full h-10 w-10 border-2 border-terra border-t-transparent" />
@@ -63,7 +76,7 @@ function HouseholdSize() {
     )
   }
 
-  if (!householdReady) {
+  if (!householdId) {
     return null
   }
 

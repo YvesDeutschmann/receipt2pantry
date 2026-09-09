@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useOnboarding } from '../../contexts/OnboardingContext'
 
@@ -24,13 +24,24 @@ function DietaryRestrictions() {
     setRestrictionsAffirmativeNone,
     otherRestriction,
     setOtherRestriction,
-    householdReady,
+    householdId,
+    householdResolved,
     householdLoading,
+    isJoiner,
+    completeJoinDietary,
   } = useOnboarding()
 
   const [hasInteracted, setHasInteracted] = useState(false)
   const [showOtherInput, setShowOtherInput] = useState(false)
   const [inlineError, setInlineError] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [submitError, setSubmitError] = useState(null)
+
+  useEffect(() => {
+    if (householdResolved && !householdLoading && !householdId) {
+      navigate('/onboarding', { replace: true })
+    }
+  }, [householdResolved, householdLoading, householdId, navigate])
 
   const canAdvance = noRestrictions || rawDietaryRestrictions.length > 0
   const ctaEnabled = hasInteracted && canAdvance
@@ -58,11 +69,26 @@ function DietaryRestrictions() {
     setOtherRestriction(text)
   }
 
-  const handleNext = () => {
-    if (!ctaEnabled) {
-      setInlineError(true)
+  const handleNext = async () => {
+    if (!ctaEnabled || submitting) {
+      if (!ctaEnabled) setInlineError(true)
       return
     }
+
+    if (isJoiner) {
+      setSubmitting(true)
+      setSubmitError(null)
+      try {
+        await completeJoinDietary()
+        navigate('/')
+      } catch (err) {
+        setSubmitError(err.message || 'Failed to save dietary restrictions')
+      } finally {
+        setSubmitting(false)
+      }
+      return
+    }
+
     navigate('/onboarding/bridge')
   }
 
@@ -71,12 +97,16 @@ function DietaryRestrictions() {
     return rawDietaryRestrictions.includes(code)
   }
 
-  if (householdLoading || !householdReady) {
+  if (householdLoading || !householdResolved) {
     return (
       <div className="min-h-screen bg-forest flex flex-col items-center justify-center px-4">
         <div className="animate-spin rounded-full h-10 w-10 border-2 border-terra border-t-transparent" />
       </div>
     )
+  }
+
+  if (!householdId) {
+    return null
   }
 
   return (
@@ -86,7 +116,9 @@ function DietaryRestrictions() {
           Any allergies or intolerances we should know about?
         </h1>
         <p className="text-sm text-sage-light text-center mb-8">
-          This covers your whole household. You can update this any time in settings.
+          {isJoiner
+            ? 'Your household already has restrictions listed. Add any of your own below.'
+            : 'This covers your whole household. You can update this any time in settings.'}
         </p>
 
         <div className="grid grid-cols-2 gap-3 mb-6">
@@ -133,13 +165,17 @@ function DietaryRestrictions() {
           </p>
         )}
 
+        {submitError && (
+          <p className="text-sm text-[var(--color-error)] mb-4">{submitError}</p>
+        )}
+
         <button
           type="button"
           onClick={handleNext}
-          disabled={!ctaEnabled}
-          className={`w-full btn btn-primary ${!ctaEnabled ? 'opacity-50 cursor-not-allowed' : ''}`}
+          disabled={!ctaEnabled || submitting}
+          className={`w-full btn btn-primary ${!ctaEnabled || submitting ? 'opacity-50 cursor-not-allowed' : ''}`}
         >
-          Next
+          {submitting ? 'Saving...' : isJoiner ? 'Finish' : 'Next'}
         </button>
       </div>
     </div>
