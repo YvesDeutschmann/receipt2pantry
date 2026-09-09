@@ -46,6 +46,7 @@ export function resolveDevLanIPv4(env = process.env, detect = getLanIPv4) {
  *   env?: NodeJS.ProcessEnv,
  *   detect?: () => string,
  * }} [opts]
+ * @returns {{ skipped: boolean, ip: string | null, source: 'env' | 'auto' | null, apiBaseUrl?: string }}
  */
 export function applyAndroidLanEnv(opts = {}) {
   const frontendRoot = opts.frontendRoot ?? defaultFrontendRoot;
