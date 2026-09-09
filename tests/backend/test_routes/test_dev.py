@@ -219,3 +219,92 @@ def debug_client():
     app.config.update({"TESTING": True, "DEBUG": True, "DEV_LOG_ENABLED": False})
     with app.test_client() as client:
         yield client
+
+
+def test_cook_loop_reset_403_when_debug_off(prod_client):
+    for path in ("/api/dev/cook-loop/reset", "/api/dev/cook-loop/run"):
+        response = prod_client.post(path)
+        assert response.status_code == 403
+    response = prod_client.get("/api/dev/cook-loop/report")
+    assert response.status_code == 403
+
+
+def test_cook_loop_reset_401_without_user(debug_client):
+    response = debug_client.post("/api/dev/cook-loop/reset")
+    assert response.status_code == 401
+
+
+def test_cook_loop_reset_400_without_household(debug_client, mocker):
+    mock_supabase = mocker.MagicMock()
+    mock_supabase.get_user_household.return_value = None
+    debug_client.application.config["SUPABASE_SERVICE"] = mock_supabase
+    response = debug_client.post(
+        "/api/dev/cook-loop/reset",
+        headers={"X-User-Id": "user-1"},
+    )
+    assert response.status_code == 400
+    assert "Household" in json.loads(response.data)["error"]
+
+
+def test_cook_loop_run_returns_graded_report(debug_client, mocker):
+    mock_supabase = mocker.MagicMock()
+    mock_supabase.get_user_household.return_value = {"id": "hh-1"}
+    mock_pantry = mocker.MagicMock()
+    mock_pool = mocker.MagicMock()
+    debug_client.application.config["SUPABASE_SERVICE"] = mock_supabase
+    debug_client.application.config["PANTRY_SERVICE"] = mock_pantry
+    debug_client.application.config["POOL_STORE_SERVICE"] = mock_pool
+
+    report = {
+        "ok": True,
+        "recipe_id": "dev_cook_loop",
+        "mode": "run",
+        "checks": [{"id": "touched_bases", "ok": True}],
+        "pool_suggestion_id": "pool-1",
+        "logged_at": "2026-01-01T00:00:00+00:00",
+    }
+    mock_svc = mocker.MagicMock()
+    mock_svc.run_async = mocker.AsyncMock(return_value=report)
+    mocker.patch(
+        "backend.routes.dev._get_cook_loop_sandbox_service",
+        return_value=mock_svc,
+    )
+
+    response = debug_client.post(
+        "/api/dev/cook-loop/run",
+        headers={"X-User-Id": "user-1"},
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data["ok"] is True
+    assert data["recipe_id"] == "dev_cook_loop"
+
+
+def test_cook_loop_report_observe(debug_client, mocker):
+    mock_supabase = mocker.MagicMock()
+    mock_supabase.get_user_household.return_value = {"id": "hh-1"}
+    debug_client.application.config["SUPABASE_SERVICE"] = mock_supabase
+    debug_client.application.config["PANTRY_SERVICE"] = mocker.MagicMock()
+    debug_client.application.config["POOL_STORE_SERVICE"] = mocker.MagicMock()
+
+    mock_svc = mocker.MagicMock()
+    mock_svc.grade.return_value = {
+        "ok": False,
+        "recipe_id": "dev_cook_loop",
+        "mode": "observe",
+        "checks": [{"id": "pool_status", "ok": False}],
+        "logged_at": "2026-01-01T00:00:00+00:00",
+    }
+    mocker.patch(
+        "backend.routes.dev._get_cook_loop_sandbox_service",
+        return_value=mock_svc,
+    )
+
+    response = debug_client.get(
+        "/api/dev/cook-loop/report",
+        headers={"X-User-Id": "user-1"},
+    )
+    assert response.status_code == 200
+    data = json.loads(response.data)
+    assert data["ok"] is False
+    assert data["mode"] == "observe"

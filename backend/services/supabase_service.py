@@ -734,6 +734,29 @@ class SupabaseService:
             logger.error(f"Failed to reset pantry: {e}")
             raise DatabaseException(f"Failed to reset pantry: {e}")
 
+    def reset_household_pantry(self, household_id: str) -> None:
+        """Delete live pantry rows for a household. Leaves graveyard (RESTRICT on depletion_history)."""
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            client.table("pantry_items").delete().eq(
+                "household_id", household_id
+            ).is_("deleted_at", "null").execute()
+            logger.info(f"Reset live household pantry for {household_id}")
+        except Exception as e:
+            logger.error(f"Failed to reset household pantry: {e}")
+            raise DatabaseException(f"Failed to reset household pantry: {e}")
+
+    def delete_recipe_cooking_log(self, household_id: str, recipe_id: str) -> None:
+        """Delete cooking_log rows for one household + recipe (DEV cook-loop teardown)."""
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            client.table("cooking_log").delete().eq(
+                "household_id", household_id
+            ).eq("recipe_id", str(recipe_id)).execute()
+        except Exception as e:
+            logger.error(f"Failed to delete cooking_log for {recipe_id}: {e}")
+            raise DatabaseException(f"Failed to delete cooking_log: {e}")
+
     # Cooking Log Methods
     
     def log_cooking_event(self, log_data: Dict) -> str:

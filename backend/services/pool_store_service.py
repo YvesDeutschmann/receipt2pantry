@@ -222,6 +222,61 @@ class PoolStoreService:
         )
         return bool(res.data)
 
+    def delete_by_recipe_id(self, household_id: str, recipe_id: str) -> None:
+        """Remove all pool rows for a recipe (any status). Used by DEV cook-loop reset."""
+        client = self._client()
+        client.table("suggestion_pool").delete().eq(
+            "household_id", household_id
+        ).eq("recipe_id", str(recipe_id)).execute()
+
+    def insert_pool_row(
+        self,
+        household_id: str,
+        user_id: str,
+        *,
+        meal_type: str,
+        recipe_id: str,
+        recipe_name: str,
+        recipe_data: Dict[str, Any],
+        match_score: Optional[float] = None,
+        recipe_image: Optional[str] = None,
+        status: str = "unused",
+    ) -> str:
+        """Direct insert for DEV sandbox (bypasses swiped skip in add_suggestions)."""
+        client = self._client()
+        row = {
+            "household_id": household_id,
+            "user_id": user_id,
+            "meal_type": meal_type,
+            "recipe_id": str(recipe_id),
+            "recipe_name": recipe_name,
+            "recipe_image": recipe_image,
+            "recipe_data": recipe_data,
+            "match_score": match_score,
+            "status": status,
+            "generation_id": None,
+        }
+        res = client.table("suggestion_pool").insert(row).execute()
+        if not res.data:
+            raise DatabaseException(f"Failed to insert pool row for {recipe_id}")
+        return str(res.data[0]["id"])
+
+    def get_pool_row_by_recipe_id(
+        self, household_id: str, recipe_id: str
+    ) -> Optional[Dict]:
+        client = self._client()
+        res = (
+            client.table("suggestion_pool")
+            .select("*")
+            .eq("household_id", household_id)
+            .eq("recipe_id", str(recipe_id))
+            .limit(1)
+            .execute()
+        )
+        if res.data:
+            return res.data[0]
+        return None
+
     def get_suggestion(self, suggestion_id: str, household_id: str) -> Optional[Dict]:
         client = self._client()
         res = (

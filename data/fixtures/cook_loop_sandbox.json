@@ -1,0 +1,47 @@
+{
+  "recipe_id": "dev_cook_loop",
+  "pantry": [
+    {
+      "base_ingredient": "pasta",
+      "quantity": 2,
+      "unit": "count",
+      "expected_depletion_class": "UNIT_ITEM"
+    },
+    {
+      "base_ingredient": "tomatoes",
+      "quantity": 1,
+      "unit": "count",
+      "expected_depletion_class": "PERISHABLE"
+    },
+    {
+      "base_ingredient": "olive oil",
+      "quantity": 1,
+      "unit": "bottle",
+      "expected_depletion_class": "CONSUMABLE"
+    },
+    {
+      "base_ingredient": "white rice",
+      "quantity": 2,
+      "unit": "count",
+      "expected_depletion_class": "UNIT_ITEM"
+    }
+  ],
+  "pool_card": {
+    "meal_type": "dinner",
+    "title": "[DEV] Cook-loop pasta",
+    "match_score": 0.9999,
+    "servings": 4,
+    "extendedIngredients": [
+      { "name": "pasta" },
+      { "name": "tomatoes" },
+      { "name": "olive oil" },
+      { "name": "rice vinegar" }
+    ]
+  },
+  "expect": {
+    "touched_bases": ["pasta", "tomatoes", "olive oil"],
+    "not_touched_bases": ["white rice"],
+    "pasta_quantity_remaining": 1,
+    "pool_status": "swiped"
+  }
+}

@@ -4,6 +4,7 @@ import { Store, Users } from 'lucide-react'
 import {
   api,
   getApiBaseResolutionDebug,
+  postDevLog,
   refreshSyncedApiBaseUrl,
   setApiBaseUrlOverride,
   shouldSyncApiBaseFromSupabase,
@@ -17,6 +18,11 @@ import {
   setCostcoDiagnosticPurgeEnabled,
 } from '../services/costcoDiagnosticSettings'
 import { clearCostcoInAppBrowserSession } from '../services/costcoWebViewBridge'
+import {
+  compactCookLoopQaLog,
+  loadStashedCookLoopReport,
+  stashCookLoopReport,
+} from '../utils/cookLoopQa'
 
 function Settings() {
   const [household, setHousehold] = useState(null)
@@ -26,6 +32,9 @@ function Settings() {
   const [refreshSuggestionsMessage, setRefreshSuggestionsMessage] = useState(null)
   const [devMockMessage, setDevMockMessage] = useState(null)
   const [devMockLoading, setDevMockLoading] = useState(false)
+  const [cookLoopReport, setCookLoopReport] = useState(() => loadStashedCookLoopReport())
+  const [cookLoopLoading, setCookLoopLoading] = useState(false)
+  const [cookLoopMessage, setCookLoopMessage] = useState(null)
   const [devApiState, setDevApiState] = useState(() => getApiBaseResolutionDebug())
   const [devApiInput, setDevApiInput] = useState('')
   const [devApiMessage, setDevApiMessage] = useState(null)
@@ -547,6 +556,114 @@ function Settings() {
             {devMockMessage && (
               <p className="text-xs text-sage-light mt-2 max-w-prose wrap-break-word">{devMockMessage}</p>
             )}
+            <div className="mt-4 p-3 rounded-mise-md bg-forest-light/50 space-y-2 w-full max-w-xl">
+              <h3 className="text-sm font-medium text-cream">Dev: Cook-loop sandbox</h3>
+              <p className="text-xs text-sage-light">
+                Seeds paired pantry + pool card for <code className="text-cream">dev_cook_loop</code>.
+                Do not tap Refresh suggestions before cooking the DEV card — generation clears unused pool rows.
+              </p>
+              <div className="flex flex-col gap-1.5 sm:flex-row sm:flex-wrap">
+                <button
+                  type="button"
+                  disabled={cookLoopLoading || !userId}
+                  onClick={async () => {
+                    if (!userId) return
+                    setCookLoopMessage(null)
+                    setCookLoopLoading(true)
+                    try {
+                      const r = await api.devCookLoopReset()
+                      stashCookLoopReport(r)
+                      setCookLoopReport(r)
+                      postDevLog('cookLoopQa', compactCookLoopQaLog(r))
+                      setCookLoopMessage(
+                        r.ok
+                          ? 'Sandbox reset. Cook [DEV] Cook-loop pasta from What’s for Dinner.'
+                          : `Reset with failures: ${(r.checks || []).filter((c) => !c.ok).map((c) => c.id).join(', ')}`
+                      )
+                    } catch (e) {
+                      setCookLoopMessage(e?.response?.data?.error || e?.message || String(e))
+                    } finally {
+                      setCookLoopLoading(false)
+                    }
+                  }}
+                  className="text-sm text-[var(--color-forest)] underline disabled:opacity-50"
+                >
+                  Reset cook-loop sandbox
+                </button>
+                <button
+                  type="button"
+                  disabled={cookLoopLoading || !userId}
+                  onClick={async () => {
+                    if (!userId) return
+                    setCookLoopMessage(null)
+                    setCookLoopLoading(true)
+                    try {
+                      const r = await api.devCookLoopRun()
+                      stashCookLoopReport(r)
+                      setCookLoopReport(r)
+                      postDevLog('cookLoopQa', compactCookLoopQaLog(r))
+                      setCookLoopMessage(
+                        r.ok
+                          ? 'Cook-loop QA passed (server cook).'
+                          : `QA failed: ${(r.checks || []).filter((c) => !c.ok).map((c) => c.id).join(', ')}`
+                      )
+                    } catch (e) {
+                      setCookLoopMessage(e?.response?.data?.error || e?.message || String(e))
+                    } finally {
+                      setCookLoopLoading(false)
+                    }
+                  }}
+                  className="text-sm text-[var(--color-forest)] underline disabled:opacity-50"
+                >
+                  Run cook-loop QA (server)
+                </button>
+                <button
+                  type="button"
+                  disabled={cookLoopLoading || !userId}
+                  onClick={async () => {
+                    if (!userId) return
+                    setCookLoopMessage(null)
+                    setCookLoopLoading(true)
+                    try {
+                      const r = await api.devCookLoopReport()
+                      stashCookLoopReport(r)
+                      setCookLoopReport(r)
+                      postDevLog('cookLoopQa', compactCookLoopQaLog(r))
+                      setCookLoopMessage(r.ok ? 'Report: all checks passed.' : 'Report: failures present.')
+                    } catch (e) {
+                      setCookLoopMessage(e?.response?.data?.error || e?.message || String(e))
+                    } finally {
+                      setCookLoopLoading(false)
+                    }
+                  }}
+                  className="text-sm text-sage-light underline disabled:opacity-50"
+                >
+                  Refresh report
+                </button>
+              </div>
+              {cookLoopMessage ? (
+                <p className="text-xs text-sage-light wrap-break-word" role="status">{cookLoopMessage}</p>
+              ) : null}
+              {cookLoopReport?.checks?.length ? (
+                <ul className="text-xs text-sage-light space-y-0.5 mt-2">
+                  {cookLoopReport.checks.map((c) => (
+                    <li key={c.id} className={c.ok ? 'text-green-300/90' : 'text-amber-200/90'}>
+                      {c.ok ? '✓' : '✗'} {c.id}
+                    </li>
+                  ))}
+                  {(cookLoopReport.client_checks || []).map((c) => (
+                    <li key={`client-${c.id}`} className={c.ok ? 'text-green-300/90' : 'text-amber-200/90'}>
+                      {c.ok ? '✓' : '✗'} {c.id} (client)
+                    </li>
+                  ))}
+                </ul>
+              ) : null}
+              {cookLoopReport ? (
+                <pre className="text-[10px] text-sage-light/80 overflow-x-auto max-h-40 mt-2 p-2 bg-forest/40 rounded">
+                  {JSON.stringify(cookLoopReport, null, 2)}
+                </pre>
+              ) : null}
+            </div>
             </div>
           </div>
         )}

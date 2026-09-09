@@ -11,12 +11,24 @@ function renderSettings() {
   )
 }
 
-const { getHousehold, triggerGeneration, healthCheck } = vi.hoisted(() => ({
+const {
+  getHousehold,
+  triggerGeneration,
+  healthCheck,
+  devCookLoopReset,
+  devCookLoopRun,
+} = vi.hoisted(() => ({
   getHousehold: vi.fn(),
   triggerGeneration: vi.fn(() =>
     Promise.resolve({ status: 'completed', suggestions_generated: 5 })
   ),
   healthCheck: vi.fn(() => Promise.resolve({ status: 'ok' })),
+  devCookLoopReset: vi.fn(() =>
+    Promise.resolve({ ok: true, checks: [{ id: 'seed_class_pasta', ok: true }] })
+  ),
+  devCookLoopRun: vi.fn(() =>
+    Promise.resolve({ ok: true, checks: [{ id: 'touched_bases', ok: true }] })
+  ),
 }))
 
 vi.mock('../contexts/AuthContext', () => ({
@@ -35,11 +47,15 @@ vi.mock('../services/apiClient', () => ({
   api: {
     getHousehold,
     devResetOnboarding: vi.fn(),
+    devCookLoopReset,
+    devCookLoopRun,
+    devCookLoopReport: vi.fn(),
     healthCheck,
     suggestions: {
       triggerGeneration,
     },
   },
+  postDevLog: vi.fn(),
   getApiBaseResolutionDebug: vi.fn(() => ({
     url: 'http://localhost:5000/api',
     source: 'auto',
@@ -99,5 +115,33 @@ describe('Settings suggestion refresh', () => {
     expect(
       screen.getByRole('button', { name: /Refresh suggestions/i })
     ).not.toBeDisabled()
+  })
+})
+
+describe('Settings cook-loop sandbox', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    getHousehold.mockResolvedValue({
+      household: { id: 'hh-1', name: 'Home', role: 'owner', join_code: 'ABC' },
+    })
+    import.meta.env.DEV = true
+  })
+
+  it('COOK_LOOP_RESET_CALLS_API', async () => {
+    renderSettings()
+    const btn = await screen.findByRole('button', { name: /Reset cook-loop sandbox/i })
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(devCookLoopReset).toHaveBeenCalled()
+    })
+  })
+
+  it('COOK_LOOP_RUN_CALLS_API', async () => {
+    renderSettings()
+    const btn = await screen.findByRole('button', { name: /Run cook-loop QA/i })
+    fireEvent.click(btn)
+    await waitFor(() => {
+      expect(devCookLoopRun).toHaveBeenCalled()
+    })
   })
 })

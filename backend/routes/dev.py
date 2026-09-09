@@ -11,7 +11,7 @@ from flask import Blueprint, current_app, jsonify, request
 from pathlib import Path
 
 from backend.utils.auth import get_user_id_from_request
-from backend.utils.exceptions import DatabaseException
+from backend.utils.exceptions import DatabaseException, ValidationException
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -288,4 +288,130 @@ def load_mock_receipts():
         return jsonify({"error": str(e)}), 500
     except Exception as e:
         logger.error(f"Error loading mock receipts: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+def _require_household(supabase, user_id: str):
+    household = supabase.get_user_household(user_id)
+    if not household or not household.get("id"):
+        return None, (jsonify({"error": "Household required for cook-loop sandbox"}), 400)
+    return str(household["id"]), None
+
+
+def _get_cook_loop_sandbox_service():
+    from backend.services.cook_loop_sandbox_service import (  # noqa: PLC0415
+        create_cook_loop_sandbox_service,
+    )
+    from backend.routes.pantry import get_pantry_service  # noqa: PLC0415
+
+    supabase = get_supabase_service()
+    pantry = get_pantry_service()
+    pool_store = current_app.config.get("POOL_STORE_SERVICE")
+    if not supabase or not pantry or not pool_store:
+        return None
+    return create_cook_loop_sandbox_service(supabase, pantry, pool_store)
+
+
+@dev_bp.route("/dev/cook-loop/reset", methods=["POST"])
+def cook_loop_reset():
+    """Seed DEV pantry + pool card from cook_loop_sandbox.json (debug only)."""
+    if not current_app.debug:
+        return jsonify({"error": "Only available in dev mode"}), 403
+
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    supabase = get_supabase_service()
+    if not supabase:
+        return jsonify({"error": "Database service not available"}), 503
+
+    household_id, err = _require_household(supabase, user_id)
+    if err:
+        return err
+
+    svc = _get_cook_loop_sandbox_service()
+    if not svc:
+        return jsonify({"error": "Cook-loop sandbox service not available"}), 503
+
+    from backend.routes.pantry import run_async  # noqa: PLC0415
+
+    try:
+        report = run_async(svc.reset(user_id, household_id))
+        return jsonify(report), 200
+    except ValidationException as e:
+        return jsonify({"error": str(e)}), 400
+    except DatabaseException as e:
+        logger.error(f"Database error resetting cook-loop sandbox: {e}")
+        return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        logger.error(f"Error resetting cook-loop sandbox: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@dev_bp.route("/dev/cook-loop/run", methods=["POST"])
+def cook_loop_run():
+    """Reset, cook server-side, and return graded report (debug only)."""
+    if not current_app.debug:
+        return jsonify({"error": "Only available in dev mode"}), 403
+
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    supabase = get_supabase_service()
+    if not supabase:
+        return jsonify({"error": "Database service not available"}), 503
+
+    household_id, err = _require_household(supabase, user_id)
+    if err:
+        return err
+
+    svc = _get_cook_loop_sandbox_service()
+    if not svc:
+        return jsonify({"error": "Cook-loop sandbox service not available"}), 503
+
+    from backend.routes.pantry import run_async  # noqa: PLC0415
+
+    try:
+        report = run_async(svc.run_async(user_id, household_id))
+        return jsonify(report), 200
+    except ValidationException as e:
+        return jsonify({"error": str(e)}), 400
+    except DatabaseException as e:
+        logger.error(f"Database error running cook-loop sandbox: {e}")
+        return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        logger.error(f"Error running cook-loop sandbox: {e}", exc_info=True)
+        return jsonify({"error": str(e)}), 500
+
+
+@dev_bp.route("/dev/cook-loop/report", methods=["GET"])
+def cook_loop_report():
+    """Grade current household state vs cook_loop_sandbox fixture (debug only)."""
+    if not current_app.debug:
+        return jsonify({"error": "Only available in dev mode"}), 403
+
+    user_id = get_user_id_from_request()
+    if not user_id:
+        return jsonify({"error": "User ID required"}), 401
+
+    supabase = get_supabase_service()
+    if not supabase:
+        return jsonify({"error": "Database service not available"}), 503
+
+    household_id, err = _require_household(supabase, user_id)
+    if err:
+        return err
+
+    svc = _get_cook_loop_sandbox_service()
+    if not svc:
+        return jsonify({"error": "Cook-loop sandbox service not available"}), 503
+
+    try:
+        report = svc.grade(user_id, household_id, mode="observe")
+        svc._log_report(report)
+        return jsonify(report), 200
+    except Exception as e:
+        logger.error(f"Error grading cook-loop sandbox: {e}", exc_info=True)
         return jsonify({"error": str(e)}), 500
