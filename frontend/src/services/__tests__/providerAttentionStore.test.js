@@ -15,16 +15,22 @@ vi.mock('@capacitor/preferences', () => ({
 import {
   getAttention,
   setNeedsReconnect,
+  setFetchFailed,
   clearProvider,
   subscribe,
-  PREF_KEY,
   __resetAttentionStoreForTests,
 } from '../providerAttentionStore';
+import { setSyncUserId, __resetSyncPrefKeysForTests } from '../syncPrefKeys';
+
+const USER_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+const ATTENTION_KEY = `sync_attention_${USER_ID}`;
 
 describe('providerAttentionStore', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    __resetSyncPrefKeysForTests();
     __resetAttentionStoreForTests();
+    setSyncUserId(USER_ID);
     preferencesGetMock.mockResolvedValue({ value: null });
     preferencesSetMock.mockResolvedValue(undefined);
   });
@@ -33,7 +39,7 @@ describe('providerAttentionStore', () => {
     const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
     await setNeedsReconnect('safeway');
     expect(preferencesSetMock).toHaveBeenCalledWith({
-      key: PREF_KEY,
+      key: ATTENTION_KEY,
       value: JSON.stringify({
         safeway: { kind: 'needs_reconnect', updatedAt: 1_700_000_000_000 },
       }),
@@ -46,7 +52,7 @@ describe('providerAttentionStore', () => {
     preferencesSetMock.mockClear();
     await clearProvider('safeway');
     expect(preferencesSetMock).toHaveBeenCalledWith({
-      key: PREF_KEY,
+      key: ATTENTION_KEY,
       value: JSON.stringify({}),
     });
   });
@@ -70,6 +76,46 @@ describe('providerAttentionStore', () => {
     preferencesGetMock.mockResolvedValue({
       value: JSON.stringify({
         safeway: { kind: 'needs_reconnect', updatedAt: 123 },
+      }),
+    });
+    const items = await getAttention();
+    expect(items).toEqual({
+      safeway: { kind: 'needs_reconnect', updatedAt: 123 },
+    });
+  });
+
+  it('SET_FETCH_FAILED_KIND', async () => {
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_111);
+    await setFetchFailed('costco');
+    expect(preferencesSetMock).toHaveBeenCalledWith({
+      key: ATTENTION_KEY,
+      value: JSON.stringify({
+        costco: { kind: 'fetch_failed', updatedAt: 1_700_000_000_111 },
+      }),
+    });
+    const items = await getAttention();
+    expect(items.costco).toEqual({ kind: 'fetch_failed', updatedAt: 1_700_000_000_111 });
+    nowSpy.mockRestore();
+  });
+
+  it('FAILED_WRITE_DOES_NOT_DESYNC_CACHE', async () => {
+    await setNeedsReconnect('safeway');
+    preferencesSetMock.mockRejectedValueOnce(new Error('write failed'));
+
+    await expect(setFetchFailed('safeway')).rejects.toThrow('write failed');
+
+    const items = await getAttention();
+    expect(items).toEqual({
+      safeway: { kind: 'needs_reconnect', updatedAt: expect.any(Number) },
+    });
+  });
+
+  it('UNKNOWN_PERSISTED_KEYS_ARE_DROPPED', async () => {
+    preferencesGetMock.mockResolvedValue({
+      value: JSON.stringify({
+        safeway: { kind: 'needs_reconnect', updatedAt: 123 },
+        walmart: { kind: 'needs_reconnect', updatedAt: 456 },
+        costco: { kind: 'bogus_kind', updatedAt: 789 },
       }),
     });
     const items = await getAttention();

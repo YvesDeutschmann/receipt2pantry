@@ -57,6 +57,33 @@ def get_receipts():
         return jsonify({"error": "Internal server error"}), 500
 
 
+@receipts_bp.route("/receipts/summary", methods=["GET"])
+def get_receipt_summary():
+    """Lean per-user receipt totals. Never returns raw_data."""
+    try:
+        user_id = get_user_id_from_request()
+        if not user_id:
+            return jsonify({"error": "User ID required"}), 401
+        try:
+            uuid.UUID(user_id)
+        except (ValueError, TypeError):
+            return jsonify({"error": "User ID required"}), 401
+
+        supabase_service = current_app.config.get("SUPABASE_SERVICE")
+        if not supabase_service:
+            return jsonify({"error": "Database service not available"}), 503
+
+        summary = supabase_service.get_user_receipt_summary(user_id)
+        return jsonify(summary), 200
+
+    except DatabaseException as e:
+        logger.error(f"Database error: {e}")
+        return jsonify({"error": "Database error"}), 500
+    except Exception as e:
+        logger.error(f"Unexpected error: {e}")
+        return jsonify({"error": "Internal server error"}), 500
+
+
 @receipts_bp.route("/receipts/parse", methods=["POST"])
 def parse_receipt():
     """

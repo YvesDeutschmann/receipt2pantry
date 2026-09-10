@@ -13,6 +13,7 @@ import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 import HouseholdModal from '../components/HouseholdModal'
 import PageHeader from '../components/PageHeader'
+import ReceiptSummarySection from '../components/ReceiptSummarySection'
 import {
   isCostcoDiagnosticPurgeEnabled,
   setCostcoDiagnosticPurgeEnabled,
@@ -106,6 +107,8 @@ function Settings() {
       />
 
       <div className="space-y-6">
+        <ReceiptSummarySection userId={userId} />
+
         {/* Household Settings */}
         <div className="card">
           <h2 className="text-xl font-display font-semibold text-cream mb-4">Household</h2>

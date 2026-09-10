@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
-import { dispatchProviderSyncCompleted } from '../providerSyncEvents';
+import {
+  dispatchProviderSyncCompleted,
+  dispatchProviderSyncFailed,
+} from '../providerSyncEvents';
 
 describe('providerSyncEvents', () => {
   it('dispatchProviderSyncCompleted emits safeway-sync-completed with detail', () => {
@@ -10,6 +13,7 @@ describe('providerSyncEvents', () => {
       tier: 'manual',
       receipts_stored: 2,
       items_added: 5,
+      outcome: 'completed_items',
     });
 
     expect(listener).toHaveBeenCalledOnce();
@@ -17,6 +21,7 @@ describe('providerSyncEvents', () => {
       tier: 'manual',
       receipts_stored: 2,
       items_added: 5,
+      outcome: 'completed_items',
     });
 
     window.removeEventListener('safeway-sync-completed', listener);
@@ -30,6 +35,7 @@ describe('providerSyncEvents', () => {
       tier: 'silent',
       receipts_stored: 0,
       items_added: 0,
+      outcome: 'completed_empty',
     });
 
     expect(listener).toHaveBeenCalledOnce();
@@ -38,8 +44,25 @@ describe('providerSyncEvents', () => {
       tier: 'silent',
       receipts_stored: 0,
       items_added: 0,
+      outcome: 'completed_empty',
     });
 
     window.removeEventListener('costco-sync-completed', listener);
+  });
+
+  it('dispatchProviderSyncFailed emits *-sync-error with outcome failed', () => {
+    const listener = vi.fn();
+    window.addEventListener('costco-sync-error', listener);
+
+    dispatchProviderSyncFailed('costco', { reason: 'fetch_incomplete', message: 'Could not load' });
+
+    expect(listener).toHaveBeenCalledOnce();
+    expect(listener.mock.calls[0][0].detail).toEqual({
+      reason: 'fetch_incomplete',
+      message: 'Could not load',
+      outcome: 'failed',
+    });
+
+    window.removeEventListener('costco-sync-error', listener);
   });
 });

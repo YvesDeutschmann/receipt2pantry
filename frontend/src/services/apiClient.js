@@ -276,6 +276,13 @@ export const api = {
     return response.data
   },
 
+  getReceiptSummary: async (userId) => {
+    const response = await apiClient.get('/receipts/summary', {
+      params: { user_id: userId },
+    })
+    return response.data
+  },
+
   parseReceipt: async (provider, emailContent) => {
     const response = await apiClient.post('/receipts/parse', {
       provider,

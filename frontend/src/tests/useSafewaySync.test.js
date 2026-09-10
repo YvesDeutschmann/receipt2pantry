@@ -7,9 +7,23 @@ import {
   hasStoredTokens,
   startSilentSync,
 } from '../services/safewayWebViewBridge'
+import { setSyncUserId, __resetSyncPrefKeysForTests } from '../services/syncPrefKeys'
+
+const { preferencesSetMock } = vi.hoisted(() => ({
+  preferencesSetMock: vi.fn(() => Promise.resolve()),
+}))
+
+vi.mock('@capacitor/preferences', () => ({
+  Preferences: {
+    get: vi.fn(() => Promise.resolve({ value: null })),
+    set: (...args) => preferencesSetMock(...args),
+    remove: vi.fn(() => Promise.resolve()),
+  },
+}))
 
 const mockStartLogin = vi.fn()
 const mockFetchSafewayReceipts = vi.fn()
+const mockParseSafewayReceipt = vi.fn((r) => r)
 const mockTriggerGeneration = vi.fn(() => Promise.resolve({ status: 'completed' }))
 const mockIngestReceipts = vi.fn()
 
@@ -34,7 +48,7 @@ vi.mock('../services/safewayWebViewBridge', () => ({
 }))
 
 vi.mock('../services/safewayReceiptParser', () => ({
-  parseSafewayReceipt: (r) => r,
+  parseSafewayReceipt: (...args) => mockParseSafewayReceipt(...args),
 }))
 
 vi.mock('../services/apiClient', () => ({
@@ -52,6 +66,8 @@ const userId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee'
 describe('useSafewaySync — Test-First Suite', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    __resetSyncPrefKeysForTests()
+    mockParseSafewayReceipt.mockImplementation((r) => r)
     isNativePlatformMock.mockReturnValue(true)
     vi.mocked(hasStoredTokens).mockResolvedValue(false)
     vi.mocked(clearStoredTokens).mockResolvedValue(undefined)
@@ -391,6 +407,67 @@ describe('useSafewaySync — Test-First Suite', () => {
       window.removeEventListener('safeway-sync-needs-reconnect', reconnectListener)
     })
 
+    it('SILENT_FETCH_THROW_EMITS_FAILED', async () => {
+      vi.mocked(startSilentSync).mockResolvedValue({
+        accessToken: 'silent-tok',
+        clubCard: '999',
+      })
+      mockFetchSafewayReceipts.mockRejectedValue(new Error('network timeout'))
+      const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+      const { result } = renderHook(() => useSafewaySync(userId))
+
+      await act(async () => {
+        await result.current.startSilent()
+      })
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.ERROR)
+      })
+
+      const errorEvents = dispatchSpy.mock.calls
+        .map(([event]) => event)
+        .filter((event) => event instanceof CustomEvent && event.type === 'safeway-sync-error')
+      const completedEvents = dispatchSpy.mock.calls
+        .map(([event]) => event)
+        .filter((event) => event instanceof CustomEvent && event.type === 'safeway-sync-completed')
+      expect(errorEvents).toHaveLength(1)
+      expect(errorEvents[0].detail.outcome).toBe('failed')
+      expect(completedEvents).toHaveLength(0)
+      expect(vi.mocked(clearStoredTokens)).not.toHaveBeenCalled()
+
+      dispatchSpy.mockRestore()
+    })
+
+    it('FETCH_ORDER_ID_401_SUBSTRING_NOT_AUTH', async () => {
+      vi.mocked(startSilentSync).mockResolvedValue({
+        accessToken: 'silent-tok',
+        clubCard: '999',
+      })
+      mockFetchSafewayReceipts.mockRejectedValue(new Error('order 401123'))
+      const reconnectListener = vi.fn()
+      window.addEventListener('safeway-sync-needs-reconnect', reconnectListener)
+      const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+      const { result } = renderHook(() => useSafewaySync(userId))
+
+      await act(async () => {
+        await result.current.startSilent()
+      })
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.ERROR)
+      })
+
+      const errorEvents = dispatchSpy.mock.calls
+        .map(([event]) => event)
+        .filter((event) => event instanceof CustomEvent && event.type === 'safeway-sync-error')
+      expect(errorEvents).toHaveLength(1)
+      expect(errorEvents[0].detail.outcome).toBe('failed')
+      expect(vi.mocked(clearStoredTokens)).not.toHaveBeenCalled()
+      expect(reconnectListener).not.toHaveBeenCalled()
+      window.removeEventListener('safeway-sync-needs-reconnect', reconnectListener)
+      dispatchSpy.mockRestore()
+    })
+
     it('test_startSilent_empty_receipts_sets_success_with_zero_counts', async () => {
       vi.mocked(startSilentSync).mockResolvedValue({
         accessToken: 'silent-tok',
@@ -469,6 +546,36 @@ describe('useSafewaySync — Test-First Suite', () => {
         .filter((event) => event instanceof CustomEvent && event.type === 'safeway-sync-completed');
     }
 
+    it('START_SYNC_PARSE_ALL_DROPPED_EMITS_FAILED', async () => {
+      setSyncUserId(userId)
+      mockFetchSafewayReceipts.mockResolvedValue([{ bad: true }, { also: 'bad' }])
+      mockParseSafewayReceipt.mockReturnValue(null)
+      const dispatchSpy = vi.spyOn(window, 'dispatchEvent')
+      const { result } = renderHook(() => useSafewaySync(userId))
+
+      await act(async () => {
+        await result.current.startSync()
+      })
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.ERROR)
+      })
+
+      const completedEvents = dispatchSpy.mock.calls
+        .map(([event]) => event)
+        .filter((event) => event instanceof CustomEvent && event.type === 'safeway-sync-completed')
+      const errorEvents = dispatchSpy.mock.calls
+        .map(([event]) => event)
+        .filter((event) => event instanceof CustomEvent && event.type === 'safeway-sync-error')
+      expect(completedEvents).toHaveLength(0)
+      expect(errorEvents).toHaveLength(1)
+      expect(errorEvents[0].detail.outcome).toBe('failed')
+      expect(mockIngestReceipts).not.toHaveBeenCalled()
+      expect(preferencesSetMock).not.toHaveBeenCalled()
+
+      dispatchSpy.mockRestore()
+    })
+
     it('test_startSync_dispatches_safeway_sync_completed_on_success', async () => {
       const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
       const { result } = renderHook(() => useSafewaySync(userId));
@@ -487,6 +594,7 @@ describe('useSafewaySync — Test-First Suite', () => {
         tier: 'manual',
         receipts_stored: 1,
         items_added: 0,
+        outcome: 'completed_items',
       });
 
       dispatchSpy.mockRestore();
@@ -515,8 +623,84 @@ describe('useSafewaySync — Test-First Suite', () => {
         tier: 'silent',
         receipts_stored: 0,
         items_added: 0,
+        outcome: 'completed_empty',
       });
 
+      dispatchSpy.mockRestore();
+    });
+
+    it('test_startSilent_skipped_sets_STATUS_SKIPPED', async () => {
+      vi.mocked(startSilentSync).mockResolvedValue({ _skipped: true, reason: 'webview_busy' });
+      const { result } = renderHook(() => useSafewaySync(userId));
+
+      await act(async () => {
+        await result.current.startSilent();
+      });
+
+      expect(result.current.status).toBe(STATUS.SKIPPED);
+      expect(result.current.error).toBeNull();
+    });
+
+    it('SKIPPED_RESETS_TO_IDLE_ON_PROVIDER_TERMINAL_EVENT', async () => {
+      vi.mocked(startSilentSync).mockResolvedValue({ _skipped: true, reason: 'webview_busy' });
+      const { result } = renderHook(() => useSafewaySync(userId));
+
+      await act(async () => {
+        await result.current.startSilent();
+      });
+
+      expect(result.current.status).toBe(STATUS.SKIPPED);
+
+      await act(() => {
+        window.dispatchEvent(new CustomEvent('safeway-sync-completed', {
+          detail: { outcome: 'completed_empty' },
+        }));
+      });
+
+      expect(result.current.status).toBe(STATUS.IDLE);
+
+      vi.mocked(startSilentSync).mockResolvedValue({ _skipped: true, reason: 'webview_busy' });
+      await act(async () => {
+        await result.current.startSilent();
+      });
+      expect(result.current.status).toBe(STATUS.SKIPPED);
+
+      await act(() => {
+        window.dispatchEvent(new CustomEvent('costco-sync-completed', {
+          detail: { outcome: 'completed_empty' },
+        }));
+      });
+
+      expect(result.current.status).toBe(STATUS.SKIPPED);
+    });
+
+    it('test_startSilent_parse_all_dropped_emits_failed_not_completed', async () => {
+      vi.mocked(startSilentSync).mockResolvedValue({
+        accessToken: 'silent-tok',
+        clubCard: '999',
+      });
+      mockFetchSafewayReceipts.mockResolvedValue([{ bad: true }, { also: 'bad' }]);
+      mockParseSafewayReceipt.mockReturnValue(null);
+      const dispatchSpy = vi.spyOn(window, 'dispatchEvent');
+      const { result } = renderHook(() => useSafewaySync(userId));
+
+      await act(async () => {
+        await result.current.startSilent();
+      });
+
+      await waitFor(() => {
+        expect(result.current.status).toBe(STATUS.ERROR);
+      });
+
+      const completedEvents = dispatchSpy.mock.calls
+        .map(([event]) => event)
+        .filter((event) => event instanceof CustomEvent && event.type === 'safeway-sync-completed');
+      const errorEvents = dispatchSpy.mock.calls
+        .map(([event]) => event)
+        .filter((event) => event instanceof CustomEvent && event.type === 'safeway-sync-error');
+      expect(completedEvents).toHaveLength(0);
+      expect(errorEvents).toHaveLength(1);
+      expect(errorEvents[0].detail.outcome).toBe('failed');
       dispatchSpy.mockRestore();
     });
 

@@ -21,10 +21,10 @@ vi.mock('../../services/providerAttentionStore', async (importOriginal) => {
 
 import NeedsAttentionSection from '../NeedsAttentionSection';
 
-function renderSection() {
+function renderSection(props = {}) {
   return render(
     <MemoryRouter>
-      <NeedsAttentionSection />
+      <NeedsAttentionSection {...props} />
     </MemoryRouter>
   );
 }
@@ -107,6 +107,29 @@ describe('NeedsAttentionSection', () => {
     nowSpy.mockRestore();
   });
 
+  it('SHOWS_FETCH_FAILED_ROW_WITH_TRY_AGAIN_CTA', async () => {
+    getAttentionMock.mockResolvedValue({
+      safeway: { kind: 'fetch_failed', updatedAt: 1 },
+    });
+    renderSection();
+    expect(await screen.findByRole('heading', { name: /Needs attention/i })).toBeInTheDocument();
+    expect(screen.getByText(/Safeway couldn't sync/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Try again/i })).toHaveAttribute('href', '/providers');
+    expect(screen.queryByRole('link', { name: /^Reconnect$/i })).not.toBeInTheDocument();
+  });
+
+  it('SHOWS_BOTH_RECONNECT_AND_FETCH_FAILED', async () => {
+    getAttentionMock.mockResolvedValue({
+      safeway: { kind: 'fetch_failed', updatedAt: 1 },
+      costco: { kind: 'needs_reconnect', updatedAt: 2 },
+    });
+    renderSection();
+    expect(await screen.findByText(/Safeway couldn't sync/i)).toBeInTheDocument();
+    expect(screen.getByText(/Costco needs reconnect/i)).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Try again/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Reconnect/i })).toBeInTheDocument();
+  });
+
   it('CTA_NAVIGATES_TO_PROVIDERS', async () => {
     getAttentionMock.mockResolvedValue({
       safeway: { kind: 'needs_reconnect', updatedAt: 1 },
@@ -116,5 +139,15 @@ describe('NeedsAttentionSection', () => {
       'href',
       '/providers'
     );
+  });
+
+  it('ATTENTION_RENDERED_AS_SLIM_BANNER_WHEN_VARIANT_SLIM', async () => {
+    getAttentionMock.mockResolvedValue({
+      safeway: { kind: 'fetch_failed', updatedAt: 1 },
+    });
+    renderSection({ variant: 'slim' });
+    const section = await screen.findByLabelText(/needs attention/i);
+    expect(section.className).toMatch(/p-3/);
+    expect(section.className).not.toMatch(/p-5/);
   });
 });

@@ -4,6 +4,7 @@ import { supabase } from '../services/supabaseClient'
 import { SignInWithApple } from '../native/signInWithApple'
 import { emit, FunnelEvent } from '../services/funnelTelemetry'
 import { setMonitoringUser } from '../services/monitoring'
+import { clearUserSyncState, getSyncUserId, setSyncUserId } from '../services/syncPrefKeys'
 
 const AuthContext = createContext(null)
 
@@ -33,6 +34,7 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: sess } }) => {
+      setSyncUserId(sess?.user?.id ?? null)
       setSession(sess)
       setUser(sess?.user ?? null)
       setMonitoringUser(sess?.user?.id ?? null)
@@ -41,7 +43,12 @@ export function AuthProvider({ children }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, sess) => {
+    } = supabase.auth.onAuthStateChange(async (_event, sess) => {
+      const previousUid = getSyncUserId()
+      if (_event === 'SIGNED_OUT' || (!sess?.user && previousUid)) {
+        await clearUserSyncState(previousUid)
+      }
+      setSyncUserId(sess?.user?.id ?? null)
       setSession(sess)
       setUser(sess?.user ?? null)
       setMonitoringUser(sess?.user?.id ?? null)
@@ -169,9 +176,12 @@ export function AuthProvider({ children }) {
   }
 
   const signOut = async () => {
+    const uid = user?.id
     localStorage.removeItem('user_id')
     const { error } = await supabase.auth.signOut()
     if (error) throw error
+    await clearUserSyncState(uid)
+    setSyncUserId(null)
   }
 
   const onboardingComplete = Boolean(user?.user_metadata?.onboarding_completed_at)

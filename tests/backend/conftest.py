@@ -57,6 +57,12 @@ def mock_supabase_service(mocker):
     """Mock Supabase service"""
     mock = mocker.MagicMock()
     mock.get_user_receipts.return_value = []
+    mock.get_user_receipt_summary.return_value = {
+        "total_receipts": 0,
+        "month_spend": 0,
+        "total_items": 0,
+        "recent": [],
+    }
     mock.store_receipt.return_value = "test-receipt-id"
     mock.store_receipt_with_items.return_value = "test-receipt-id"
     mock.store_receipt_items.return_value = 5

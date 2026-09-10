@@ -66,6 +66,19 @@ vi.mock('../native/signInWithApple', () => ({
   },
 }))
 
+vi.mock('../services/syncPrefKeys', () => {
+  let uid = null
+  return {
+    clearUserSyncState: vi.fn(() => Promise.resolve()),
+    getSyncUserId: vi.fn(() => uid),
+    setSyncUserId: vi.fn((next) => {
+      uid = next ?? null
+    }),
+  }
+})
+
+import { clearUserSyncState, setSyncUserId } from '../services/syncPrefKeys'
+
 function createWrapper() {
   function Wrapper({ children }) {
     return <AuthProvider>{children}</AuthProvider>
@@ -76,6 +89,7 @@ function createWrapper() {
 describe('AuthContext', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    setSyncUserId(null)
     isNativePlatformMock.mockReturnValue(false)
     mockGetPlatform.mockReturnValue('web')
     mockGetSession.mockResolvedValue({ data: { session: null } })
@@ -352,6 +366,31 @@ describe('AuthContext', () => {
       })
       expect(mockSignInWithIdToken).not.toHaveBeenCalled()
     })
+  })
+
+  it('SIGNED_OUT_EVENT_CLEARS_SYNC_STATE', async () => {
+    let authCb
+    mockOnAuthStateChange.mockImplementation((cb) => {
+      authCb = cb
+      return { data: { subscription: { unsubscribe: mockUnsubscribe } } }
+    })
+    mockGetSession.mockResolvedValue({
+      data: {
+        session: { user: { id: 'user-A', user_metadata: {} }, access_token: 't' },
+      },
+    })
+
+    const { result } = renderHook(() => useAuth(), { wrapper: createWrapper() })
+
+    await waitFor(() => {
+      expect(result.current.loading).toBe(false)
+    })
+
+    await act(async () => {
+      await authCb('SIGNED_OUT', null)
+    })
+
+    expect(clearUserSyncState).toHaveBeenCalledWith('user-A')
   })
 
   describe('E — sign-out', () => {

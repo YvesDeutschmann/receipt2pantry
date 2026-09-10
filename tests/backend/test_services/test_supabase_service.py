@@ -1,5 +1,7 @@
 """Tests for `SupabaseService` — PostgREST chains mocked via `PostgrestClientStub`."""
 
+from datetime import date
+
 import pytest
 
 from backend.services.supabase_service import SupabaseService
@@ -552,4 +554,79 @@ def test_delete_recipe_cooking_log_scopes_household_and_recipe(mocker):
     assert chain_calls_eq([ch], "recipe_id", "dev_cook_loop")
     assert any(step[0] == "delete" for step in ch)
     assert len(anon.chains) == 0
+
+
+def _select_arg_from_receipts_chain(admin: PostgrestClientStub) -> str:
+    ch = latest_chain_using_table(admin.chains, "receipts")
+    assert ch is not None
+    select_steps = [step for step in ch if step[0] == "select"]
+    assert select_steps, "expected a select() on receipts"
+    return select_steps[0][1][0]
+
+
+def test_get_user_receipt_summary_excludes_raw_data(mocker):
+    anon = PostgrestClientStub()
+    admin = PostgrestClientStub()
+    admin.set_default_response_data([])
+    service = install_supabase_service_with_clients(mocker, anon, admin)
+
+    service.get_user_receipt_summary("user-123")
+
+    select_arg = _select_arg_from_receipts_chain(admin)
+    assert select_arg != "*"
+    assert "raw_data" not in select_arg
+    assert chain_calls_eq(admin.chains, "user_id", "user-123")
+    assert len(anon.chains) == 0
+
+
+def test_get_user_receipt_summary_month_spend_uses_today(mocker):
+    anon = PostgrestClientStub()
+    admin = PostgrestClientStub()
+    admin.set_default_response_data(
+        [
+            {
+                "id": "r-sep-1",
+                "provider": "costco",
+                "order_date": "2026-09-01",
+                "total_amount": 10.00,
+                "num_items": 2,
+            },
+            {
+                "id": "r-sep-2",
+                "provider": "safeway",
+                "order_date": "2026-09-15",
+                "total_amount": 25.50,
+                "num_items": 3,
+            },
+            {
+                "id": "r-aug",
+                "provider": "costco",
+                "order_date": "2026-08-31",
+                "total_amount": 100.00,
+                "num_items": 8,
+            },
+            {
+                "id": "r-oct",
+                "provider": "safeway",
+                "order_date": "2026-10-01",
+                "total_amount": 50.00,
+                "num_items": 1,
+            },
+        ]
+    )
+    service = install_supabase_service_with_clients(mocker, anon, admin)
+
+    summary = service.get_user_receipt_summary(
+        "user-123", today=date(2026, 9, 15)
+    )
+
+    assert summary["month_spend"] == 35.5
+    assert summary["total_receipts"] == 4
+    assert summary["total_items"] == 14
+    assert [row["id"] for row in summary["recent"]] == [
+        "r-oct",
+        "r-sep-2",
+        "r-sep-1",
+        "r-aug",
+    ]
 
