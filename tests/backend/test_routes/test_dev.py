@@ -6,7 +6,10 @@ import pytest
 
 from backend.app import create_app
 from backend.config import Config
-from backend.routes.dev import reset_dev_log_rate_limit_for_tests
+from backend.routes.dev import (
+    _DEV_LOG_RATE_LIMIT_PER_MINUTE,
+    reset_dev_log_rate_limit_for_tests,
+)
 
 
 class ProdLikeConfig(Config):
@@ -146,7 +149,7 @@ def test_dev_log_rejects_oversized_body(prod_client):
 
 def test_dev_log_rate_limit_returns_429(prod_client):
     prod_client.application.config["DEV_LOG_ENABLED"] = True
-    for _ in range(60):
+    for _ in range(_DEV_LOG_RATE_LIMIT_PER_MINUTE):
         response = prod_client.post(
             "/api/dev/log",
             data="costcoLogin|ping",
@@ -177,7 +180,7 @@ def test_dev_log_strips_control_characters(prod_client, mocker):
 def test_dev_log_rate_limit_not_bypassed_by_spoofed_x_forwarded_for(prod_client):
     """Rate limit keys on Fly-Client-IP / remote_addr, not client X-Forwarded-For."""
     prod_client.application.config["DEV_LOG_ENABLED"] = True
-    for i in range(60):
+    for i in range(_DEV_LOG_RATE_LIMIT_PER_MINUTE):
         response = prod_client.post(
             "/api/dev/log",
             data="costcoLogin|ping",
@@ -196,7 +199,7 @@ def test_dev_log_rate_limit_not_bypassed_by_spoofed_x_forwarded_for(prod_client)
 
 def test_dev_log_uses_fly_client_ip_when_present(prod_client):
     prod_client.application.config["DEV_LOG_ENABLED"] = True
-    for i in range(60):
+    for i in range(_DEV_LOG_RATE_LIMIT_PER_MINUTE):
         response = prod_client.post(
             "/api/dev/log",
             data="costcoLogin|ping",
