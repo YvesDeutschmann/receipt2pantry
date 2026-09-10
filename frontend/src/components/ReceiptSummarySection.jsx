@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { api } from '../services/apiClient'
-import PullToRefresh from './PullToRefresh'
+import SettingsGroup from './settings/SettingsGroup'
 
 const EMPTY_SUMMARY = {
   total_receipts: 0,
@@ -57,73 +57,64 @@ export default function ReceiptSummarySection({ userId }) {
     }
   }, [userId, loadSummary])
 
-  const handleRefresh = async () => {
-    setLoading(true)
-    try {
-      await loadSummary()
-    } catch {
-      setError('Failed to load receipts')
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const receipts = summary.recent
 
   return (
-    <PullToRefresh onRefresh={handleRefresh}>
-      <div>
-        <h2 className="text-xl font-display font-semibold text-cream mb-4">Your receipts</h2>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="card">
-            <h3 className="text-sm font-medium text-sage-light mb-2">Total Receipts</h3>
-            <p className="text-3xl font-display font-bold text-cream">{summary.total_receipts}</p>
-          </div>
-          <div className="card">
-            <h3 className="text-sm font-medium text-sage-light mb-2">This Month</h3>
-            <p className="text-3xl font-display font-bold text-cream">
-              {formatUsd(summary.month_spend)}
-            </p>
-          </div>
-          <div className="card">
-            <h3 className="text-sm font-medium text-sage-light mb-2">Total Items</h3>
-            <p className="text-3xl font-display font-bold text-cream">{summary.total_items}</p>
-          </div>
-        </div>
+    <SettingsGroup title="Receipts">
+      <div className="px-4 py-4">
+        {loading ? (
+          <div className="text-center py-4 text-sage-light text-sm">Loading…</div>
+        ) : error ? (
+          <div className="text-center py-4 text-[var(--color-error)] text-sm">{error}</div>
+        ) : (
+          <>
+            <div className="flex justify-between gap-4 text-center mb-4">
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-sage-light mb-1">Receipts</p>
+                <p className="text-xl font-display font-bold text-cream tabular-nums">
+                  {summary.total_receipts}
+                </p>
+              </div>
+              <div className="flex-1 min-w-0 border-x border-forest-light/60 px-2">
+                <p className="text-xs text-sage-light mb-1">This month</p>
+                <p className="text-xl font-display font-bold text-cream tabular-nums">
+                  {formatUsd(summary.month_spend)}
+                </p>
+              </div>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-sage-light mb-1">Items</p>
+                <p className="text-xl font-display font-bold text-cream tabular-nums">
+                  {summary.total_items}
+                </p>
+              </div>
+            </div>
 
-        <div className="card">
-          <h2 className="text-xl font-display font-semibold text-cream mb-4">Recent Receipts</h2>
-          {loading ? (
-            <div className="text-center py-8 text-sage-light">Loading...</div>
-          ) : error ? (
-            <div className="text-center py-8 text-[var(--color-error)]">{error}</div>
-          ) : receipts.length === 0 ? (
-            <div className="text-center py-8 text-sage-light">
-              <p className="mb-4">No receipts yet!</p>
-              <p className="text-sm">
-                Configure a provider to start syncing your grocery receipts.
+            {receipts.length === 0 ? (
+              <p className="text-sm text-sage-light text-center py-2">
+                No receipts yet. Connect a store to start syncing.
               </p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {receipts.map((receipt) => (
-                <div key={receipt.id} className="border border-forest-light rounded-meald-md p-4">
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <h3 className="font-semibold text-cream">{receipt.provider}</h3>
-                      <p className="text-sm text-sage-light">{receipt.order_date}</p>
+            ) : (
+              <ul className="divide-y divide-forest-light/60 -mx-4">
+                {receipts.map((receipt) => (
+                  <li
+                    key={receipt.id}
+                    className="flex justify-between items-start gap-3 px-4 py-3"
+                  >
+                    <div className="min-w-0">
+                      <p className="font-medium text-cream capitalize">{receipt.provider}</p>
+                      <p className="text-xs text-sage-light">{receipt.order_date}</p>
                     </div>
-                    <div className="text-right">
-                      <p className="font-semibold text-cream">${receipt.total_amount}</p>
-                      <p className="text-sm text-sage-light">{receipt.num_items} items</p>
+                    <div className="text-right shrink-0">
+                      <p className="font-medium text-cream">${receipt.total_amount}</p>
+                      <p className="text-xs text-sage-light">{receipt.num_items} items</p>
                     </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
+        )}
       </div>
-    </PullToRefresh>
+    </SettingsGroup>
   )
 }
