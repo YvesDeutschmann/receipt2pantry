@@ -5,6 +5,7 @@ import { api } from '../services/apiClient'
 import { useAuth } from '../contexts/AuthContext'
 import HouseholdModal from './HouseholdModal'
 import { FEATURES } from '../config/features'
+import { whatsForMealTitle } from '../utils/dinnerPickerRank'
 
 function TopNavBar() {
   const location = useLocation()
@@ -53,7 +54,7 @@ function TopNavBar() {
               </Link>
               <nav className="flex space-x-6">
                 <NavLink to="/recipes" className={navLinkClass}>
-                  What&apos;s for Dinner
+                  {whatsForMealTitle()}
                 </NavLink>
                 <NavLink to="/pantry" className={navLinkClass}>
                   Pantry

@@ -11,7 +11,7 @@ export default function ColdStartProgressBar({ highlightStep = 2, step3Unlocked 
   const steps = [
     { id: 1, label: 'Grocery store', sub: 'Connected' },
     { id: 2, label: 'Your pantry', sub: 'Set up' },
-    { id: 3, label: "What's for Dinner", sub: step3Unlocked ? 'Ready' : 'Next' },
+    { id: 3, label: 'Cook', sub: step3Unlocked ? 'Ready' : 'Next' },
   ]
 
   return (

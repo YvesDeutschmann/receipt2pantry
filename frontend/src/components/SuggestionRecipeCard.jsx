@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { motion, useMotionValue, useMotionValueEvent } from 'framer-motion'
+import { SKIP_LABEL } from '../utils/dinnerPickerRank'
 
 function useSoonIngredientLine(recipe, resolvedTier) {
   if (resolvedTier !== 'use_soon') return null
@@ -56,6 +57,8 @@ function photoFallbackLabel(recipe) {
 function SuggestionRecipeCard({
   recipe,
   tier,
+  variant = 'default',
+  fillHeight = false,
   onDismiss,
   onExpand,
   dismissBusy = false,
@@ -67,10 +70,13 @@ function SuggestionRecipeCard({
   const showAccent = resolvedTier === 'use_soon' || resolvedTier === 'check_first'
   const [imageFailed, setImageFailed] = useState(false)
   const showImage = recipe.image && !imageFailed
+  const isPicker = variant === 'picker'
+  const isPeek = variant === 'peek'
 
   const x = useMotionValue(0)
   const [behindOpacity, setBehindOpacity] = useState(0)
   useMotionValueEvent(x, 'change', (latest) => {
+    if (isPicker || isPeek) return
     const o = Math.min(1, Math.abs(latest) / 120)
     setBehindOpacity(o)
   })
@@ -79,6 +85,113 @@ function SuggestionRecipeCard({
     event?.stopPropagation?.()
     if (dismissBusy) return
     onDismiss(recipe)
+  }
+
+  const handleDetails = (event) => {
+    event?.stopPropagation?.()
+    onExpand(recipe)
+  }
+
+  const imageHeightClass = isPeek
+    ? 'h-32'
+    : fillHeight
+      ? 'h-44 sm:h-52 flex-shrink-0'
+      : 'h-40 sm:h-48'
+
+  const cardShell = (
+    <div
+      className={`relative z-10 card card-flush shadow-meald-lg overflow-hidden ${
+        showAccent ? 'card-accent' : ''
+      } ${fillHeight ? 'h-full flex flex-col' : ''} ${
+        !isPicker && !isPeek ? 'cursor-pointer' : ''
+      }`}
+    >
+      <div className={`w-full ${imageHeightClass} bg-forest-light overflow-hidden`}>
+        {showImage ? (
+          <img
+            src={recipe.image}
+            alt=""
+            className="w-full h-full object-cover"
+            onError={() => setImageFailed(true)}
+          />
+        ) : (
+          <div
+            className="w-full h-full flex items-center justify-center text-2xl font-display text-sage-light"
+            aria-hidden
+          >
+            {photoFallbackLabel(recipe)}
+          </div>
+        )}
+      </div>
+
+      <div className={`p-4 ${fillHeight ? 'flex-1 flex flex-col' : ''}`}>
+        <h3
+          className={`font-display font-semibold text-cream leading-snug ${
+            isPeek ? 'text-base' : 'text-lg'
+          }`}
+        >
+          {recipe.title}
+        </h3>
+        {cookTime ? (
+          <p className="mt-1 text-xs text-sage-light">{cookTime}</p>
+        ) : null}
+        {usesLine ? (
+          <p className="mt-1 text-sm text-sage-light">{usesLine}</p>
+        ) : null}
+        {useSoonLine ? (
+          <p className="mt-1 text-sm text-terra-light">{useSoonLine}</p>
+        ) : null}
+        {resolvedTier === 'check_first' && recipe.trigger_ingredient ? (
+          <p className="mt-2 text-sm text-terra-light">
+            Confirm you still have: {recipe.trigger_ingredient}
+          </p>
+        ) : null}
+
+        {isPicker ? (
+          <div className="mt-auto pt-4 flex gap-3">
+            <button
+              type="button"
+              className="btn-ghost flex-1 text-sm py-2.5 px-3"
+              disabled={dismissBusy}
+              onClick={handleDismiss}
+            >
+              {SKIP_LABEL}
+            </button>
+            <button
+              type="button"
+              className="btn btn-primary flex-1 text-sm py-2.5 px-3"
+              onClick={handleDetails}
+            >
+              Details
+            </button>
+          </div>
+        ) : !isPeek ? (
+          <div className="mt-4 flex justify-end">
+            <button
+              type="button"
+              className="btn-ghost text-sm py-2 px-3"
+              disabled={dismissBusy}
+              onClick={handleDismiss}
+            >
+              {SKIP_LABEL}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </div>
+  )
+
+  if (isPicker || isPeek) {
+    return (
+      <div className={`relative overflow-hidden rounded-meald-lg ${fillHeight ? 'h-full' : 'mb-0'}`}>
+        {cardShell}
+        {shouldShowUseSoonMeatDisclaimer(recipe, resolvedTier) && !isPeek ? (
+          <p className="mt-2 text-xs text-terra-light px-1">
+            Check before cooking -- this was past its use-by date
+          </p>
+        ) : null}
+      </div>
+    )
   }
 
   return (
@@ -90,13 +203,10 @@ function SuggestionRecipeCard({
           backgroundColor: 'color-mix(in srgb, var(--color-error) 90%, transparent)',
         }}
       >
-        <span className="text-cream font-semibold text-sm sm:text-base">Not tonight</span>
+        <span className="text-cream font-semibold text-sm sm:text-base">{SKIP_LABEL}</span>
       </div>
 
       <motion.div
-        className={`relative z-10 card card-flush shadow-meald-lg overflow-hidden cursor-pointer ${
-          showAccent ? 'card-accent' : ''
-        }`}
         style={{ x }}
         drag={dismissBusy ? false : 'x'}
         dragConstraints={{ left: -280, right: 0 }}
@@ -117,54 +227,7 @@ function SuggestionRecipeCard({
           onExpand(recipe)
         }}
       >
-        <div className="w-full h-40 sm:h-48 bg-forest-light overflow-hidden">
-          {showImage ? (
-            <img
-              src={recipe.image}
-              alt=""
-              className="w-full h-full object-cover"
-              onError={() => setImageFailed(true)}
-            />
-          ) : (
-            <div
-              className="w-full h-full flex items-center justify-center text-2xl font-display text-sage-light"
-              aria-hidden
-            >
-              {photoFallbackLabel(recipe)}
-            </div>
-          )}
-        </div>
-
-        <div className="p-4">
-          <h3 className="text-lg font-display font-semibold text-cream leading-snug">
-            {recipe.title}
-          </h3>
-          {cookTime ? (
-            <p className="mt-1 text-xs text-sage-light">{cookTime}</p>
-          ) : null}
-          {usesLine ? (
-            <p className="mt-1 text-sm text-sage-light">{usesLine}</p>
-          ) : null}
-          {useSoonLine ? (
-            <p className="mt-1 text-sm text-terra-light">{useSoonLine}</p>
-          ) : null}
-          {resolvedTier === 'check_first' && recipe.trigger_ingredient ? (
-            <p className="mt-2 text-sm text-terra-light">
-              Confirm you still have: {recipe.trigger_ingredient}
-            </p>
-          ) : null}
-
-          <div className="mt-4 flex justify-end">
-            <button
-              type="button"
-              className="btn-ghost text-sm py-2 px-3"
-              disabled={dismissBusy}
-              onClick={handleDismiss}
-            >
-              Not tonight
-            </button>
-          </div>
-        </div>
+        {cardShell}
       </motion.div>
 
       {shouldShowUseSoonMeatDisclaimer(recipe, resolvedTier) && (

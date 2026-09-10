@@ -213,9 +213,18 @@ function sixCookTonight(prefix) {
   )
 }
 
+async function clickNotNow() {
+  fireEvent.click(screen.getByRole('button', { name: /^Not now$/i }))
+}
+
+async function clickDetails() {
+  fireEvent.click(screen.getByRole('button', { name: /^Details$/i }))
+}
+
 async function cookFromModal(title) {
   const restoreIO = stubIntersectingObserver()
-  fireEvent.click(screen.getByText(title))
+  await screen.findByText(title)
+  await clickDetails()
   const buttons = await screen.findAllByRole('button', { name: /^Cooked it$/i })
   fireEvent.click(buttons[buttons.length - 1])
   restoreIO()
@@ -285,60 +294,46 @@ describe('SuggestionScreen', () => {
     )
   })
 
-  it('SHELF_ORDER_RENDERS_CORRECTLY', async () => {
+  it('DECK_ORDER_USE_SOON_FIRST', async () => {
     const shelfPayload = {
-      use_soon_shelf: [recipeStub({ id: 'u1', tier: 'use_soon' })],
-      cook_tonight: [recipeStub({ id: 'c1' })],
-      probably_have: [recipeStub({ id: 'p1', tier: 'probably_have' })],
-      check_first: [recipeStub({ id: 'k1', tier: 'check_first' })],
+      use_soon_shelf: [recipeStub({ id: 'u1', title: 'Use Soon First', tier: 'use_soon' })],
+      cook_tonight: [recipeStub({ id: 'c1', title: 'Cook Tonight Card' })],
+      probably_have: [recipeStub({ id: 'p1', title: 'Probably Card', tier: 'probably_have' })],
+      check_first: [recipeStub({ id: 'k1', title: 'Check Card', tier: 'check_first' })],
     }
     getSuggestions.mockImplementation(() => Promise.resolve(shelfPayload))
     render(<Recipes />)
-    await screen.findByText('Use before it\'s gone')
-    await waitFor(() => {
-      const text = document.body.textContent || ''
-      const iUse = text.indexOf('Use before')
-      const iCook = text.indexOf('Cook tonight')
-      const iProb = text.indexOf('Probably have everything')
-      const iCheck = text.indexOf('Quick check needed')
-      expect(iUse).toBeGreaterThanOrEqual(0)
-      expect(iCook).toBeGreaterThan(iUse)
-      expect(iProb).toBeGreaterThan(iCook)
-      expect(iCheck).toBeGreaterThan(iProb)
-    })
+    await screen.findByText('Use Soon First')
+    expect(screen.getByText('1 / 4')).toBeInTheDocument()
+    expect(screen.queryByText('Cook tonight')).not.toBeInTheDocument()
   })
 
   it('EMPTY_SHELF_NOT_RENDERED', async () => {
     getSuggestions.mockImplementation(() =>
       Promise.resolve({
         use_soon_shelf: [],
-        cook_tonight: [recipeStub({ id: 'c1' })],
+        cook_tonight: [recipeStub({ id: 'c1', title: 'Only Card' })],
         probably_have: [],
         check_first: [],
       })
     )
     render(<Recipes />)
-    await screen.findByText('Cook tonight')
+    await screen.findByText('Only Card')
     expect(screen.queryByText('Use before it\'s gone')).not.toBeInTheDocument()
     expect(screen.queryByText('Probably have everything')).not.toBeInTheDocument()
     expect(screen.queryByText('Quick check needed')).not.toBeInTheDocument()
   })
 
-  it('USE_SOON_HEADER_TWO_ITEMS', async () => {
+  it('USE_SOON_LINE_ON_HERO_CARD', async () => {
     getSuggestions.mockImplementation(() =>
       Promise.resolve({
         use_soon_shelf: [
           recipeStub({
             id: 'a',
+            title: 'Soon Salad',
             tier: 'use_soon',
             ingredient_flags: [
               { ingredient_name: 'spinach', is_use_soon: true, confidence: 0.5, is_soft_required: false },
-            ],
-          }),
-          recipeStub({
-            id: 'b',
-            tier: 'use_soon',
-            ingredient_flags: [
               { ingredient_name: 'chicken', is_use_soon: true, confidence: 0.5, is_soft_required: false },
             ],
           }),
@@ -349,33 +344,8 @@ describe('SuggestionScreen', () => {
       })
     )
     render(<Recipes />)
-    const el = await screen.findByText(/Recipes using your spinach and chicken/)
+    const el = await screen.findByText(/Use your spinach & chicken before it's gone/)
     expect(el).toBeInTheDocument()
-  })
-
-  it('USE_SOON_HEADER_THREE_PLUS_ITEMS', async () => {
-    getSuggestions.mockImplementation(() =>
-      Promise.resolve({
-        use_soon_shelf: [
-          recipeStub({
-            id: 'a',
-            tier: 'use_soon',
-            ingredient_flags: [
-              { ingredient_name: 'a', is_use_soon: true, confidence: 0.5, is_soft_required: false },
-              { ingredient_name: 'b', is_use_soon: true, confidence: 0.5, is_soft_required: false },
-              { ingredient_name: 'c', is_use_soon: true, confidence: 0.5, is_soft_required: false },
-            ],
-          }),
-        ],
-        cook_tonight: [],
-        probably_have: [],
-        check_first: [],
-      })
-    )
-    render(<Recipes />)
-    expect(
-      await screen.findByText('Recipes using what needs using up')
-    ).toBeInTheDocument()
   })
 
   it('CHECK_FIRST_SHOWS_TRIGGER_INGREDIENT', async () => {
@@ -505,7 +475,7 @@ describe('SuggestionScreen', () => {
     await screen.findByText('First Recipe')
     expect(screen.getByText('Second Recipe')).toBeInTheDocument()
 
-    fireEvent.click(screen.getAllByTestId('simulate-swipe-dismiss')[0])
+    await clickNotNow()
 
     await waitFor(() => {
       expect(screen.queryByText('First Recipe')).not.toBeInTheDocument()
@@ -523,7 +493,7 @@ describe('SuggestionScreen', () => {
     }
     getSuggestions.mockImplementation(() => Promise.resolve(shelfPayload))
     render(<Recipes />)
-    await screen.findByText('Cook tonight')
+    await screen.findByText('Test')
     expect(getPool).not.toHaveBeenCalled()
     expect(getSuggestions).toHaveBeenCalled()
   })
@@ -553,7 +523,6 @@ describe('SuggestionScreen', () => {
       check_first: [],
     })
     render(<Recipes />)
-    await screen.findByText('Cook tonight')
     await screen.findByText('Pool Pasta')
     expect(getSuggestions).toHaveBeenCalled()
     expect(getPool).not.toHaveBeenCalled()
@@ -573,7 +542,7 @@ describe('SuggestionScreen', () => {
     expect(document.querySelector('.animate-spin')).toBeNull()
   })
 
-  it('POOL_SWIPE_USES_POOL_ENDPOINT_AND_LOW_WATERMARK', async () => {
+  it('NONEMPTY_DECK_SKIP_DOES_NOT_RELOAD_SUGGESTIONS', async () => {
     getSuggestions.mockResolvedValue({
       use_soon_shelf: [],
       cook_tonight: [
@@ -583,18 +552,32 @@ describe('SuggestionScreen', () => {
       probably_have: [],
       check_first: [],
     })
-    getDepth.mockResolvedValue({
-      depth: { breakfast: 1, lunch: 5, dinner: 5 },
-      household_id: 'h1',
-    })
     render(<Recipes />)
     await screen.findByText('First')
-    fireEvent.click(screen.getAllByTestId('simulate-swipe-dismiss')[0])
+    const callsBefore = getSuggestions.mock.calls.length
+    await clickNotNow()
     await waitFor(() => {
       expect(swipeSuggestion).toHaveBeenCalledWith('user-1', 'sug-1', 'h1')
     })
+    expect(getSuggestions.mock.calls.length).toBe(callsBefore)
+    expect(triggerGeneration).not.toHaveBeenCalled()
+    expect(screen.getByText('Second')).toBeInTheDocument()
+  })
+
+  it('EMPTY_AFTER_LAST_SKIP_AWAITS_GENERATE_THEN_GET', async () => {
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        poolCookCard({ id: '500', title: 'Only One', pool_suggestion_id: 'sug-only' }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
+    render(<Recipes />)
+    await screen.findByText('Only One')
+    await clickNotNow()
     await waitFor(() => {
-      expect(getDepth).toHaveBeenCalled()
+      expect(swipeSuggestion).toHaveBeenCalledWith('user-1', 'sug-only', 'h1')
     })
     await waitFor(() => {
       expect(triggerGeneration).toHaveBeenCalledWith(
@@ -602,6 +585,7 @@ describe('SuggestionScreen', () => {
         expect.objectContaining({ triggerReason: 'low_watermark' })
       )
     })
+    expect(getSuggestions.mock.calls.length).toBeGreaterThan(1)
   })
 
   it('POOL_COOK_SENDS_REAL_BOM_AND_SWIPES', async () => {
@@ -747,7 +731,7 @@ describe('SuggestionScreen', () => {
 
     render(<Recipes />)
     await screen.findByText('Dup Test')
-    fireEvent.click(screen.getByText('Dup Test'))
+    await clickDetails()
     const btn = await screen.findByRole('button', { name: /^Cooked it$/i })
     fireEvent.click(btn)
     fireEvent.click(btn)
@@ -767,7 +751,7 @@ describe('SuggestionScreen', () => {
     })
     render(<Recipes />)
     await screen.findByText('Telemetry Pasta')
-    fireEvent.click(screen.getByText('Telemetry Pasta'))
+    await clickDetails()
     await waitFor(() => {
       expect(emitRepeatable).toHaveBeenCalledWith(
         'recipe_detail_opened',
@@ -824,7 +808,7 @@ describe('SuggestionScreen', () => {
 
     render(<Recipes />)
     await screen.findByText('Exit Confirm Soup')
-    fireEvent.click(screen.getByText('Exit Confirm Soup'))
+    await clickDetails()
     const closeButtons = await screen.findAllByRole('button', { name: /^Close$/i })
     now += 31_000
     fireEvent.click(closeButtons[closeButtons.length - 1])
@@ -856,7 +840,7 @@ describe('SuggestionScreen', () => {
 
     render(<Recipes />)
     await screen.findByText('Too Fast Soup')
-    fireEvent.click(screen.getByText('Too Fast Soup'))
+    await clickDetails()
     const closeButtons = await screen.findAllByRole('button', { name: /^Close$/i })
     now += 5_000
     fireEvent.click(closeButtons[closeButtons.length - 1])
@@ -889,7 +873,7 @@ describe('SuggestionScreen', () => {
 
     render(<Recipes />)
     await screen.findByText('Analyzed Only')
-    fireEvent.click(screen.getByText('Analyzed Only'))
+    await clickDetails()
     expect(await screen.findByText('Cook the rice.')).toBeInTheDocument()
     const closeButtons = await screen.findAllByRole('button', { name: /^Close$/i })
     now += 31_000
@@ -922,7 +906,7 @@ describe('SuggestionScreen', () => {
 
     render(<Recipes />)
     await screen.findByText('No Steps Pasta')
-    fireEvent.click(screen.getByText('No Steps Pasta'))
+    await clickDetails()
     const closeButtons = await screen.findAllByRole('button', { name: /^Close$/i })
     now += 31_000
     fireEvent.click(closeButtons[closeButtons.length - 1])
@@ -955,7 +939,7 @@ describe('SuggestionScreen', () => {
 
     render(<Recipes />)
     await screen.findByText('Pool Exit')
-    fireEvent.click(screen.getByText('Pool Exit'))
+    await clickDetails()
     const closeButtons = await screen.findAllByRole('button', { name: /^Close$/i })
     now += 31_000
     fireEvent.click(closeButtons[closeButtons.length - 1])
@@ -996,7 +980,7 @@ describe('SuggestionScreen', () => {
     render(<Recipes />)
     await screen.findByText('Dismiss Prompt')
     const openAndClose = async () => {
-      fireEvent.click(screen.getByText('Dismiss Prompt'))
+      await clickDetails()
       const closeButtons = await screen.findAllByRole('button', { name: /^Close$/i })
       now += 31_000
       fireEvent.click(closeButtons[closeButtons.length - 1])
@@ -1035,7 +1019,7 @@ describe('SuggestionScreen', () => {
 
     render(<Recipes />)
     await screen.findByText('Portal Soup')
-    fireEvent.click(screen.getByText('Portal Soup'))
+    await clickDetails()
     const closeButtons = await screen.findAllByRole('button', { name: /^Close$/i })
     now += 31_000
     fireEvent.click(closeButtons[closeButtons.length - 1])
@@ -1070,7 +1054,7 @@ describe('SuggestionScreen', () => {
 
     render(<Recipes />)
     await screen.findByText('Sheet Stay Open')
-    fireEvent.click(screen.getByText('Sheet Stay Open'))
+    await clickDetails()
     const cookedButtons = await screen.findAllByRole('button', { name: /^Cooked it$/i })
     fireEvent.click(cookedButtons[cookedButtons.length - 1])
 
@@ -1104,7 +1088,7 @@ describe('SuggestionScreen', () => {
 
     render(<Recipes />)
     await screen.findByText('Empty BOM Soup')
-    fireEvent.click(screen.getByText('Empty BOM Soup'))
+    await clickDetails()
     const cookedButtons = await screen.findAllByRole('button', { name: /^Cooked it$/i })
     fireEvent.click(cookedButtons[cookedButtons.length - 1])
 
@@ -1159,10 +1143,11 @@ describe('SuggestionScreen', () => {
     })
     render(<Recipes />)
     await screen.findByText('Pool Pasta')
-    expect(screen.getByText('Cook tonight')).toBeInTheDocument()
-    expect(screen.getByText('Check Curry')).toBeInTheDocument()
-    expect(screen.getByText('Quick check needed')).toBeInTheDocument()
-    expect(screen.getByText('Probably Salad')).toBeInTheDocument()
+    expect(screen.getByText('1 / 3')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Next suggestion/i }))
+    await screen.findByText('Probably Salad')
+    fireEvent.click(screen.getByRole('button', { name: /Next suggestion/i }))
+    await screen.findByText('Check Curry')
     expect(screen.getByText(/Confirm you still have: coconut milk/i)).toBeInTheDocument()
   })
 
@@ -1317,13 +1302,10 @@ describe('SuggestionScreen', () => {
       check_first: [],
     })
     render(<Recipes />)
-    const useSoonHeader = await screen.findByText("Use before it's gone")
-    const readyHeader = await screen.findByText('Cook tonight')
-    expect(
-      useSoonHeader.compareDocumentPosition(readyHeader) & Node.DOCUMENT_POSITION_FOLLOWING
-    ).toBeTruthy()
-    expect(screen.getByText('Spinach Soup')).toBeInTheDocument()
-    expect(screen.getByText('Pool Pasta')).toBeInTheDocument()
+    await screen.findByText('Spinach Soup')
+    expect(screen.getByText('1 / 2')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Next suggestion/i }))
+    await screen.findByText('Pool Pasta')
   })
 
   it('PULL_REFRESH_AWAITS_GENERATION_THEN_RELOADS', async () => {
@@ -1433,23 +1415,36 @@ describe('SuggestionScreen', () => {
     )
   })
 
-  it('SHOW_MORE_AND_SESSION_REFS_RESET_ON_USER_CHANGE', async () => {
+  it('WINDOW_TAIL_FILLS_AFTER_SKIP_AND_RESETS_ON_USER_CHANGE', async () => {
     const shelf = (cards) => ({
       use_soon_shelf: [],
       cook_tonight: cards,
       probably_have: [],
       check_first: [],
     })
+    const nineMeals = () =>
+      Array.from({ length: 9 }, (_, i) =>
+        poolCookCard({
+          id: `nine-${i + 1}`,
+          title: `Nine Meal ${i + 1}`,
+          pool_suggestion_id: `nine-sug-${i + 1}`,
+          score: 0.99 - i * 0.01,
+        })
+      )
     getSuggestions.mockImplementation((uid) =>
-      Promise.resolve(shelf(uid === 'user-2' ? sixCookTonight('U2') : sixCookTonight('U1')))
+      Promise.resolve(shelf(uid === 'user-2' ? sixCookTonight('U2') : nineMeals()))
     )
 
     const { rerender } = render(<Recipes />)
-    await screen.findByText('U1 Meal 1')
-    expect(screen.queryByText('U1 Meal 6')).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /Show more \(1\)/i }))
-    expect(screen.getByText('U1 Meal 6')).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Show more/i })).not.toBeInTheDocument()
+    await screen.findByText('Nine Meal 1')
+    expect(screen.getByText('1 / 8')).toBeInTheDocument()
+    expect(screen.queryByText('Nine Meal 9')).not.toBeInTheDocument()
+    await clickNotNow()
+    await screen.findByText('Nine Meal 2')
+    for (let i = 0; i < 6; i++) {
+      fireEvent.click(screen.getByRole('button', { name: /Next suggestion/i }))
+    }
+    await screen.findByText('Nine Meal 9')
 
     await waitFor(() => {
       expect(emit).toHaveBeenCalledWith('funnel_first_suggestion_viewed', 'user-1')
@@ -1461,8 +1456,8 @@ describe('SuggestionScreen', () => {
 
     await screen.findByText('U2 Meal 1')
     expect(screen.queryByText('U1 Meal 1')).not.toBeInTheDocument()
-    expect(screen.queryByText('U2 Meal 6')).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /Show more \(1\)/i })).toBeInTheDocument()
+    expect(screen.queryByText('Nine Meal 9')).not.toBeInTheDocument()
+    expect(screen.getByText('1 / 6')).toBeInTheDocument()
     await waitFor(() => {
       expect(emit).toHaveBeenCalledWith('funnel_first_suggestion_viewed', 'user-2')
     })
@@ -1598,7 +1593,7 @@ describe('SuggestionRecipeCard disclaimer', () => {
     expect(screen.queryByText(/Check before cooking/)).not.toBeInTheDocument()
   })
 
-  it('SWIPE_OVERLAY_SAYS_NOT_TONIGHT', () => {
+  it('SWIPE_OVERLAY_SAYS_NOT_NOW', () => {
     render(
       <SuggestionRecipeCard
         recipe={recipeStub({ title: 'Swipe Copy' })}
@@ -1606,7 +1601,7 @@ describe('SuggestionRecipeCard disclaimer', () => {
         onExpand={vi.fn()}
       />
     )
-    expect(screen.getAllByText('Not tonight').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('Not now').length).toBeGreaterThan(0)
     expect(screen.queryByText(/Don't have this/i)).not.toBeInTheDocument()
   })
 
@@ -1623,17 +1618,18 @@ describe('SuggestionRecipeCard disclaimer', () => {
     expect(overlay?.className || '').not.toMatch(/bg-red-600/)
   })
 
-  it('NOT_TONIGHT_BUTTON_DISMISSES_WITHOUT_EXPAND', () => {
+  it('NOT_NOW_BUTTON_DISMISSES_WITHOUT_EXPAND', () => {
     const onExpand = vi.fn()
     const onDismiss = vi.fn()
     render(
       <SuggestionRecipeCard
         recipe={recipeStub({ title: 'Curry Check' })}
+        variant="picker"
         onDismiss={onDismiss}
         onExpand={onExpand}
       />
     )
-    fireEvent.click(screen.getByRole('button', { name: /^Not tonight$/i }))
+    fireEvent.click(screen.getByRole('button', { name: /^Not now$/i }))
     expect(onDismiss).toHaveBeenCalled()
     expect(onExpand).not.toHaveBeenCalled()
   })
@@ -1677,7 +1673,7 @@ describe('Dinner picker dismiss', () => {
   it('DISMISS_USES_POOL_SUGGESTION_ID_NOT_RECIPE_ID', async () => {
     render(<Recipes />)
     await screen.findByText('Pool Card')
-    fireEvent.click(screen.getByRole('button', { name: /^Not tonight$/i }))
+    await clickNotNow()
     await waitFor(() => {
       expect(swipeSuggestion).toHaveBeenCalledWith('user-1', 'sug-dismiss', 'h1')
     })
@@ -1688,7 +1684,7 @@ describe('Dinner picker dismiss', () => {
     swipeSuggestion.mockRejectedValueOnce(new Error('network'))
     render(<Recipes />)
     await screen.findByText('Pool Card')
-    fireEvent.click(screen.getByRole('button', { name: /^Not tonight$/i }))
+    await clickNotNow()
     await waitFor(() => {
       expect(screen.getByText('Pool Card')).toBeInTheDocument()
     })

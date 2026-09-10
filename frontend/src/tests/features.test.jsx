@@ -63,7 +63,7 @@ function TestAppRoutes({ mealPlanner }) {
   return (
     <Routes>
       <Route index element={<Navigate to="/recipes" replace />} />
-      <Route path="recipes" element={<h1>Dinner</h1>} />
+      <Route path="recipes" element={<h1>Cook</h1>} />
       {mealPlanner && <Route path="meal-plan" element={<MealPlanRouteProbe />} />}
       <Route path="*" element={<Navigate to="/recipes" replace />} />
     </Routes>
@@ -97,7 +97,8 @@ describe('meal planner feature flag', () => {
       </MemoryRouter>
     )
     expect(screen.queryByRole('link', { name: /meal plan/i })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /what's for dinner/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /what's for (breakfast|lunch|dinner)/i })).toBeInTheDocument()
+    expect(screen.getByText('Cook')).toBeInTheDocument()
   })
 
   it('TOP_NAV_HIDES_MEAL_PLAN_WHEN_FLAG_OFF', () => {
@@ -107,7 +108,7 @@ describe('meal planner feature flag', () => {
       </MemoryRouter>
     )
     expect(screen.queryByRole('link', { name: /meal plan/i })).not.toBeInTheDocument()
-    expect(screen.getByRole('link', { name: /what's for dinner/i })).toBeInTheDocument()
+    expect(screen.getByRole('link', { name: /what's for (breakfast|lunch|dinner)/i })).toBeInTheDocument()
   })
 
   it('MEAL_PLAN_ROUTE_REDIRECTS_TO_RECIPES_WHEN_FLAG_OFF', () => {
@@ -116,7 +117,7 @@ describe('meal planner feature flag', () => {
         <TestAppRoutes mealPlanner={false} />
       </MemoryRouter>
     )
-    expect(screen.getByRole('heading', { name: /^dinner$/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /^cook$/i })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: /^meal plan$/i })).not.toBeInTheDocument()
   })
 
@@ -210,11 +211,11 @@ describe('Track 1 home routing', () => {
       <MemoryRouter initialEntries={['/auth']}>
         <Routes>
           <Route path="/auth" element={<Auth />} />
-          <Route path="/recipes" element={<h1>Dinner</h1>} />
+          <Route path="/recipes" element={<h1>Cook</h1>} />
         </Routes>
       </MemoryRouter>
     )
-    expect(screen.getByRole('heading', { name: /^dinner$/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /^cook$/i })).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /sign in with google/i })).not.toBeInTheDocument()
   })
 })
