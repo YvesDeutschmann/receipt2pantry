@@ -269,7 +269,7 @@ describe('StaplesTemplate cold-start E2E', () => {
     expect(skip).toBe(false)
     expect(screen.queryByTestId('bridge-dest')).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /What's for Dinner/i }))
+    fireEvent.click(screen.getByRole('button', { name: /What's for (Breakfast|Lunch|Dinner)/i }))
     await waitFor(() => {
       expect(mockUpdateUser).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -299,7 +299,7 @@ describe('StaplesTemplate cold-start E2E', () => {
 
   it('PAYOFF_TAP_WRITES_COMPLETED_AND_NAVIGATES_RECIPES', async () => {
     await confirmToPayoff()
-    fireEvent.click(screen.getByRole('button', { name: /What's for Dinner/i }))
+    fireEvent.click(screen.getByRole('button', { name: /What's for (Breakfast|Lunch|Dinner)/i }))
     await waitFor(() => {
       expect(mockUpdateUser).toHaveBeenCalledWith(
         expect.objectContaining({

@@ -6,6 +6,8 @@ vi.mock('../ColdStartProgressBar', () => ({
   default: () => <div data-testid="cold-start-progress" />,
 }))
 
+const mealCtaPattern = /What's for (Breakfast|Lunch|Dinner)/i
+
 describe('OnboardingPayoffPanel', () => {
   it('JOINER_PAYOFF_SKIPS_BASELINE_COPY', () => {
     render(
@@ -19,7 +21,7 @@ describe('OnboardingPayoffPanel', () => {
 
     expect(screen.getByText(/You're in — see what you can cook tonight/i)).toBeInTheDocument()
     expect(screen.queryByText(/pantry baseline/i)).not.toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /What's for Dinner/i })).toHaveClass('animate-pulse')
+    expect(screen.getByRole('button', { name: mealCtaPattern })).toHaveClass('animate-pulse')
     expect(screen.queryByRole('button', { name: /^Back$/i })).not.toBeInTheDocument()
   })
 
@@ -36,7 +38,7 @@ describe('OnboardingPayoffPanel', () => {
     expect(
       screen.getByText(/Your pantry baseline is saved — see what you can cook tonight/i)
     ).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /What's for Dinner/i })).toHaveClass('animate-pulse')
+    expect(screen.getByRole('button', { name: mealCtaPattern })).toHaveClass('animate-pulse')
   })
 
   it('PAYOFF_CTA_CALLS_ON_COMPLETE', () => {
@@ -45,7 +47,7 @@ describe('OnboardingPayoffPanel', () => {
       <OnboardingPayoffPanel variant="owner" onComplete={onComplete} submitting={false} error={null} />
     )
 
-    fireEvent.click(screen.getByRole('button', { name: /What's for Dinner/i }))
+    fireEvent.click(screen.getByRole('button', { name: mealCtaPattern }))
     expect(onComplete).toHaveBeenCalledTimes(1)
   })
 })

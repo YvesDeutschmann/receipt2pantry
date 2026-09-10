@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest'
 import {
   capCookTonight,
+  clampDeckIndex,
+  computeIndexAfterSkip,
+  flattenCookDeck,
   preferredMealTypeForHour,
   rankCookTonight,
+  SKIP_LABEL,
   suggestionCardKey,
+  whatsForMealTitle,
+  windowCookDeck,
 } from '../dinnerPickerRank'
 
 describe('dinnerPickerRank', () => {
@@ -40,5 +46,87 @@ describe('dinnerPickerRank', () => {
     expect(preferredMealTypeForHour(10)).toBe('breakfast')
     expect(preferredMealTypeForHour(11)).toBe('lunch')
     expect(preferredMealTypeForHour(16)).toBe('dinner')
+  })
+
+  it('whatsForMealTitle matches hour', () => {
+    expect(whatsForMealTitle(8)).toBe("What's for Breakfast?")
+    expect(whatsForMealTitle(12)).toBe("What's for Lunch?")
+    expect(whatsForMealTitle(18)).toBe("What's for Dinner?")
+  })
+
+  it('SKIP_LABEL is Not now', () => {
+    expect(SKIP_LABEL).toBe('Not now')
+  })
+
+  it('FLATTEN_PREFERS_USE_SOON_COPY_ON_COLLISION', () => {
+    const payload = {
+      use_soon_shelf: [
+        {
+          id: '1',
+          pool_suggestion_id: 'pool-1',
+          title: 'Use Soon Soup',
+          tier: 'use_soon',
+          ingredient_flags: [{ is_use_soon: true, ingredient_name: 'spinach' }],
+        },
+      ],
+      cook_tonight: [
+        { id: '1', pool_suggestion_id: 'pool-1', title: 'Plain Soup', score: 0.9 },
+      ],
+      probably_have: [],
+      check_first: [],
+    }
+    const flat = flattenCookDeck(payload, 18)
+    expect(flat).toHaveLength(1)
+    expect(flat[0].title).toBe('Use Soon Soup')
+    expect(flat[0].tier).toBe('use_soon')
+  })
+
+  it('WINDOW_PROTECTS_USE_SOON_SLOTS', () => {
+    const flat = [
+      { id: 'u1', tier: 'use_soon', title: 'A' },
+      { id: 'u2', tier: 'use_soon', title: 'B' },
+      ...Array.from({ length: 10 }, (_, i) => ({
+        id: `c${i}`,
+        tier: 'cook_tonight',
+        title: `C${i}`,
+      })),
+    ]
+    const visible = windowCookDeck(flat, 8)
+    expect(visible).toHaveLength(8)
+    expect(visible[0].tier).toBe('use_soon')
+    expect(visible[1].tier).toBe('use_soon')
+    expect(visible.filter((c) => c.tier === 'use_soon')).toHaveLength(2)
+    expect(visible.filter((c) => c.tier === 'cook_tonight')).toHaveLength(6)
+  })
+
+  it('SKIP_ADVANCES_TO_PEEK_NOT_INDEX_ZERO', () => {
+    const newVisible = [
+      { id: '2', title: 'B' },
+      { id: '3', title: 'C' },
+    ]
+    const idx = computeIndexAfterSkip({
+      index: 0,
+      nextKey: '2',
+      newVisible,
+    })
+    expect(idx).toBe(0)
+    expect(newVisible[idx].title).toBe('B')
+  })
+
+  it('SKIP_LAST_OF_WINDOW_SHOWS_TAIL_CARD', () => {
+    const newVisible = [{ id: 'tail', title: 'Tail' }]
+    const idx = computeIndexAfterSkip({
+      index: 7,
+      nextKey: null,
+      newVisible,
+    })
+    expect(idx).toBe(0)
+    expect(newVisible[idx].title).toBe('Tail')
+  })
+
+  it('clampDeckIndex stays in range', () => {
+    expect(clampDeckIndex(5, 3)).toBe(2)
+    expect(clampDeckIndex(-1, 3)).toBe(0)
+    expect(clampDeckIndex(0, 0)).toBe(0)
   })
 })

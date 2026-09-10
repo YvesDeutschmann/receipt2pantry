@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { createPortal } from 'react-dom'
 import { api, postDevLog } from '../services/apiClient'
 import { useAuth } from '../contexts/AuthContext'
@@ -9,14 +9,19 @@ import { APP_OVERLAY_Z_CLASS } from '../components/AdaptiveModal'
 import SuggestionDetailModal, {
   EXIT_CONFIRM_VIEW_THRESHOLD_MS,
 } from '../components/SuggestionDetailModal'
-import SuggestionRecipeCard from '../components/SuggestionRecipeCard'
+import CookPickerDeck from '../components/CookPickerDeck'
 import PageHeader from '../components/PageHeader'
 import NeedsAttentionSection from '../components/NeedsAttentionSection'
 import PullToRefresh from '../components/PullToRefresh'
 import { buildCookIngredients, isStapleRecipeId } from '../utils/buildCookIngredients'
 import {
-  capCookTonight,
+  clampDeckIndex,
+  computeIndexAfterSkip,
+  flattenCookDeck,
+  hasAnySuggestions,
   suggestionCardKey,
+  whatsForMealTitle,
+  windowCookDeck,
 } from '../utils/dinnerPickerRank'
 import {
   clientCookLoopChecks,
@@ -35,6 +40,31 @@ const EMPTY_SUGGESTIONS = {
 const COOK_PARTIAL_ERROR =
   'Cook may be partially recorded. Check your pantry before logging again.'
 const OPEN_RECIPE_MESSAGE = 'Open the recipe to log what you used.'
+
+const POLL_BACKOFF_MS = [500, 1000, 2000, 3000, 4000]
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function tierToShelfKey(tier) {
+  if (tier === 'use_soon') return 'use_soon_shelf'
+  if (tier === 'cook_tonight' || tier === 'probably_have' || tier === 'check_first') {
+    return tier
+  }
+  return 'cook_tonight'
+}
+
+function reinsertCard(prev, recipe) {
+  const shelfKey = tierToShelfKey(recipe.tier)
+  const key = suggestionCardKey(recipe)
+  if (!key) return prev
+  const next = { ...prev }
+  const list = next[shelfKey] || []
+  if (list.some((r) => suggestionCardKey(r) === key)) return prev
+  next[shelfKey] = [...list, recipe]
+  return next
+}
 
 function cookConfirmationMessage(touched) {
   if (!touched?.length) {
@@ -76,32 +106,6 @@ async function fetchSuggestionsPayload(userId, householdId) {
   return { suggestions: normalizeSuggestionsPayload(liveData) }
 }
 
-function orderedUseSoonNames(shelfRecipes) {
-  const ordered = []
-  const seen = new Set()
-  for (const r of shelfRecipes) {
-    for (const f of r.ingredient_flags || []) {
-      if (f.is_use_soon && f.ingredient_name) {
-        const n = String(f.ingredient_name).trim()
-        const key = n.toLowerCase()
-        if (!seen.has(key)) {
-          seen.add(key)
-          ordered.push(n)
-        }
-      }
-    }
-  }
-  return ordered
-}
-
-function useSoonShelfSubtitle(shelfRecipes) {
-  const names = orderedUseSoonNames(shelfRecipes)
-  if (names.length === 0) return null
-  if (names.length >= 3) return 'Recipes using what needs using up'
-  if (names.length === 1) return `Recipes using your ${names[0]}`
-  return `Recipes using your ${names[0]} and ${names[1]}`
-}
-
 function Recipes() {
   const [suggestions, setSuggestions] = useState(EMPTY_SUGGESTIONS)
   const [loading, setLoading] = useState(true)
@@ -115,31 +119,49 @@ function Recipes() {
   const [detailModalOpen, setDetailModalOpen] = useState(false)
   const [exitConfirmRecipe, setExitConfirmRecipe] = useState(null)
   const [pantryData, setPantryData] = useState(null)
-  const [showMoreCookTonight, setShowMoreCookTonight] = useState(false)
+  const [deckIndex, setDeckIndex] = useState(0)
   const [cookingRecipeIds, setCookingRecipeIds] = useState(() => new Set())
   const [dismissingCardKeys, setDismissingCardKeys] = useState(() => new Set())
+  const [ptrDisabled, setPtrDisabled] = useState(false)
+  const [refreshingEmpty, setRefreshingEmpty] = useState(false)
 
   const { user } = useAuth()
   const userId = user?.id
 
   const initialLoadDoneRef = useRef(false)
-  const lowWatermarkInFlightRef = useRef(false)
   const firstSuggestionEmitted = useRef(false)
   const firstCookEmitted = useRef(false)
   const cookInFlightRef = useRef(new Set())
+  const skipInFlightRef = useRef(new Set())
   const cookedPoolIdsRef = useRef(new Set())
   const exitConfirmSuppressedRef = useRef(new Set())
+  const frozenHourRef = useRef(new Date().getHours())
+  const loadEpochRef = useRef(0)
+  const generatePromiseRef = useRef(null)
 
   const syncCookingUi = useCallback(() => {
     setCookingRecipeIds(new Set(cookInFlightRef.current))
   }, [])
 
+  const flattened = useMemo(
+    () => flattenCookDeck(suggestions, frozenHourRef.current),
+    [suggestions]
+  )
+
+  const visibleDeck = useMemo(() => windowCookDeck(flattened, 8), [flattened])
+
   useEffect(() => {
-    setShowMoreCookTonight(false)
+    setDeckIndex((idx) => clampDeckIndex(idx, visibleDeck.length))
+  }, [visibleDeck.length])
+
+  useEffect(() => {
     cookedPoolIdsRef.current = new Set()
     exitConfirmSuppressedRef.current = new Set()
     firstSuggestionEmitted.current = false
     cookInFlightRef.current = new Set()
+    skipInFlightRef.current = new Set()
+    loadEpochRef.current += 1
+    setDeckIndex(0)
     syncCookingUi()
   }, [userId, syncCookingUi])
 
@@ -165,79 +187,135 @@ function Recipes() {
     }
   }, [userId])
 
+  const applySuggestions = useCallback(
+    (next, { resetIndex = false } = {}) => {
+      setSuggestions(next)
+      if (resetIndex) {
+        setDeckIndex(0)
+      }
+    },
+    []
+  )
+
+  const loadSuggestions = useCallback(
+    async ({ resetIndex = false, epoch } = {}) => {
+      if (!userId) return null
+      const myEpoch = epoch ?? loadEpochRef.current
+      if (!initialLoadDoneRef.current) {
+        setLoading(true)
+      }
+      setError(null)
+      try {
+        frozenHourRef.current = new Date().getHours()
+        const { suggestions: next } = await fetchSuggestionsPayload(userId, householdId)
+        if (myEpoch !== loadEpochRef.current) return null
+        initialLoadDoneRef.current = true
+        applySuggestions(next, { resetIndex })
+        if (hasAnySuggestions(next) && !firstSuggestionEmitted.current) {
+          firstSuggestionEmitted.current = true
+          void emit(FunnelEvent.FIRST_SUGGESTION_VIEWED, userId)
+        }
+        return next
+      } catch (err) {
+        if (myEpoch !== loadEpochRef.current) return null
+        console.error('Failed to load suggestions:', err)
+        const status = err.response?.status
+        const apiError = err.response?.data?.error
+        if (status === 429 || err.response?.data?.code === 'recipe_quota') {
+          setError(
+            apiError ||
+              'Daily recipe lookup limit reached. Suggestions will refresh tomorrow.'
+          )
+        } else {
+          setError(apiError || 'Failed to load recipe suggestions.')
+        }
+        applySuggestions(EMPTY_SUGGESTIONS, { resetIndex })
+        return null
+      } finally {
+        if (myEpoch === loadEpochRef.current) {
+          setLoading(false)
+        }
+      }
+    },
+    [userId, householdId, applySuggestions]
+  )
+
+  const pollUntilSuggestions = useCallback(
+    async (epoch) => {
+      for (const delay of POLL_BACKOFF_MS) {
+        await sleep(delay)
+        if (epoch !== loadEpochRef.current) return null
+        const next = await loadSuggestions({ epoch })
+        if (next && flattenCookDeck(next, frozenHourRef.current).length > 0) {
+          return next
+        }
+      }
+      return null
+    },
+    [loadSuggestions]
+  )
+
+  const generateThenReload = useCallback(
+    async ({ triggerReason = 'manual_refresh' }) => {
+      if (!userId) return null
+      if (generatePromiseRef.current) {
+        return generatePromiseRef.current
+      }
+
+      const epoch = loadEpochRef.current
+      const promise = (async () => {
+        try {
+          let genResult = null
+          try {
+            genResult = await api.suggestions.triggerGeneration(userId, {
+              triggerReason,
+              householdId,
+            })
+          } catch (err) {
+            const status = err.response?.status
+            if (status === 429 || err.response?.data?.code === 'recipe_quota') {
+              setError(
+                err.response?.data?.error ||
+                  'Daily recipe lookup limit reached. Suggestions will refresh tomorrow.'
+              )
+            }
+            await loadSuggestions({ resetIndex: true, epoch })
+            return null
+          }
+
+          if (epoch !== loadEpochRef.current) return null
+
+          if (genResult?.status === 'already_running') {
+            const polled = await pollUntilSuggestions(epoch)
+            if (polled) return polled
+          }
+
+          return await loadSuggestions({ resetIndex: true, epoch })
+        } finally {
+          generatePromiseRef.current = null
+        }
+      })()
+
+      generatePromiseRef.current = promise
+      return promise
+    },
+    [userId, householdId, loadSuggestions, pollUntilSuggestions]
+  )
+
   const maybeTriggerLowWatermarkRefill = useCallback(async () => {
-    if (!userId || lowWatermarkInFlightRef.current) return
-    lowWatermarkInFlightRef.current = true
+    if (!userId) return
     try {
       const res = await api.suggestions.getDepth(userId, householdId)
       const depth = res.depth || {}
       const slots = ['breakfast', 'lunch', 'dinner']
       const anyLow = slots.some((k) => (depth[k] ?? 0) < 2)
       if (anyLow) {
-        void api.suggestions
-          .triggerGeneration(userId, {
-            triggerReason: 'low_watermark',
-            householdId,
-          })
-          .catch(() => {})
+        void generateThenReload({ triggerReason: 'low_watermark' })
       }
     } catch (e) {
       console.warn('Low-watermark check failed:', e)
-    } finally {
-      lowWatermarkInFlightRef.current = false
     }
-  }, [userId, householdId])
-
-  const loadSuggestions = useCallback(async () => {
-    if (!userId) return
-    if (!initialLoadDoneRef.current) {
-      setLoading(true)
-    }
-    setError(null)
-    try {
-      const { suggestions: next } = await fetchSuggestionsPayload(userId, householdId)
-      initialLoadDoneRef.current = true
-      setSuggestions(next)
-      const hasAnySuggestion =
-        (next.use_soon_shelf?.length > 0) ||
-        (next.cook_tonight?.length > 0) ||
-        (next.probably_have?.length > 0) ||
-        (next.check_first?.length > 0)
-      if (hasAnySuggestion && userId && !firstSuggestionEmitted.current) {
-        firstSuggestionEmitted.current = true
-        void emit(FunnelEvent.FIRST_SUGGESTION_VIEWED, userId)
-      }
-    } catch (err) {
-      console.error('Failed to load suggestions:', err)
-      const status = err.response?.status
-      const apiError = err.response?.data?.error
-      if (status === 429 || err.response?.data?.code === 'recipe_quota') {
-        setError(
-          apiError ||
-            'Daily recipe lookup limit reached. Suggestions will refresh tomorrow.'
-        )
-      } else {
-        setError(apiError || 'Failed to load recipe suggestions.')
-      }
-      setSuggestions(EMPTY_SUGGESTIONS)
-    } finally {
-      setLoading(false)
-    }
-  }, [userId, householdId])
-
-  const regeneratePoolThenReload = useCallback(async () => {
-    if (userId) {
-      try {
-        await api.suggestions.triggerGeneration(userId, {
-          triggerReason: 'manual_refresh',
-          householdId,
-        })
-      } catch {
-        /* still reload whatever pool is currently unused */
-      }
-    }
-    await loadSuggestions()
-  }, [userId, householdId, loadSuggestions])
+  }, [userId, householdId, generateThenReload])
 
   useEffect(() => {
     void fetchHousehold()
@@ -245,12 +323,21 @@ function Recipes() {
 
   useEffect(() => {
     if (!userId) return
-    void loadSuggestions()
+    void loadSuggestions({ resetIndex: true })
     void fetchPantry()
   }, [userId, householdId, loadSuggestions, fetchPantry])
 
   const handleRefreshPull = async () => {
-    await regeneratePoolThenReload()
+    await generateThenReload({ triggerReason: 'manual_refresh' })
+  }
+
+  const handleEmptyRefresh = async () => {
+    setRefreshingEmpty(true)
+    try {
+      await generateThenReload({ triggerReason: 'manual_refresh' })
+    } finally {
+      setRefreshingEmpty(false)
+    }
   }
 
   const handlePostCookCorrection = async (itemId, action) => {
@@ -260,7 +347,7 @@ function Recipes() {
       prev.filter((item) => String(item.pantry_item_id) !== String(itemId))
     )
     if (action === 'used_it_up' || action === 'never_had_it') {
-      await regeneratePoolThenReload()
+      await generateThenReload({ triggerReason: 'manual_refresh' })
     } else {
       await loadSuggestions()
     }
@@ -351,7 +438,8 @@ function Recipes() {
       }
 
       const { suggestions: updated } = await fetchSuggestionsPayload(userId, hh)
-      setSuggestions(updated)
+      frozenHourRef.current = new Date().getHours()
+      applySuggestions(updated, { resetIndex: false })
       void fetchPantry()
 
       if (isDevCookLoopRecipe(recipe)) {
@@ -399,11 +487,22 @@ function Recipes() {
 
   const handleDismiss = async (recipe) => {
     const cardKey = suggestionCardKey(recipe)
-    if (!cardKey || dismissingCardKeys.has(cardKey)) return
+    if (!cardKey || skipInFlightRef.current.has(cardKey)) return
 
-    const snapshot = suggestions
-    removeCardFromSuggestions(cardKey)
+    const hour = frozenHourRef.current
+    const flatBefore = flattenCookDeck(suggestions, hour)
+    const windowBefore = windowCookDeck(flatBefore, 8)
+    const nextKey =
+      deckIndex + 1 < windowBefore.length
+        ? suggestionCardKey(windowBefore[deckIndex + 1])
+        : null
+
+    const flatAfterRemove = flatBefore.filter((r) => suggestionCardKey(r) !== cardKey)
+    const willBeEmpty = flatAfterRemove.length === 0
+
+    skipInFlightRef.current.add(cardKey)
     setDismissingCardKeys((prev) => new Set(prev).add(cardKey))
+    removeCardFromSuggestions(cardKey)
 
     if (
       selectedRecipe &&
@@ -414,7 +513,11 @@ function Recipes() {
       setExitConfirmRecipe(null)
     }
 
+    const newVisible = windowCookDeck(flatAfterRemove, 8)
+    setDeckIndex(computeIndexAfterSkip({ index: deckIndex, nextKey, newVisible }))
+
     if (!userId) {
+      skipInFlightRef.current.delete(cardKey)
       setDismissingCardKeys((prev) => {
         const next = new Set(prev)
         next.delete(cardKey)
@@ -426,17 +529,21 @@ function Recipes() {
     try {
       if (recipe.pool_suggestion_id) {
         await api.suggestions.swipe(userId, recipe.pool_suggestion_id, householdId)
-        void maybeTriggerLowWatermarkRefill()
       } else {
         await api.dismissSuggestion(userId, recipe.id, householdId)
+      }
+
+      if (willBeEmpty) {
+        await generateThenReload({ triggerReason: 'low_watermark' })
       }
     } catch (err) {
       console.error('dismiss failed', err)
       const status = err.response?.status
       if (status !== 404) {
-        setSuggestions(snapshot)
+        setSuggestions((prev) => reinsertCard(prev, recipe))
       }
     } finally {
+      skipInFlightRef.current.delete(cardKey)
       setDismissingCardKeys((prev) => {
         const next = new Set(prev)
         next.delete(cardKey)
@@ -453,6 +560,15 @@ function Recipes() {
         recipeId: String(recipe.recipeIdForCook || recipe.id || ''),
       })
     }
+  }
+
+  const handleDeckIndexChange = (nextIndex) => {
+    if (detailModalOpen) {
+      setDetailModalOpen(false)
+      setSelectedRecipe(null)
+      setExitConfirmRecipe(null)
+    }
+    setDeckIndex(nextIndex)
   }
 
   const handleDetailClose = (meta) => {
@@ -480,52 +596,18 @@ function Recipes() {
     setExitConfirmRecipe(null)
   }
 
-  const renderShelf = (key, title, subtitle, list) => {
-    if (!list || list.length === 0) return null
-    return (
-      <section key={key} className="mb-8">
-        <div className="mb-3">
-          <h2 className="eyebrow">{title}</h2>
-          {subtitle ? <p className="text-sm text-sage-light mt-1">{subtitle}</p> : null}
-        </div>
-        {list.map((recipe) => {
-          const cardKey = suggestionCardKey(recipe)
-          return (
-            <SuggestionRecipeCard
-              key={`${key}-${cardKey}`}
-              recipe={recipe}
-              tier={key}
-              onDismiss={handleDismiss}
-              onExpand={handleExpand}
-              dismissBusy={dismissingCardKeys.has(cardKey)}
-            />
-          )
-        })}
-      </section>
-    )
-  }
-
-  const cookTonightCap = capCookTonight(
-    suggestions.cook_tonight,
-    5,
-    showMoreCookTonight
-  )
-
-  const hasAnyRecipes =
-    (suggestions.use_soon_shelf?.length || 0) +
-      (suggestions.cook_tonight?.length || 0) +
-      (suggestions.probably_have?.length || 0) +
-      (suggestions.check_first?.length || 0) >
-    0
+  const hasRecipes = flattened.length > 0
 
   const selectedCookBusy = selectedRecipe
     ? cookingRecipeIds.has(suggestionCardKey(selectedRecipe))
     : false
 
+  const pageTitle = whatsForMealTitle(frozenHourRef.current)
+
   return (
-    <PullToRefresh onRefresh={handleRefreshPull}>
-      <div>
-        <PageHeader title="Recipe Ideas" />
+    <PullToRefresh onRefresh={handleRefreshPull} disabled={ptrDisabled}>
+      <div className="flex flex-col min-h-[calc(100dvh-8rem)] lg:min-h-0">
+        <PageHeader title={pageTitle} sticky={false} />
 
         <NeedsAttentionSection variant="slim" />
 
@@ -580,7 +662,7 @@ function Recipes() {
           <div className="card flex justify-center py-12">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terra" />
           </div>
-        ) : !hasAnyRecipes ? (
+        ) : !hasRecipes ? (
           <div className="card text-center py-12">
             <div className="mx-auto w-16 h-16 bg-forest-light rounded-full flex items-center justify-center mb-4">
               <svg
@@ -601,36 +683,25 @@ function Recipes() {
             <p className="text-sage-light mb-4">
               Pull down to refresh or add pantry items—we will match recipes to what you have.
             </p>
-            <button type="button" className="btn btn-primary" onClick={() => void loadSuggestions()}>
-              Refresh suggestions
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={refreshingEmpty}
+              onClick={() => void handleEmptyRefresh()}
+            >
+              {refreshingEmpty ? 'Refreshing…' : 'Refresh suggestions'}
             </button>
           </div>
         ) : (
-          <div className="w-full max-w-lg mx-auto">
-            {renderShelf(
-              'use_soon',
-              "Use before it's gone",
-              useSoonShelfSubtitle(suggestions.use_soon_shelf),
-              suggestions.use_soon_shelf
-            )}
-            {renderShelf('cook_tonight', 'Cook tonight', null, cookTonightCap.visible)}
-            {!showMoreCookTonight && cookTonightCap.hiddenCount > 0 ? (
-              <button
-                type="button"
-                className="btn-ghost w-full mb-8"
-                onClick={() => setShowMoreCookTonight(true)}
-              >
-                Show more ({cookTonightCap.hiddenCount})
-              </button>
-            ) : null}
-            {renderShelf(
-              'probably_have',
-              'Probably have everything',
-              null,
-              suggestions.probably_have
-            )}
-            {renderShelf('check_first', 'Quick check needed', null, suggestions.check_first)}
-          </div>
+          <CookPickerDeck
+            visible={visibleDeck}
+            index={deckIndex}
+            onIndexChange={handleDeckIndexChange}
+            onDismiss={handleDismiss}
+            onDetails={handleExpand}
+            dismissBusyKeys={dismissingCardKeys}
+            onHorizontalDragChange={setPtrDisabled}
+          />
         )}
 
         <SuggestionDetailModal
@@ -695,7 +766,8 @@ function Recipes() {
                 userId,
                 householdId
               )
-              setSuggestions(updated)
+              frozenHourRef.current = new Date().getHours()
+              applySuggestions(updated)
               await fetchPantry()
             }}
           />

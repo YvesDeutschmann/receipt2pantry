@@ -1,4 +1,5 @@
 import ColdStartProgressBar from '../ColdStartProgressBar'
+import { whatsForMealTitle } from '../../utils/dinnerPickerRank'
 
 /**
  * Terminal onboarding step: "You're all set" + pulsing What's for Dinner CTA.
@@ -39,7 +40,7 @@ export default function OnboardingPayoffPanel({
           onClick={() => void onComplete()}
           className="w-full btn btn-primary animate-pulse disabled:opacity-50 disabled:cursor-not-allowed disabled:animate-none"
         >
-          {submitting ? 'Opening…' : "What's for Dinner"}
+          {submitting ? 'Opening…' : whatsForMealTitle()}
         </button>
       </div>
     </div>

@@ -86,7 +86,7 @@ describe('DietaryRestrictions joiner payoff', () => {
     expect(await screen.findByText(/You're in — see what you can cook tonight/i)).toBeInTheDocument()
     expect(screen.queryByText(/pantry baseline/i)).not.toBeInTheDocument()
 
-    fireEvent.click(screen.getByRole('button', { name: /What's for Dinner/i }))
+    fireEvent.click(screen.getByRole('button', { name: /What's for (Breakfast|Lunch|Dinner)/i }))
 
     await waitFor(() => {
       expect(onboardingMock.completeJoin).toHaveBeenCalledTimes(1)

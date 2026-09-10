@@ -8,14 +8,15 @@ import {
 } from 'lucide-react'
 import { hapticSelection } from '../utils/haptics'
 import { FEATURES } from '../config/features'
+import { whatsForMealTitle } from '../utils/dinnerPickerRank'
 
 function getTabs() {
   return [
     {
       path: '/recipes',
       icon: UtensilsCrossed,
-      label: 'Dinner',
-      ariaLabel: "What's for Dinner",
+      label: 'Cook',
+      ariaLabel: whatsForMealTitle(),
       enabled: true,
     },
     { path: '/pantry', icon: Package, label: 'Pantry', enabled: true },
