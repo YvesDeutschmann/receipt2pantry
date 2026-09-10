@@ -31,7 +31,8 @@
 
 @layer components {
   .btn {
-    @apply min-h-touch min-w-touch rounded-meald-md font-medium transition-all duration-200 active:scale-[0.98] flex items-center justify-center;
+    @apply min-h-touch min-w-touch font-medium transition-all duration-200 active:scale-[0.98] flex items-center justify-center;
+    border-radius: var(--radius-md);
   }
 
   .btn-secondary {

@@ -26,10 +26,16 @@ def household_service():
 
 
 @pytest.fixture
-def app_with_pool(app, pool_store, pool_generator, household_service):
+def suggestion_service():
+    return MagicMock()
+
+
+@pytest.fixture
+def app_with_pool(app, pool_store, pool_generator, household_service, suggestion_service):
     app.config["POOL_STORE_SERVICE"] = pool_store
     app.config["POOL_GENERATOR"] = pool_generator
     app.config["HOUSEHOLD_SERVICE"] = household_service
+    app.config["SUGGESTION_SERVICE"] = suggestion_service
     return app
 
 
@@ -67,8 +73,8 @@ def test_get_pool_depth_returns_per_slot_counts(client_pool, pool_store):
     assert res.get_json()["depth"]["breakfast"] == 2
 
 
-def test_post_swipe_updates_status_to_swiped(client_pool, pool_store):
-    pool_store.update_status.return_value = True
+def test_post_swipe_updates_status_to_swiped(client_pool, pool_store, suggestion_service):
+    suggestion_service.on_pool_swipe.return_value = True
 
     res = client_pool.post(
         "/api/suggestions/pool/sug-uuid/swipe",
@@ -77,9 +83,10 @@ def test_post_swipe_updates_status_to_swiped(client_pool, pool_store):
     )
     assert res.status_code == 200
     assert res.get_json()["ok"] is True
-    pool_store.update_status.assert_called_once_with(
-        "sug-uuid", "hh-1", "swiped"
+    suggestion_service.on_pool_swipe.assert_called_once_with(
+        "user-1", "hh-1", "sug-uuid"
     )
+    pool_store.update_status.assert_not_called()
 
 
 def test_post_generate_accepts_all_four_trigger_reasons(

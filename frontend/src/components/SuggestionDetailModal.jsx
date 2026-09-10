@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import AdaptiveModal from './AdaptiveModal'
 import ConfidenceIndicator from './ConfidenceIndicator'
 import IngredientCorrection from './IngredientCorrection'
@@ -82,6 +82,16 @@ export function mergeRecipeDetails(recipe, details) {
   }
 }
 
+export const EXIT_CONFIRM_VIEW_THRESHOLD_MS = 30_000
+
+export function hasInstructionContent(recipe) {
+  if (!recipe) return false
+  if (String(recipe.instructions || '').trim()) return true
+  const analyzed = recipe.analyzedInstructions
+  if (!Array.isArray(analyzed)) return false
+  return analyzed.some((group) => Array.isArray(group?.steps) && group.steps.length > 0)
+}
+
 function SuggestionDetailModal({
   isOpen,
   onClose,
@@ -97,6 +107,9 @@ function SuggestionDetailModal({
   const [detailRecipe, setDetailRecipe] = useState(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [expandedKey, setExpandedKey] = useState(null)
+  const openedAtRef = useRef(null)
+  const instructionsReachedRef = useRef(false)
+  const instructionsRef = useRef(null)
 
   const baseFlags = recipe?.ingredient_flags || []
 
@@ -104,8 +117,12 @@ function SuggestionDetailModal({
     if (!isOpen) {
       setDetailRecipe(null)
       setExpandedKey(null)
+      openedAtRef.current = null
+      instructionsReachedRef.current = false
       return
     }
+    openedAtRef.current = Date.now()
+    instructionsReachedRef.current = !hasInstructionContent(recipe)
     if (!recipe) {
       setDetailRecipe(null)
       return
@@ -125,17 +142,23 @@ function SuggestionDetailModal({
     const fetchId = resolveRecipeFetchId(recipe)
     setDetailLoading(true)
     setDetailRecipe({ ...recipe })
+    let cancelled = false
     void (async () => {
       try {
         const details = await api.getRecipeDetails(userId, fetchId)
+        if (cancelled) return
         setDetailRecipe(mergeRecipeDetails(recipe, details))
       } catch (e) {
+        if (cancelled) return
         console.error(e)
         setDetailRecipe(recipe)
       } finally {
-        setDetailLoading(false)
+        if (!cancelled) setDetailLoading(false)
       }
     })()
+    return () => {
+      cancelled = true
+    }
   }, [isOpen, recipe, userId])
 
   const mergedLoading = loading || detailLoading
@@ -160,22 +183,76 @@ function SuggestionDetailModal({
 
   const display = detailRecipe || recipe
 
+  const requestClose = useCallback(() => {
+    const duration = openedAtRef.current ? Date.now() - openedAtRef.current : 0
+    onClose?.({
+      recipe: display,
+      viewDurationMs: duration,
+      instructionsReached: instructionsReachedRef.current,
+    })
+  }, [display, onClose])
+
+  const instructionContent = hasInstructionContent(display)
+
+  useEffect(() => {
+    if (!isOpen) return undefined
+    if (!instructionContent) {
+      instructionsReachedRef.current = true
+      return undefined
+    }
+    instructionsReachedRef.current = false
+    if (mergedLoading || !instructionsRef.current) return undefined
+    const el = instructionsRef.current
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          instructionsReachedRef.current = true
+        }
+      },
+      { threshold: 0.1 }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [isOpen, instructionContent, mergedLoading, display?.instructions, display?.analyzedInstructions])
+
   useEffect(() => {
     const handleEscape = (e) => {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') requestClose()
     }
-    if (isOpen) {
-      document.addEventListener('keydown', handleEscape)
-      document.body.style.overflow = 'hidden'
-    }
+    if (!isOpen) return undefined
+    document.addEventListener('keydown', handleEscape)
     return () => {
       document.removeEventListener('keydown', handleEscape)
-      document.body.style.overflow = 'unset'
     }
-  }, [isOpen, onClose])
+  }, [isOpen, requestClose])
+
+  const cookActionDisabled = cookDisabled || mergedLoading
+
+  const cookFooter = (
+    <div className="px-4 py-3 sm:px-6 space-y-2">
+      {display && (
+        <button
+          type="button"
+          className="w-full bg-terra text-cream font-semibold rounded-meald-md py-3 disabled:opacity-50 disabled:cursor-not-allowed"
+          disabled={cookActionDisabled}
+          onClick={() => onCookedIt(display)}
+        >
+          {cookBusy ? 'Recording…' : 'Cooked it'}
+        </button>
+      )}
+      <button type="button" onClick={requestClose} className="w-full btn btn-secondary">
+        Close
+      </button>
+    </div>
+  )
 
   return (
-    <AdaptiveModal isOpen={isOpen} onClose={onClose} title={display?.title || 'Recipe'}>
+    <AdaptiveModal
+      isOpen={isOpen}
+      onClose={requestClose}
+      title={display?.title || 'Recipe'}
+      footer={cookFooter}
+    >
       <div className="px-4 pt-2 pb-4 sm:px-6">
         {mergedLoading ? (
           <div className="flex justify-center py-12">
@@ -279,8 +356,8 @@ function SuggestionDetailModal({
               </div>
             )}
 
-            {display.instructions && (
-              <div>
+            {instructionContent && (
+              <div ref={instructionsRef}>
                 <h4 className="text-lg font-display font-semibold text-cream mb-3">Instructions</h4>
                 {display.analyzedInstructions && display.analyzedInstructions.length > 0 ? (
                   <div className="space-y-4">
@@ -310,21 +387,6 @@ function SuggestionDetailModal({
             )}
           </div>
         )}
-      </div>
-      <div className="bg-forest px-4 py-3 sm:px-6 border-t border-forest-light space-y-2">
-        {display && (
-          <button
-            type="button"
-            className="w-full bg-terra text-cream font-semibold rounded-meald-md py-3 disabled:opacity-50 disabled:cursor-not-allowed"
-            disabled={cookDisabled}
-            onClick={() => onCookedIt(display)}
-          >
-            {cookBusy ? 'Recording…' : 'Cooked it'}
-          </button>
-        )}
-        <button type="button" onClick={onClose} className="w-full btn btn-secondary">
-          Close
-        </button>
       </div>
     </AdaptiveModal>
   )

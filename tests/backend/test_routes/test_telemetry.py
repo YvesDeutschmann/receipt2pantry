@@ -93,6 +93,52 @@ def test_telemetry_rejects_nested_metadata(telemetry_client, mocker):
     assert response.status_code == 400
 
 
+def test_telemetry_repeatable_events_insert_not_upsert(app, mocker):
+    mocker.patch(
+        "backend.routes.telemetry.get_user_id_from_request",
+        return_value="jwt-user-id",
+    )
+    mock_admin = mocker.MagicMock()
+    tables = {}
+
+    def table(name):
+        if name not in tables:
+            m = mocker.MagicMock()
+            m.insert.return_value.execute.return_value = mocker.MagicMock(data=[{}])
+            m.upsert.return_value.execute.return_value = mocker.MagicMock(data=[{}])
+            tables[name] = m
+        return tables[name]
+
+    mock_admin.table.side_effect = table
+    mock_supabase = mocker.MagicMock()
+    mock_supabase.admin_client = mock_admin
+    app.config["SUPABASE_SERVICE"] = mock_supabase
+    client = app.test_client()
+
+    response = client.post(
+        "/api/telemetry/funnel",
+        data=json.dumps(
+            {
+                "events": [
+                    {"event": "cook_logged", "sessionId": "11111111-1111-1111-1111-111111111111"},
+                    {
+                        "event": "recipe_detail_opened",
+                        "sessionId": "11111111-1111-1111-1111-111111111111",
+                    },
+                ]
+            }
+        ),
+        content_type="application/json",
+        headers={"Authorization": "Bearer fake"},
+    )
+    assert response.status_code == 200
+    assert json.loads(response.data)["accepted"] == 2
+    repeatable = tables["funnel_repeatable_events"]
+    assert repeatable.insert.call_count == 2
+    repeatable.upsert.assert_not_called()
+    assert "funnel_events" not in tables
+
+
 def test_telemetry_accepts_valid_batch(telemetry_client, mocker):
     mocker.patch(
         "backend.routes.telemetry.get_user_id_from_request",

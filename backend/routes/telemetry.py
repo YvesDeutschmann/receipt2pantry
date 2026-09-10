@@ -22,8 +22,12 @@ ALLOWED_EVENTS = frozenset(
         "funnel_staples_confirmed",
         "funnel_first_suggestion_viewed",
         "funnel_first_cook_logged",
+        "recipe_detail_opened",
+        "cook_logged",
     }
 )
+
+REPEATABLE_EVENTS = frozenset({"recipe_detail_opened", "cook_logged"})
 
 MAX_BATCH_SIZE = 20
 MAX_SYNC_BATCH_SIZE = 50
@@ -185,6 +189,10 @@ def ingest_funnel_events():
     client = supabase_service.admin_client
     for row in rows:
         try:
+            if row["event"] in REPEATABLE_EVENTS:
+                client.table("funnel_repeatable_events").insert(row).execute()
+                accepted += 1
+                continue
             client.table("funnel_events").upsert(
                 row,
                 on_conflict="user_id,event",

@@ -8,9 +8,11 @@ import pytest
 
 from backend.services.confidence_engine import (
     PUT_BACK_CONFIDENCE_OVERRIDE,
+    UNIT_ITEM_DEFAULT_DAYS_SUPPLY,
     USE_SOON_DAYS,
     _find_pantry_match,
     compute_confidence,
+    default_days_supply_for,
     find_pantry_match,
     find_pantry_match_for_cook,
     get_calibrated_days_supply,
@@ -403,6 +405,22 @@ def test_staple_known_quantity_acts_as_consumable(default_user_prefs):
 # --- Group 5: UNIT_ITEM ---
 
 
+def test_default_days_supply_for_unit_item_null_is_90():
+    assert default_days_supply_for({"depletion_class": "UNIT_ITEM"}) == UNIT_ITEM_DEFAULT_DAYS_SUPPLY
+    assert default_days_supply_for({}, {"depletion_class": "UNIT_ITEM"}) == UNIT_ITEM_DEFAULT_DAYS_SUPPLY
+
+
+def test_default_days_supply_for_uses_classification_value():
+    assert default_days_supply_for({"depletion_class": "UNIT_ITEM", "default_days_supply": 60}) == 60
+    assert default_days_supply_for({"depletion_class": "CONSUMABLE", "default_days_supply": 45}) == 45
+
+
+def test_default_days_supply_for_non_unit_item_null_is_45():
+    assert default_days_supply_for({"depletion_class": "CONSUMABLE"}) == 45
+    assert default_days_supply_for({"depletion_class": "STAPLE"}) == 45
+    assert default_days_supply_for({}) == 45
+
+
 def test_unit_item_full_untracked(default_user_prefs):
     cls = make_classification(depletion_class="UNIT_ITEM")
     item = make_pantry_item(
@@ -434,7 +452,77 @@ def test_unit_item_empty(default_user_prefs):
     assert compute_confidence(item, default_user_prefs, cls, today=TEST_DATE) == 0.0
 
 
-# --- Group 6: Spice cap ---
+def test_unit_item_stale_untracked_scores_0_20(default_user_prefs):
+    cls = make_classification(depletion_class="UNIT_ITEM", default_days_supply=60)
+    item = make_pantry_item(
+        depletion_class="UNIT_ITEM",
+        base_ingredient="pasta",
+        purchase_date=days_ago(TEST_DATE, 70),
+        quantity_remaining=None,
+    )
+    assert compute_confidence(item, default_user_prefs, cls, today=TEST_DATE) == 0.20
+
+
+def test_unit_item_well_past_supply_scores_0_10(default_user_prefs):
+    cls = make_classification(depletion_class="UNIT_ITEM", default_days_supply=60)
+    item = make_pantry_item(
+        depletion_class="UNIT_ITEM",
+        base_ingredient="pasta",
+        purchase_date=days_ago(TEST_DATE, 120),
+        quantity_remaining=None,
+    )
+    assert compute_confidence(item, default_user_prefs, cls, today=TEST_DATE) == 0.10
+
+
+def test_unit_item_fresh_with_purchase_date_stays_0_90(default_user_prefs):
+    cls = make_classification(depletion_class="UNIT_ITEM", default_days_supply=60)
+    item = make_pantry_item(
+        depletion_class="UNIT_ITEM",
+        base_ingredient="pasta",
+        purchase_date=TEST_DATE,
+        quantity_remaining=None,
+    )
+    assert compute_confidence(item, default_user_prefs, cls, today=TEST_DATE) == 0.90
+
+
+def test_unit_item_partial_decays_when_stale(default_user_prefs):
+    cls = make_classification(depletion_class="UNIT_ITEM", default_days_supply=60)
+    item = make_pantry_item(
+        depletion_class="UNIT_ITEM",
+        quantity_purchased=2,
+        quantity_remaining=1,
+        purchase_date=days_ago(TEST_DATE, 70),
+    )
+    assert compute_confidence(item, default_user_prefs, cls, today=TEST_DATE) == 0.20
+
+
+def test_unit_item_denom_shortens_decay_ladder(default_user_prefs):
+    cls = make_classification(depletion_class="UNIT_ITEM", default_days_supply=60)
+    item = make_pantry_item(
+        depletion_class="UNIT_ITEM",
+        purchase_date=days_ago(TEST_DATE, 95),
+        quantity_remaining=None,
+    )
+    assert (
+        compute_confidence(
+            item,
+            default_user_prefs,
+            cls,
+            today=TEST_DATE,
+            engagement_multiplier=2.0,
+        )
+        == 0.20
+    )
+    assert (
+        compute_confidence(
+            item,
+            default_user_prefs,
+            cls,
+            today=TEST_DATE,
+            engagement_multiplier=1.0,
+        )
+        == 0.10
+    )
 
 
 def test_spice_cap_within_supply(default_user_prefs):

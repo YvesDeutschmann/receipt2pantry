@@ -13,6 +13,7 @@ from backend.services.confidence_engine import (
     _rpc_soft_delete_pantry_item,
     _to_date,
     compute_confidence,
+    default_days_supply_for,
     get_calibrated_days_supply,
     get_engagement_multiplier,
     process_cook_event,
@@ -118,7 +119,7 @@ def _enrich_pantry_summary_with_confidence(
     for item in summary["items"]:
         base = (item.get("base_ingredient") or "").strip().lower()
         cls = classifications.get(base, {})
-        default_days = cls.get("default_days_supply") or 45
+        default_days = default_days_supply_for(cls, item)
         cal = get_calibrated_days_supply(client, user_id, base, int(default_days))
         item["confidence"] = compute_confidence(
             item,
@@ -887,7 +888,7 @@ def pantry_health_card():
         for item in items:
             base = (item.get("base_ingredient") or "").strip().lower()
             cls = classifications.get(base, {})
-            default_days = cls.get("default_days_supply") or 45
+            default_days = default_days_supply_for(cls, item)
             cal = get_calibrated_days_supply(client, user_id, base, int(default_days))
             conf = compute_confidence(
                 item,

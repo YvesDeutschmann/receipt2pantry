@@ -41,7 +41,7 @@ Users remain responsible for checking freshness, especially meat and fish. Meald
 - Do not put roadmap items on the premise that event capture can become complete
 - Prefer receipt-cadence calibration and conservative suggestion tiers over quantity fiction
 - Prefer making cook events a free byproduct of using the recipe screen over asking people to "mark as cooked" later
-- When the app is wrong to the user's face ("I don't have this"), that correction should update belief about the pantry, not only recipe ranking
+- When the app is wrong to the user's face, an explicit per-ingredient correction ("still have it / used it up / never had it") updates belief about the pantry. Recipe swipes ("Not tonight") are taste/ranking signals only — they do not change pantry confidence. Cook events logged in the app also update belief.
 
 Engineering detail for depletion classes, scoring, and failure modes lives in [`docs/implementation_briefs/depletion-logic/meald-depletion-master.md`](implementation_briefs/depletion-logic/meald-depletion-master.md). That document must not contradict this premise.
 

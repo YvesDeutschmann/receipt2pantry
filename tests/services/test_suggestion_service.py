@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from backend.services.confidence_engine import compute_confidence
 from backend.services.suggestion_service import (
     ASPIRATIONAL_CONFIDENCE_PENALTY,
     ASPIRATIONAL_DISMISS_THRESHOLD,
@@ -201,6 +202,39 @@ def test_score_all_high_confidence(suggestion_svc):
     )
     assert out["tier"] == "cook_tonight"
     assert abs(out["score"] - (0.95 + 0.90 + 0.80) / 3) < 0.01
+
+
+def test_LIVE_SCORE_RECIPE_INCLUDES_READYIN_AND_HIGHLIGHTS(suggestion_svc):
+    pantry = [
+        make_pantry_item(base_ingredient="chicken breast", id="a"),
+        make_pantry_item(base_ingredient="spinach", id="b"),
+        make_pantry_item(base_ingredient="garlic", id="c"),
+    ]
+    cls = {
+        "chicken breast": {"is_soft_required": False},
+        "spinach": {"is_soft_required": False},
+        "garlic": {"is_soft_required": False},
+    }
+    recipe = {**_frittata_recipe(), "readyInMinutes": 35}
+    out = suggestion_svc.score_recipe(
+        recipe,
+        pantry,
+        {"depletion_multiplier": 1.0},
+        [],
+        {},
+        cls,
+        today=TEST_DATE,
+        confidence_override_by_base={
+            "chicken breast": 0.95,
+            "spinach": 0.90,
+            "garlic": 0.80,
+        },
+        meal_type="dinner",
+    )
+    assert out["readyInMinutes"] == 35
+    assert len(out["pantry_highlights"]) >= 2
+    assert out["meal_type"] == "dinner"
+    assert out["pool_suggestion_id"] is None
 
 
 def test_score_one_borderline_drops_tier(suggestion_svc):
@@ -475,6 +509,8 @@ def test_aspirational_penalty_applied_after_three_dismissals(suggestion_svc):
         confidence_override_by_base=base,
     )
     assert out_at_3["score"] < out_at_2["score"]
+    assert pantry[0].get("confidence_override") is None
+    assert pantry[0].get("dismiss_count") is None
 
 
 def test_aspirational_penalty_not_persisted_to_db(suggestion_svc):
@@ -530,6 +566,9 @@ def test_aspirational_penalty_does_not_flip_tier_by_itself(suggestion_svc):
     )
     assert out["tier"] == "cook_tonight"
     assert abs(out["score"] - (0.90 - ASPIRATIONAL_CONFIDENCE_PENALTY)) < 0.01
+    # Ranking penalty must not rewrite pantry rows (belief stays on the computed path).
+    assert pantry[0].get("confidence_override") is None
+    assert pantry[0].get("dismiss_count") is None
 
 
 def test_spice_only_uncertainty_stays_cook_tonight(suggestion_svc):
@@ -1100,6 +1139,124 @@ def test_dismiss_marks_pool_row_swiped_by_recipe_id():
 
     svc.on_recipe_dismiss("u1", 99, household_id="hh")
     pool_store.mark_swiped_by_recipe_id.assert_called_once_with("hh", "99")
+
+
+def test_pool_swipe_increments_signals_from_stored_recipe_data():
+    supabase = MagicMock()
+    pantry_service = MagicMock()
+    recipe_service = MagicMock()
+    config = MagicMock()
+    pool_store = MagicMock()
+    svc = SuggestionService(
+        supabase, pantry_service, recipe_service, config, pool_store=pool_store
+    )
+
+    pool_store.get_suggestion.return_value = {
+        "id": "sug-1",
+        "recipe_data": {
+            "extendedIngredients": [{"name": "olive oil"}, {"name": "spinach"}],
+        },
+    }
+    pool_store.update_status.return_value = True
+    pantry_service._get_pantry_items.return_value = [
+        make_pantry_item(base_ingredient="olive oil", id="oil-1"),
+    ]
+
+    ok = svc.on_pool_swipe("u1", "hh", "sug-1")
+    assert ok is True
+    pool_store.update_status.assert_called_once_with("sug-1", "hh", "swiped")
+    supabase.increment_ingredient_dismiss_counts.assert_called_once_with(
+        "u1", ["olive oil"]
+    )
+    recipe_service.get_recipe_details.assert_not_called()
+
+
+def test_pool_swipe_increments_signals_from_used_and_missed_ingredients():
+    supabase = MagicMock()
+    pantry_service = MagicMock()
+    recipe_service = MagicMock()
+    config = MagicMock()
+    pool_store = MagicMock()
+    svc = SuggestionService(
+        supabase, pantry_service, recipe_service, config, pool_store=pool_store
+    )
+
+    pool_store.get_suggestion.return_value = {
+        "id": "sug-1",
+        "recipe_data": {
+            "extendedIngredients": [],
+            "usedIngredients": [{"name": "olive oil"}],
+            "missedIngredients": [{"name": "spinach"}],
+        },
+    }
+    pool_store.update_status.return_value = True
+    pantry_service._get_pantry_items.return_value = [
+        make_pantry_item(base_ingredient="olive oil", id="oil-1"),
+        make_pantry_item(base_ingredient="spinach", id="spin-1"),
+    ]
+
+    ok = svc.on_pool_swipe("u1", "hh", "sug-1")
+    assert ok is True
+    supabase.increment_ingredient_dismiss_counts.assert_called_once()
+    names = supabase.increment_ingredient_dismiss_counts.call_args[0][1]
+    assert set(names) == {"olive oil", "spinach"}
+    recipe_service.get_recipe_details.assert_not_called()
+
+
+def test_compute_confidence_ignores_dismiss_signal_counts(default_user_prefs):
+    import inspect
+
+    params = inspect.signature(compute_confidence).parameters
+    assert "signals" not in params
+    assert "dismiss_count" not in params
+    assert "ingredient_signals" not in params
+
+    cls = {"depletion_class": "CONSUMABLE", "default_days_supply": 45, "is_soft_required": False}
+    item = make_pantry_item(
+        depletion_class="CONSUMABLE",
+        base_ingredient="olive oil",
+        purchase_date=TEST_DATE,
+    )
+    noisy = {
+        **item,
+        "dismiss_count": ASPIRATIONAL_DISMISS_THRESHOLD * 10,
+        "ingredient_signals": ASPIRATIONAL_DISMISS_THRESHOLD * 10,
+    }
+    base = compute_confidence(
+        item, default_user_prefs, cls, today=TEST_DATE, calibrated_days=45
+    )
+    with_noise = compute_confidence(
+        noisy, default_user_prefs, cls, today=TEST_DATE, calibrated_days=45
+    )
+    assert base == with_noise == 0.80
+
+
+def test_score_recipe_unit_item_null_default_uses_90_day_ladder(suggestion_svc):
+    pantry = [
+        make_pantry_item(
+            base_ingredient="soy sauce",
+            depletion_class="UNIT_ITEM",
+            purchase_date=days_ago(TEST_DATE, 70),
+            quantity_remaining=None,
+        )
+    ]
+    cls = {"soy sauce": {"depletion_class": "UNIT_ITEM", "is_soft_required": False}}
+    recipe = {
+        "id": 9,
+        "title": "Stir fry",
+        "extendedIngredients": [{"name": "soy sauce", "aisle": "Ethnic Foods"}],
+    }
+    out = suggestion_svc.score_recipe(
+        recipe,
+        pantry,
+        {"depletion_multiplier": 1.0},
+        [],
+        {},
+        cls,
+        today=TEST_DATE,
+    )
+    assert out["tier"] != "suppressed"
+    assert out["ingredient_flags"][0]["confidence"] == 0.60
 
 
 def test_dismiss_without_pool_store_still_succeeds():

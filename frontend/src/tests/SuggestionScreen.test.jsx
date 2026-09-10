@@ -26,8 +26,16 @@ const {
   triggerGeneration,
   devCookLoopReport,
   postDevLog,
+  getRecipeDetails,
 } = vi.hoisted(() => ({
   getSuggestions: vi.fn(),
+  getRecipeDetails: vi.fn(() =>
+    Promise.resolve({
+      extendedIngredients: [{ name: 'x', original: 'x' }],
+      instructions: 'Step one.\nStep two.',
+      analyzedInstructions: [{ steps: [{ number: 1, step: 'Step one.' }] }],
+    })
+  ),
   markCooked: vi.fn(),
   dismissSuggestion: vi.fn(),
   getHousehold: vi.fn(),
@@ -56,9 +64,13 @@ const {
   postDevLog: vi.fn(),
 }))
 
+const mockAuthUser = vi.hoisted(() => ({
+  current: { id: 'user-1', email: 't@example.com' },
+}))
+
 vi.mock('../contexts/AuthContext', () => ({
   useAuth: () => ({
-    user: { id: 'user-1', email: 't@example.com' },
+    user: mockAuthUser.current,
     session: {},
     loading: false,
   }),
@@ -113,7 +125,6 @@ vi.mock('framer-motion', async () => {
             role="presentation"
             onClick={(e) => {
               if (e.target.closest('[data-testid="simulate-swipe-dismiss"]')) return
-              if (e.target.closest('button')) return
               onTap?.(e)
             }}
           >
@@ -135,12 +146,7 @@ vi.mock('../services/apiClient', () => ({
     getHealthCard,
     dismissHealthCard,
     devCookLoopReport,
-    getRecipeDetails: vi.fn(() =>
-      Promise.resolve({
-        extendedIngredients: [{ name: 'x', original: 'x' }],
-        instructions: '',
-      })
-    ),
+    getRecipeDetails,
     correctPantryItem: vi.fn(() => Promise.resolve({ ok: true })),
     suggestions: {
       getPool,
@@ -152,6 +158,20 @@ vi.mock('../services/apiClient', () => ({
   postDevLog,
 }))
 
+const emit = vi.fn()
+const emitRepeatable = vi.fn()
+
+vi.mock('../services/funnelTelemetry', () => ({
+  emit: (...args) => emit(...args),
+  emitRepeatable: (...args) => emitRepeatable(...args),
+  FunnelEvent: {
+    FIRST_SUGGESTION_VIEWED: 'funnel_first_suggestion_viewed',
+    FIRST_COOK_LOGGED: 'funnel_first_cook_logged',
+    RECIPE_DETAIL_OPENED: 'recipe_detail_opened',
+    COOK_LOGGED: 'cook_logged',
+  },
+}))
+
 function recipeStub(overrides) {
   return {
     id: 'r1',
@@ -161,12 +181,66 @@ function recipeStub(overrides) {
     score: 1,
     trigger_ingredient: null,
     ingredient_flags: [],
+    pantry_highlights: [],
+    readyInMinutes: null,
+    meal_type: null,
+    pool_suggestion_id: null,
     ...overrides,
+  }
+}
+
+function poolCookCard(overrides = {}) {
+  const poolId = overrides.pool_suggestion_id ?? 'sug-1'
+  const recipeId = overrides.id ?? '500'
+  return recipeStub({
+    id: String(recipeId),
+    pool_suggestion_id: poolId,
+    meal_type: 'dinner',
+    score: 0.9,
+    ...overrides,
+  })
+}
+
+function sixCookTonight(prefix) {
+  return Array.from({ length: 6 }, (_, i) =>
+    poolCookCard({
+      id: `${prefix}-${i + 1}`,
+      title: `${prefix} Meal ${i + 1}`,
+      pool_suggestion_id: `${prefix}-sug-${i + 1}`,
+      meal_type: 'dinner',
+      score: 0.99 - i * 0.01,
+    })
+  )
+}
+
+async function cookFromModal(title) {
+  const restoreIO = stubIntersectingObserver()
+  fireEvent.click(screen.getByText(title))
+  const buttons = await screen.findAllByRole('button', { name: /^Cooked it$/i })
+  fireEvent.click(buttons[buttons.length - 1])
+  restoreIO()
+}
+
+function stubIntersectingObserver() {
+  const original = global.IntersectionObserver
+  global.IntersectionObserver = class {
+    constructor(callback) {
+      this.callback = callback
+    }
+    observe() {
+      this.callback([{ isIntersecting: true }])
+    }
+    unobserve() {}
+    disconnect() {}
+  }
+  return () => {
+    global.IntersectionObserver = original
   }
 }
 
 describe('SuggestionScreen', () => {
   beforeEach(() => {
+    mockAuthUser.current = { id: 'user-1', email: 't@example.com' }
     getSuggestions.mockClear()
     markCooked.mockClear()
     dismissSuggestion.mockClear()
@@ -175,11 +249,14 @@ describe('SuggestionScreen', () => {
     getHealthCard.mockClear()
     dismissHealthCard.mockClear()
     getPool.mockClear()
+    getRecipeDetails.mockClear()
     getDepth.mockClear()
     swipeSuggestion.mockClear()
     triggerGeneration.mockClear()
     devCookLoopReport.mockClear()
     postDevLog.mockClear()
+    emit.mockClear()
+    emitRepeatable.mockClear()
     triggerGeneration.mockImplementation(() =>
       Promise.resolve({ status: 'completed', suggestions_generated: 1 })
     )
@@ -187,6 +264,13 @@ describe('SuggestionScreen', () => {
     getPantry.mockResolvedValue({ grouped: [] })
     getHealthCard.mockResolvedValue({ show: false, items: [] })
     getSuggestions.mockImplementation(() => Promise.resolve(EMPTY_SUGGESTIONS))
+    getRecipeDetails.mockImplementation(() =>
+      Promise.resolve({
+        extendedIngredients: [{ name: 'x', original: 'x' }],
+        instructions: 'Step one.\nStep two.',
+        analyzedInstructions: [{ steps: [{ number: 1, step: 'Step one.' }] }],
+      })
+    )
     getPool.mockImplementation(() =>
       Promise.resolve({
         pool: { breakfast: [], lunch: [], dinner: [] },
@@ -347,7 +431,8 @@ describe('SuggestionScreen', () => {
     )
 
     render(<Recipes />)
-    fireEvent.click(await screen.findByRole('button', { name: /Cooked it/i }))
+    await screen.findByText('Test')
+    await cookFromModal('Test')
 
     expect(markCooked).toHaveBeenCalledWith(
       'user-1',
@@ -375,10 +460,31 @@ describe('SuggestionScreen', () => {
       })
     )
     render(<Recipes />)
-    fireEvent.click(await screen.findByRole('button', { name: /Cooked it/i }))
+    await screen.findByText('Test')
+    await cookFromModal('Test')
     expect(
       await screen.findByText('Logged. Nothing in your pantry matched this recipe.')
     ).toBeInTheDocument()
+  })
+
+  it('LIST_HAS_NO_COOKED_IT_OR_INGREDIENT_CORRECTION', async () => {
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [recipeStub({ id: 'c1', title: 'List Card' })],
+      probably_have: [],
+      check_first: [
+        recipeStub({
+          id: 'k1',
+          title: 'Check Card',
+          tier: 'check_first',
+          trigger_ingredient: 'milk',
+        }),
+      ],
+    })
+    render(<Recipes />)
+    await screen.findByText('List Card')
+    expect(screen.queryAllByRole('button', { name: /^Cooked it$/i })).toHaveLength(0)
+    expect(screen.queryByRole('button', { name: /Still have it/i })).not.toBeInTheDocument()
   })
 
   it('DISMISS_REMOVES_CARD_OPTIMISTICALLY', async () => {
@@ -418,48 +524,49 @@ describe('SuggestionScreen', () => {
     getSuggestions.mockImplementation(() => Promise.resolve(shelfPayload))
     render(<Recipes />)
     await screen.findByText('Cook tonight')
-    expect(getPool).toHaveBeenCalled()
+    expect(getPool).not.toHaveBeenCalled()
     expect(getSuggestions).toHaveBeenCalled()
   })
 
-  it('POOL_FIRST_LOAD_SHOWS_READY_TO_COOK_WITHOUT_LIVE_SUGGESTIONS', async () => {
-    getPool.mockResolvedValue({
-      pool: {
-        breakfast: [],
-        lunch: [],
-        dinner: [
-          {
-            id: 'sug-1',
-            recipe_id: '500',
-            recipe_name: 'Pool Pasta',
-            recipe_image: null,
-            recipe_data: { title: 'Pool Pasta' },
-            match_score: 0.9,
-          },
-        ],
-      },
-      household_id: 'h1',
+  it('NO_POOL_SUBTITLE_AND_NO_OUTER_SHELF_CARD', async () => {
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        poolCookCard({ id: '500', title: 'Pool Pasta', pool_suggestion_id: 'sug-1' }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
+    const { container } = render(<Recipes />)
+    await screen.findByText('Pool Pasta')
+    expect(screen.queryByText(/From your suggestion pool/i)).not.toBeInTheDocument()
+    expect(container.querySelector('.card .eyebrow')).toBeNull()
+  })
+
+  it('POOL_FIRST_LOAD_SHOWS_COOK_TONIGHT_FROM_SUGGESTIONS', async () => {
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        poolCookCard({ id: '500', title: 'Pool Pasta', pool_suggestion_id: 'sug-1' }),
+      ],
+      probably_have: [],
+      check_first: [],
     })
     render(<Recipes />)
-    await screen.findByText('Ready to cook')
+    await screen.findByText('Cook tonight')
     await screen.findByText('Pool Pasta')
     expect(getSuggestions).toHaveBeenCalled()
+    expect(getPool).not.toHaveBeenCalled()
   })
 
   it('POOL_FIRST_LOAD_NO_SPINNER_AFTER_CONTENT', async () => {
-    getPool.mockResolvedValue({
-      pool: {
-        dinner: [
-          {
-            id: 'sug-1',
-            recipe_id: '500',
-            recipe_name: 'Quick Pool',
-            recipe_image: null,
-            recipe_data: {},
-            match_score: 0.9,
-          },
-        ],
-      },
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        poolCookCard({ id: '500', title: 'Quick Pool', pool_suggestion_id: 'sug-1' }),
+      ],
+      probably_have: [],
+      check_first: [],
     })
     render(<Recipes />)
     await screen.findByText('Quick Pool')
@@ -467,29 +574,14 @@ describe('SuggestionScreen', () => {
   })
 
   it('POOL_SWIPE_USES_POOL_ENDPOINT_AND_LOW_WATERMARK', async () => {
-    getPool.mockResolvedValue({
-      pool: {
-        breakfast: [],
-        lunch: [],
-        dinner: [
-          {
-            id: 'sug-1',
-            recipe_id: '500',
-            recipe_name: 'First',
-            recipe_image: null,
-            recipe_data: {},
-            match_score: 0.9,
-          },
-          {
-            id: 'sug-2',
-            recipe_id: '501',
-            recipe_name: 'Second',
-            recipe_image: null,
-            recipe_data: {},
-            match_score: 0.8,
-          },
-        ],
-      },
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        poolCookCard({ id: '500', title: 'First', pool_suggestion_id: 'sug-1' }),
+        poolCookCard({ id: '501', title: 'Second', pool_suggestion_id: 'sug-2', score: 0.8 }),
+      ],
+      probably_have: [],
+      check_first: [],
     })
     getDepth.mockResolvedValue({
       depth: { breakfast: 1, lunch: 5, dinner: 5 },
@@ -514,31 +606,23 @@ describe('SuggestionScreen', () => {
 
   it('POOL_COOK_SENDS_REAL_BOM_AND_SWIPES', async () => {
     let afterCook = false
-    getPool.mockImplementation(async () => {
-      if (afterCook) {
-        return { pool: { breakfast: [], lunch: [], dinner: [] }, household_id: 'h1' }
-      }
+    getSuggestions.mockImplementation(async () => {
+      if (afterCook) return EMPTY_SUGGESTIONS
       return {
-        pool: {
-          breakfast: [],
-          lunch: [],
-          dinner: [
-            {
-              id: 'sug-pool-1',
-              recipe_id: '500',
-              recipe_name: 'Chicken Parm',
-              recipe_image: null,
-              recipe_data: {
-                extendedIngredients: [
-                  { name: 'chicken breast' },
-                  { name: 'parmesan' },
-                ],
-              },
-              match_score: 0.9,
-            },
-          ],
-        },
-        household_id: 'h1',
+        use_soon_shelf: [],
+        cook_tonight: [
+          poolCookCard({
+            id: '500',
+            title: 'Chicken Parm',
+            pool_suggestion_id: 'sug-pool-1',
+            extendedIngredients: [
+              { name: 'chicken breast' },
+              { name: 'parmesan' },
+            ],
+          }),
+        ],
+        probably_have: [],
+        check_first: [],
       }
     })
     markCooked.mockImplementation(async () => {
@@ -555,7 +639,7 @@ describe('SuggestionScreen', () => {
 
     render(<Recipes />)
     await screen.findByText('Chicken Parm')
-    fireEvent.click(screen.getByRole('button', { name: /^Cooked it$/i }))
+    await cookFromModal('Chicken Parm')
 
     await waitFor(() => {
       expect(markCooked).toHaveBeenCalledWith(
@@ -576,27 +660,24 @@ describe('SuggestionScreen', () => {
   })
 
   it('POOL_COOK_STAPLE_EMPTY_INGREDIENTS', async () => {
-    getPool.mockImplementation(async () => ({
-      pool: {
-        breakfast: [],
-        lunch: [],
-        dinner: [
-          {
-            id: 'sug-staple',
-            recipe_id: 'staple_omelette',
-            recipe_name: 'Omelette',
-            recipe_data: {},
-            match_score: 1,
-          },
-        ],
-      },
-      household_id: 'h1',
-    }))
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        poolCookCard({
+          id: 'staple_omelette',
+          title: 'Omelette',
+          pool_suggestion_id: 'sug-staple',
+          score: 1,
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
     markCooked.mockResolvedValue({ ok: true, touched: [] })
 
     render(<Recipes />)
     await screen.findByText('Omelette')
-    fireEvent.click(screen.getByRole('button', { name: /^Cooked it$/i }))
+    await cookFromModal('Omelette')
 
     await waitFor(() => {
       expect(markCooked).toHaveBeenCalledWith(
@@ -612,24 +693,28 @@ describe('SuggestionScreen', () => {
   })
 
   it('POOL_COOK_EMPTY_BOM_SKIPS_MARKCOOKED', async () => {
-    getPool.mockImplementation(async () => ({
-      pool: {
-        dinner: [
-          {
-            id: 'sug-thin',
-            recipe_id: '600',
-            recipe_name: 'Mystery Meal',
-            recipe_data: {},
-            match_score: 0.5,
-          },
-        ],
-      },
-      household_id: 'h1',
-    }))
+    getRecipeDetails.mockResolvedValue({
+      extendedIngredients: [],
+      instructions: '',
+      analyzedInstructions: [],
+    })
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        poolCookCard({
+          id: '600',
+          title: 'Mystery Meal',
+          pool_suggestion_id: 'sug-thin',
+          score: 0.5,
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
 
     render(<Recipes />)
     await screen.findByText('Mystery Meal')
-    fireEvent.click(screen.getByRole('button', { name: /^Cooked it$/i }))
+    await cookFromModal('Mystery Meal')
 
     await waitFor(() => {
       expect(screen.getByText(/Open the recipe to log what you used/)).toBeInTheDocument()
@@ -646,24 +731,24 @@ describe('SuggestionScreen', () => {
           resolveCook = () => resolve({ ok: true, touched: [] })
         })
     )
-    getPool.mockImplementation(async () => ({
-      pool: {
-        dinner: [
-          {
-            id: 'sug-dup',
-            recipe_id: '700',
-            recipe_name: 'Dup Test',
-            recipe_data: { extendedIngredients: [{ name: 'rice' }] },
-            match_score: 0.9,
-          },
-        ],
-      },
-      household_id: 'h1',
-    }))
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        poolCookCard({
+          id: '700',
+          title: 'Dup Test',
+          pool_suggestion_id: 'sug-dup',
+          extendedIngredients: [{ name: 'rice' }],
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
 
     render(<Recipes />)
     await screen.findByText('Dup Test')
-    const btn = screen.getByRole('button', { name: /^Cooked it$/i })
+    fireEvent.click(screen.getByText('Dup Test'))
+    const btn = await screen.findByRole('button', { name: /^Cooked it$/i })
     fireEvent.click(btn)
     fireEvent.click(btn)
     expect(markCooked).toHaveBeenCalledTimes(1)
@@ -673,51 +758,467 @@ describe('SuggestionScreen', () => {
     })
   })
 
+  it('RECIPE_DETAIL_OPENED_TELEMETRY_ON_EXPAND', async () => {
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [recipeStub({ id: 'c1', title: 'Telemetry Pasta' })],
+      probably_have: [],
+      check_first: [],
+    })
+    render(<Recipes />)
+    await screen.findByText('Telemetry Pasta')
+    fireEvent.click(screen.getByText('Telemetry Pasta'))
+    await waitFor(() => {
+      expect(emitRepeatable).toHaveBeenCalledWith(
+        'recipe_detail_opened',
+        'user-1',
+        expect.objectContaining({ recipeId: 'c1' })
+      )
+    })
+  })
+
+  it('COOK_LOGGED_TELEMETRY_ON_EVERY_COOK', async () => {
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        recipeStub({
+          id: 'c1',
+          title: 'Cook Telemetry',
+          extendedIngredients: [{ name: 'beans', original: 'beans' }],
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
+    markCooked.mockResolvedValue({ ok: true, touched: [] })
+    render(<Recipes />)
+    await screen.findByText('Cook Telemetry')
+    await cookFromModal('Cook Telemetry')
+    await waitFor(() => {
+      expect(emitRepeatable).toHaveBeenCalledWith(
+        'cook_logged',
+        'user-1',
+        expect.objectContaining({ recipeId: 'c1' })
+      )
+    })
+  })
+
+  it('EXIT_CONFIRM_AFTER_VIEW_THRESHOLD', async () => {
+    let now = 1_000_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const restoreIO = stubIntersectingObserver()
+
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        recipeStub({
+          id: 'c1',
+          title: 'Exit Confirm Soup',
+          extendedIngredients: [{ name: 'carrot', original: 'carrot' }],
+          instructions: 'Boil carrots.',
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
+
+    render(<Recipes />)
+    await screen.findByText('Exit Confirm Soup')
+    fireEvent.click(screen.getByText('Exit Confirm Soup'))
+    const closeButtons = await screen.findAllByRole('button', { name: /^Close$/i })
+    now += 31_000
+    fireEvent.click(closeButtons[closeButtons.length - 1])
+    await waitFor(() => {
+      expect(screen.getByText('Did you cook this?')).toBeInTheDocument()
+    })
+    nowSpy.mockRestore()
+    restoreIO()
+  })
+
+  it('EXIT_CONFIRM_NOT_BEFORE_THRESHOLD', async () => {
+    let now = 1_500_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const restoreIO = stubIntersectingObserver()
+
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        recipeStub({
+          id: 'c1',
+          title: 'Too Fast Soup',
+          extendedIngredients: [{ name: 'carrot', original: 'carrot' }],
+          instructions: 'Boil carrots.',
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
+
+    render(<Recipes />)
+    await screen.findByText('Too Fast Soup')
+    fireEvent.click(screen.getByText('Too Fast Soup'))
+    const closeButtons = await screen.findAllByRole('button', { name: /^Close$/i })
+    now += 5_000
+    fireEvent.click(closeButtons[closeButtons.length - 1])
+    await waitFor(() => {
+      expect(screen.queryByText('Did you cook this?')).not.toBeInTheDocument()
+    })
+    nowSpy.mockRestore()
+    restoreIO()
+  })
+
+  it('EXIT_CONFIRM_ANALYZED_INSTRUCTIONS_WITHOUT_HTML', async () => {
+    let now = 1_800_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const restoreIO = stubIntersectingObserver()
+
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        recipeStub({
+          id: 'c1',
+          title: 'Analyzed Only',
+          extendedIngredients: [{ name: 'rice', original: 'rice' }],
+          instructions: '',
+          analyzedInstructions: [{ steps: [{ number: 1, step: 'Cook the rice.' }] }],
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
+
+    render(<Recipes />)
+    await screen.findByText('Analyzed Only')
+    fireEvent.click(screen.getByText('Analyzed Only'))
+    expect(await screen.findByText('Cook the rice.')).toBeInTheDocument()
+    const closeButtons = await screen.findAllByRole('button', { name: /^Close$/i })
+    now += 31_000
+    fireEvent.click(closeButtons[closeButtons.length - 1])
+    await waitFor(() => {
+      expect(screen.getByText('Did you cook this?')).toBeInTheDocument()
+    })
+    nowSpy.mockRestore()
+    restoreIO()
+  })
+
+  it('EXIT_CONFIRM_WITHOUT_INSTRUCTIONS_AFTER_THRESHOLD', async () => {
+    let now = 4_000_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        recipeStub({
+          id: 'c1',
+          title: 'No Steps Pasta',
+          extendedIngredients: [{ name: 'pasta', original: 'pasta' }],
+          instructions: '',
+          analyzedInstructions: [],
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
+
+    render(<Recipes />)
+    await screen.findByText('No Steps Pasta')
+    fireEvent.click(screen.getByText('No Steps Pasta'))
+    const closeButtons = await screen.findAllByRole('button', { name: /^Close$/i })
+    now += 31_000
+    fireEvent.click(closeButtons[closeButtons.length - 1])
+    await waitFor(() => {
+      expect(screen.getByText('Did you cook this?')).toBeInTheDocument()
+    })
+    nowSpy.mockRestore()
+  })
+
+  it('EXIT_CONFIRM_ONE_TAP_COOK_PRESERVES_POOL_ID', async () => {
+    let now = 2_000_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const restoreIO = stubIntersectingObserver()
+
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        poolCookCard({
+          id: '900',
+          title: 'Pool Exit',
+          pool_suggestion_id: 'pool-sug-1',
+          extendedIngredients: [{ name: 'rice', original: 'rice' }],
+          instructions: 'Cook rice.',
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
+    markCooked.mockResolvedValue({ ok: true, touched: [] })
+
+    render(<Recipes />)
+    await screen.findByText('Pool Exit')
+    fireEvent.click(screen.getByText('Pool Exit'))
+    const closeButtons = await screen.findAllByRole('button', { name: /^Close$/i })
+    now += 31_000
+    fireEvent.click(closeButtons[closeButtons.length - 1])
+    await screen.findByText('Did you cook this?')
+    fireEvent.click(screen.getByRole('button', { name: /Yes, cooked it/i }))
+    await waitFor(() => {
+      expect(markCooked).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({
+          poolSuggestionId: 'pool-sug-1',
+          ingredients: [{ name: 'rice', amount: 1, unit: 'serving' }],
+        })
+      )
+    })
+    nowSpy.mockRestore()
+    restoreIO()
+  })
+
+  it('EXIT_CONFIRM_DISMISS_SUPPRESSES_RE_PROMPT', async () => {
+    let now = 3_000_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const restoreIO = stubIntersectingObserver()
+
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        recipeStub({
+          id: 'c1',
+          title: 'Dismiss Prompt',
+          extendedIngredients: [{ name: 'lentils', original: 'lentils' }],
+          instructions: 'Simmer lentils.',
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
+
+    render(<Recipes />)
+    await screen.findByText('Dismiss Prompt')
+    const openAndClose = async () => {
+      fireEvent.click(screen.getByText('Dismiss Prompt'))
+      const closeButtons = await screen.findAllByRole('button', { name: /^Close$/i })
+      now += 31_000
+      fireEvent.click(closeButtons[closeButtons.length - 1])
+    }
+    await openAndClose()
+    await screen.findByText('Did you cook this?')
+    fireEvent.click(screen.getByRole('button', { name: /Not this time/i }))
+    await waitFor(() => {
+      expect(screen.queryByText('Did you cook this?')).not.toBeInTheDocument()
+    })
+    now += 31_000
+    await openAndClose()
+    expect(screen.queryByText('Did you cook this?')).not.toBeInTheDocument()
+    nowSpy.mockRestore()
+    restoreIO()
+  })
+
+  it('EXIT_CONFIRM_TOAST_PORTALED', async () => {
+    let now = 5_000_000
+    const nowSpy = vi.spyOn(Date, 'now').mockImplementation(() => now)
+    const restoreIO = stubIntersectingObserver()
+
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        recipeStub({
+          id: 'c1',
+          title: 'Portal Soup',
+          extendedIngredients: [{ name: 'carrot', original: 'carrot' }],
+          instructions: 'Boil carrots.',
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
+
+    render(<Recipes />)
+    await screen.findByText('Portal Soup')
+    fireEvent.click(screen.getByText('Portal Soup'))
+    const closeButtons = await screen.findAllByRole('button', { name: /^Close$/i })
+    now += 31_000
+    fireEvent.click(closeButtons[closeButtons.length - 1])
+    await waitFor(() => {
+      expect(screen.getByText('Did you cook this?')).toBeInTheDocument()
+    })
+    const overlay = screen.getByTestId('exit-confirm-overlay')
+    expect(document.body).toContainElement(overlay)
+    expect(overlay.className).toContain('pb-tab-bar')
+    expect(overlay.className).toContain('pointer-events-none')
+
+    nowSpy.mockRestore()
+    restoreIO()
+  })
+
+  it('FAILED_COOK_LEAVES_SHEET_OPEN', async () => {
+    const restoreIO = stubIntersectingObserver()
+    markCooked.mockRejectedValue(new Error('network'))
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        recipeStub({
+          id: 'c1',
+          title: 'Sheet Stay Open',
+          extendedIngredients: [{ name: 'lentils', original: 'lentils' }],
+          instructions: 'Simmer lentils.',
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
+
+    render(<Recipes />)
+    await screen.findByText('Sheet Stay Open')
+    fireEvent.click(screen.getByText('Sheet Stay Open'))
+    const cookedButtons = await screen.findAllByRole('button', { name: /^Cooked it$/i })
+    fireEvent.click(cookedButtons[cookedButtons.length - 1])
+
+    await waitFor(() => {
+      expect(screen.getByText(/partially recorded/)).toBeInTheDocument()
+    })
+    expect(screen.getAllByRole('button', { name: /^Close$/i }).length).toBeGreaterThan(0)
+    expect(screen.getAllByRole('button', { name: /^Cooked it$/i }).length).toBeGreaterThan(0)
+
+    markCooked.mockClear()
+    markCooked.mockResolvedValue({ ok: true, touched: [] })
+    restoreIO()
+  })
+
+  it('FAILED_COOK_EMPTY_BOM_LEAVES_SHEET_OPEN', async () => {
+    const restoreIO = stubIntersectingObserver()
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        recipeStub({
+          id: 'c1',
+          title: 'Empty BOM Soup',
+          extendedIngredients: [],
+          ingredient_flags: [],
+          instructions: 'Guess.',
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
+
+    render(<Recipes />)
+    await screen.findByText('Empty BOM Soup')
+    fireEvent.click(screen.getByText('Empty BOM Soup'))
+    const cookedButtons = await screen.findAllByRole('button', { name: /^Cooked it$/i })
+    fireEvent.click(cookedButtons[cookedButtons.length - 1])
+
+    await waitFor(() => {
+      expect(screen.getByText(/Open the recipe to log what you used/i)).toBeInTheDocument()
+    })
+    expect(screen.getAllByRole('button', { name: /^Close$/i }).length).toBeGreaterThan(0)
+    expect(markCooked).not.toHaveBeenCalled()
+    restoreIO()
+  })
+
+  it('CHECK_FIRST_NAMED_LINE_WITHOUT_LIST_CORRECTION', async () => {
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [],
+      probably_have: [],
+      check_first: [
+        recipeStub({
+          id: 'k1',
+          tier: 'check_first',
+          title: 'Curry Check',
+          trigger_ingredient: 'coconut milk',
+        }),
+      ],
+    })
+    render(<Recipes />)
+    await screen.findByText('Curry Check')
+    expect(screen.getByText(/Confirm you still have: coconut milk/i)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Still have it/i })).not.toBeInTheDocument()
+  })
+
+  it('CHECK_FIRST_SHOWS_WITH_WARM_POOL', async () => {
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        poolCookCard({
+          id: '500',
+          title: 'Pool Pasta',
+          pool_suggestion_id: 'sug-pool',
+          extendedIngredients: [{ name: 'pasta' }],
+        }),
+      ],
+      probably_have: [recipeStub({ id: 'p1', title: 'Probably Salad', tier: 'probably_have' })],
+      check_first: [
+        recipeStub({
+          id: 'k1',
+          title: 'Check Curry',
+          tier: 'check_first',
+          trigger_ingredient: 'coconut milk',
+        }),
+      ],
+    })
+    render(<Recipes />)
+    await screen.findByText('Pool Pasta')
+    expect(screen.getByText('Cook tonight')).toBeInTheDocument()
+    expect(screen.getByText('Check Curry')).toBeInTheDocument()
+    expect(screen.getByText('Quick check needed')).toBeInTheDocument()
+    expect(screen.getByText('Probably Salad')).toBeInTheDocument()
+    expect(screen.getByText(/Confirm you still have: coconut milk/i)).toBeInTheDocument()
+  })
+
   it('POOL_COOK_MARKCOOKED_FAILURE_NO_SWIPE', async () => {
     markCooked.mockRejectedValue(new Error('network'))
-    getPool.mockImplementation(async () => ({
-      pool: {
-        dinner: [
-          {
-            id: 'sug-fail',
-            recipe_id: '800',
-            recipe_name: 'Fail Test',
-            recipe_data: { extendedIngredients: [{ name: 'salt' }] },
-            match_score: 0.9,
-          },
-        ],
-      },
-      household_id: 'h1',
-    }))
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        poolCookCard({
+          id: '800',
+          title: 'Fail Test',
+          pool_suggestion_id: 'sug-fail',
+          extendedIngredients: [{ name: 'salt' }],
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
 
     render(<Recipes />)
     await screen.findByText('Fail Test')
-    fireEvent.click(screen.getByRole('button', { name: /^Cooked it$/i }))
+    await cookFromModal('Fail Test')
 
     await waitFor(() => {
       expect(screen.getByText(/partially recorded/)).toBeInTheDocument()
     })
     expect(swipeSuggestion).not.toHaveBeenCalled()
-    expect(screen.getByText('Fail Test')).toBeInTheDocument()
+    expect(screen.getAllByText('Fail Test').length).toBeGreaterThan(0)
   })
 
   it('POOL_COOK_SWIPE_FAILURE_CARD_STAYS_GONE', async () => {
-    const poolRow = {
-      id: 'sug-swipe-fail',
-      recipe_id: '900',
-      recipe_name: 'Swipe Fail',
-      recipe_data: { extendedIngredients: [{ name: 'pasta' }] },
-      match_score: 0.9,
-    }
-    getPool.mockImplementation(async () => ({
-      pool: { dinner: [poolRow] },
-      household_id: 'h1',
-    }))
-    markCooked.mockResolvedValue({ ok: true, touched: [] })
+    let afterCook = false
+    getSuggestions.mockImplementation(async () => {
+      if (afterCook) return EMPTY_SUGGESTIONS
+      return {
+        use_soon_shelf: [],
+        cook_tonight: [
+          poolCookCard({
+            id: '900',
+            title: 'Swipe Fail',
+            pool_suggestion_id: 'sug-swipe-fail',
+            extendedIngredients: [{ name: 'pasta' }],
+          }),
+        ],
+        probably_have: [],
+        check_first: [],
+      }
+    })
+    markCooked.mockImplementation(async () => {
+      afterCook = true
+      return { ok: true, touched: [] }
+    })
 
     render(<Recipes />)
     await screen.findByText('Swipe Fail')
-    fireEvent.click(screen.getByRole('button', { name: /^Cooked it$/i }))
+    await cookFromModal('Swipe Fail')
 
     await waitFor(() => {
       expect(markCooked).toHaveBeenCalled()
@@ -738,33 +1239,32 @@ describe('SuggestionScreen', () => {
       callOrder.push('getDepth')
       return { depth: { breakfast: 1, lunch: 5, dinner: 5 }, household_id: 'h1' }
     })
-    getPool.mockImplementation(async () => {
-      callOrder.push('getPool')
+    getSuggestions.mockImplementation(async () => {
+      callOrder.push('getSuggestions')
       return {
-        pool: {
-          dinner: [
-            {
-              id: 'sug-order',
-              recipe_id: '950',
-              recipe_name: 'Order Test',
-              recipe_data: { extendedIngredients: [{ name: 'beans' }] },
-              match_score: 0.9,
-            },
-          ],
-        },
-        household_id: 'h1',
+        use_soon_shelf: [],
+        cook_tonight: [
+          poolCookCard({
+            id: '950',
+            title: 'Order Test',
+            pool_suggestion_id: 'sug-order',
+            extendedIngredients: [{ name: 'beans' }],
+          }),
+        ],
+        probably_have: [],
+        check_first: [],
       }
     })
 
     render(<Recipes />)
     await screen.findByText('Order Test')
-    fireEvent.click(screen.getByRole('button', { name: /^Cooked it$/i }))
+    await cookFromModal('Order Test')
 
     await waitFor(() => {
       expect(callOrder.indexOf('markCooked')).toBeGreaterThanOrEqual(0)
       expect(callOrder.indexOf('getDepth')).toBeGreaterThan(callOrder.indexOf('markCooked'))
-      const poolAfterCook = callOrder.filter((c) => c === 'getPool').length
-      expect(poolAfterCook).toBeGreaterThan(1)
+      const reloads = callOrder.filter((c) => c === 'getSuggestions').length
+      expect(reloads).toBeGreaterThan(1)
     })
     expect(swipeSuggestion).not.toHaveBeenCalled()
   })
@@ -790,7 +1290,7 @@ describe('SuggestionScreen', () => {
     })
     render(<Recipes />)
     await screen.findByText('Spinach Pasta')
-    fireEvent.click(screen.getByRole('button', { name: /Cooked it/i }))
+    await cookFromModal('Spinach Pasta')
     await waitFor(() => {
       expect(screen.getByText('Still have these?')).toBeInTheDocument()
       expect(screen.getByText('spinach')).toBeInTheDocument()
@@ -798,22 +1298,7 @@ describe('SuggestionScreen', () => {
     expect(getHealthCard).not.toHaveBeenCalled()
   })
 
-  it('POOL_SHOWS_USE_SOON_ABOVE_READY_TO_COOK', async () => {
-    getPool.mockResolvedValue({
-      pool: {
-        dinner: [
-          {
-            id: 'sug-1',
-            recipe_id: '500',
-            recipe_name: 'Pool Pasta',
-            recipe_image: null,
-            recipe_data: { title: 'Pool Pasta' },
-            match_score: 0.9,
-          },
-        ],
-      },
-      household_id: 'h1',
-    })
+  it('POOL_SHOWS_USE_SOON_ABOVE_COOK_TONIGHT', async () => {
     getSuggestions.mockResolvedValue({
       use_soon_shelf: [
         recipeStub({
@@ -825,13 +1310,15 @@ describe('SuggestionScreen', () => {
           ],
         }),
       ],
-      cook_tonight: [],
+      cook_tonight: [
+        poolCookCard({ id: '500', title: 'Pool Pasta', pool_suggestion_id: 'sug-1' }),
+      ],
       probably_have: [],
       check_first: [],
     })
     render(<Recipes />)
     const useSoonHeader = await screen.findByText("Use before it's gone")
-    const readyHeader = await screen.findByText('Ready to cook')
+    const readyHeader = await screen.findByText('Cook tonight')
     expect(
       useSoonHeader.compareDocumentPosition(readyHeader) & Node.DOCUMENT_POSITION_FOLLOWING
     ).toBeTruthy()
@@ -855,7 +1342,6 @@ describe('SuggestionScreen', () => {
     })
     render(<Recipes />)
     await screen.findByText('Old Card')
-    const poolCallsBefore = getPool.mock.calls.length
     fireEvent.click(screen.getByRole('button', { name: /Pull refresh/i }))
     await waitFor(() => {
       expect(triggerGeneration).toHaveBeenCalledWith(
@@ -863,7 +1349,6 @@ describe('SuggestionScreen', () => {
         expect.objectContaining({ triggerReason: 'manual_refresh' })
       )
     })
-    expect(getPool.mock.calls.length).toBe(poolCallsBefore)
     getSuggestions.mockResolvedValue({
       use_soon_shelf: [],
       cook_tonight: [recipeStub({ id: 'c2', title: 'New Card' })],
@@ -872,29 +1357,25 @@ describe('SuggestionScreen', () => {
     })
     resolveGen({ status: 'completed', suggestions_generated: 1 })
     await screen.findByText('New Card')
+    expect(getSuggestions.mock.calls.length).toBeGreaterThan(1)
   })
 
   it('POOL_COOK_CARD_GONE_AFTER_REMOUNT', async () => {
     let afterCook = false
-    getPool.mockImplementation(async () => {
-      if (afterCook) {
-        return { pool: { breakfast: [], lunch: [], dinner: [] }, household_id: 'h1' }
-      }
+    getSuggestions.mockImplementation(async () => {
+      if (afterCook) return EMPTY_SUGGESTIONS
       return {
-        pool: {
-          breakfast: [],
-          lunch: [],
-          dinner: [
-            {
-              id: 'sug-remount',
-              recipe_id: '500',
-              recipe_name: 'Remount Soup',
-              recipe_data: { extendedIngredients: [{ name: 'carrot' }] },
-              match_score: 0.9,
-            },
-          ],
-        },
-        household_id: 'h1',
+        use_soon_shelf: [],
+        cook_tonight: [
+          poolCookCard({
+            id: '500',
+            title: 'Remount Soup',
+            pool_suggestion_id: 'sug-remount',
+            extendedIngredients: [{ name: 'carrot' }],
+          }),
+        ],
+        probably_have: [],
+        check_first: [],
       }
     })
     markCooked.mockImplementation(async () => {
@@ -903,40 +1384,34 @@ describe('SuggestionScreen', () => {
     })
     const { unmount } = render(<Recipes />)
     await screen.findByText('Remount Soup')
-    fireEvent.click(screen.getByRole('button', { name: /^Cooked it$/i }))
+    await cookFromModal('Remount Soup')
     await waitFor(() => expect(markCooked).toHaveBeenCalledTimes(1))
     unmount()
     render(<Recipes />)
-    await waitFor(() => expect(getPool.mock.calls.length).toBeGreaterThan(1))
+    await waitFor(() => expect(getSuggestions.mock.calls.length).toBeGreaterThan(1))
     expect(screen.queryByText('Remount Soup')).not.toBeInTheDocument()
     expect(swipeSuggestion).not.toHaveBeenCalled()
   })
 
   it('DEV_COOK_LOOP_OBSERVE_LOGS_QA_AFTER_COOK', async () => {
-    getPool.mockResolvedValue({
-      pool: {
-        breakfast: [],
-        lunch: [],
-        dinner: [
-          {
-            id: 'sug-dev',
-            recipe_id: 'dev_cook_loop',
-            recipe_name: '[DEV] Cook-loop pasta',
-            recipe_data: {
-              title: '[DEV] Cook-loop pasta',
-              servings: 4,
-              extendedIngredients: [
-                { name: 'pasta' },
-                { name: 'tomatoes' },
-                { name: 'olive oil' },
-                { name: 'rice vinegar' },
-              ],
-            },
-            match_score: 0.9999,
-          },
-        ],
-      },
-      household_id: 'h1',
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        poolCookCard({
+          id: 'dev_cook_loop',
+          title: '[DEV] Cook-loop pasta',
+          pool_suggestion_id: 'sug-dev',
+          score: 0.9999,
+          extendedIngredients: [
+            { name: 'pasta' },
+            { name: 'tomatoes' },
+            { name: 'olive oil' },
+            { name: 'rice vinegar' },
+          ],
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
     })
     markCooked.mockResolvedValue({
       ok: true,
@@ -948,7 +1423,7 @@ describe('SuggestionScreen', () => {
     })
     render(<Recipes />)
     await screen.findByText('[DEV] Cook-loop pasta')
-    fireEvent.click(screen.getByRole('button', { name: /^Cooked it$/i }))
+    await cookFromModal('[DEV] Cook-loop pasta')
     await waitFor(() => expect(devCookLoopReport).toHaveBeenCalled())
     await waitFor(() =>
       expect(postDevLog).toHaveBeenCalledWith(
@@ -956,6 +1431,41 @@ describe('SuggestionScreen', () => {
         expect.stringContaining('mode=observe')
       )
     )
+  })
+
+  it('SHOW_MORE_AND_SESSION_REFS_RESET_ON_USER_CHANGE', async () => {
+    const shelf = (cards) => ({
+      use_soon_shelf: [],
+      cook_tonight: cards,
+      probably_have: [],
+      check_first: [],
+    })
+    getSuggestions.mockImplementation((uid) =>
+      Promise.resolve(shelf(uid === 'user-2' ? sixCookTonight('U2') : sixCookTonight('U1')))
+    )
+
+    const { rerender } = render(<Recipes />)
+    await screen.findByText('U1 Meal 1')
+    expect(screen.queryByText('U1 Meal 6')).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Show more \(1\)/i }))
+    expect(screen.getByText('U1 Meal 6')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Show more/i })).not.toBeInTheDocument()
+
+    await waitFor(() => {
+      expect(emit).toHaveBeenCalledWith('funnel_first_suggestion_viewed', 'user-1')
+    })
+    emit.mockClear()
+
+    mockAuthUser.current = { id: 'user-2', email: 'u2@example.com' }
+    rerender(<Recipes />)
+
+    await screen.findByText('U2 Meal 1')
+    expect(screen.queryByText('U1 Meal 1')).not.toBeInTheDocument()
+    expect(screen.queryByText('U2 Meal 6')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Show more \(1\)/i })).toBeInTheDocument()
+    await waitFor(() => {
+      expect(emit).toHaveBeenCalledWith('funnel_first_suggestion_viewed', 'user-2')
+    })
   })
 })
 
@@ -1059,7 +1569,6 @@ describe('SuggestionRecipeCard disclaimer', () => {
             },
           ],
         })}
-        onCookedIt={vi.fn()}
         onDismiss={vi.fn()}
         onExpand={vi.fn()}
       />
@@ -1082,11 +1591,106 @@ describe('SuggestionRecipeCard disclaimer', () => {
             },
           ],
         })}
-        onCookedIt={vi.fn()}
         onDismiss={vi.fn()}
         onExpand={vi.fn()}
       />
     )
     expect(screen.queryByText(/Check before cooking/)).not.toBeInTheDocument()
+  })
+
+  it('SWIPE_OVERLAY_SAYS_NOT_TONIGHT', () => {
+    render(
+      <SuggestionRecipeCard
+        recipe={recipeStub({ title: 'Swipe Copy' })}
+        onDismiss={vi.fn()}
+        onExpand={vi.fn()}
+      />
+    )
+    expect(screen.getAllByText('Not tonight').length).toBeGreaterThan(0)
+    expect(screen.queryByText(/Don't have this/i)).not.toBeInTheDocument()
+  })
+
+  it('SKIPPED_OVERLAY_USES_ERROR_TOKEN', () => {
+    const { container } = render(
+      <SuggestionRecipeCard
+        recipe={recipeStub({ title: 'Swipe Copy' })}
+        onDismiss={vi.fn()}
+        onExpand={vi.fn()}
+      />
+    )
+    const overlay = container.querySelector('[style*="color-mix"]')
+    expect(overlay).toBeTruthy()
+    expect(overlay?.className || '').not.toMatch(/bg-red-600/)
+  })
+
+  it('NOT_TONIGHT_BUTTON_DISMISSES_WITHOUT_EXPAND', () => {
+    const onExpand = vi.fn()
+    const onDismiss = vi.fn()
+    render(
+      <SuggestionRecipeCard
+        recipe={recipeStub({ title: 'Curry Check' })}
+        onDismiss={onDismiss}
+        onExpand={onExpand}
+      />
+    )
+    fireEvent.click(screen.getByRole('button', { name: /^Not tonight$/i }))
+    expect(onDismiss).toHaveBeenCalled()
+    expect(onExpand).not.toHaveBeenCalled()
+  })
+
+  it('CARD_SHOWS_PHOTO_TIME_AND_USES_LINE', () => {
+    render(
+      <SuggestionRecipeCard
+        recipe={recipeStub({
+          title: 'Egg Toast',
+          readyInMinutes: 20,
+          pantry_highlights: ['eggs', 'bread'],
+          image: 'https://img.test/egg.jpg',
+        })}
+        onDismiss={vi.fn()}
+        onExpand={vi.fn()}
+      />
+    )
+    expect(screen.getByText('20 min')).toBeInTheDocument()
+    expect(screen.getByText(/Uses eggs and bread/i)).toBeInTheDocument()
+  })
+})
+
+describe('Dinner picker dismiss', () => {
+  beforeEach(() => {
+    mockAuthUser.current = { id: 'user-1', email: 't@example.com' }
+    getSuggestions.mockClear()
+    swipeSuggestion.mockClear()
+    dismissSuggestion.mockClear()
+    getHousehold.mockResolvedValue({ household: { id: 'h1' } })
+    getPantry.mockResolvedValue({ grouped: [] })
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        poolCookCard({ id: '500', title: 'Pool Card', pool_suggestion_id: 'sug-dismiss' }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
+  })
+
+  it('DISMISS_USES_POOL_SUGGESTION_ID_NOT_RECIPE_ID', async () => {
+    render(<Recipes />)
+    await screen.findByText('Pool Card')
+    fireEvent.click(screen.getByRole('button', { name: /^Not tonight$/i }))
+    await waitFor(() => {
+      expect(swipeSuggestion).toHaveBeenCalledWith('user-1', 'sug-dismiss', 'h1')
+    })
+    expect(dismissSuggestion).not.toHaveBeenCalled()
+  })
+
+  it('DISMISS_NETWORK_ERROR_RESTORES_CARD', async () => {
+    swipeSuggestion.mockRejectedValueOnce(new Error('network'))
+    render(<Recipes />)
+    await screen.findByText('Pool Card')
+    fireEvent.click(screen.getByRole('button', { name: /^Not tonight$/i }))
+    await waitFor(() => {
+      expect(screen.getByText('Pool Card')).toBeInTheDocument()
+    })
   })
 })

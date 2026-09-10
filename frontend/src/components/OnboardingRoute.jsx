@@ -18,7 +18,7 @@ function OnboardingRoute() {
   }
 
   if (onboardingComplete) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/recipes" replace />
   }
 
   return (

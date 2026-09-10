@@ -19,6 +19,7 @@ logger = get_logger(__name__)
 # Put-back: user explicitly says item is still there — highest trust until window ends.
 PUT_BACK_CONFIDENCE_OVERRIDE = 0.85
 USE_SOON_DAYS = 2
+UNIT_ITEM_DEFAULT_DAYS_SUPPLY = 90
 
 # Meat/fish put-back limit (application-level; matches depletion docs)
 MAX_PUT_BACK_SUBCLASSES = frozenset({"raw_meat", "raw_fish"})
@@ -94,6 +95,20 @@ def resolve_depletion_class(pantry_item: dict, classification: dict) -> str:
     ).upper()
 
 
+def default_days_supply_for(
+    classification: Optional[dict] = None,
+    pantry_item: Optional[dict] = None,
+) -> int:
+    """Classification default_days_supply, else 90 for UNIT_ITEM and 45 otherwise."""
+    cls = classification or {}
+    raw = cls.get("default_days_supply")
+    if raw is not None:
+        return int(raw)
+    if resolve_depletion_class(pantry_item or {}, cls) == "UNIT_ITEM":
+        return UNIT_ITEM_DEFAULT_DAYS_SUPPLY
+    return 45
+
+
 def compute_confidence(
     pantry_item: dict,
     user_prefs: dict,
@@ -106,8 +121,8 @@ def compute_confidence(
     """
     Compute current confidence for a pantry row. Never reads/writes a stored confidence column.
 
-    Multipliers apply to time-based classes (PERISHABLE, CONSUMABLE, STAPLE-as-consumable).
-    UNIT_ITEM uses quantity bands only (no multipliers).
+    Multipliers apply to time-based classes (PERISHABLE, CONSUMABLE, STAPLE, UNIT_ITEM).
+    UNIT_ITEM combines quantity event bands with a time ceiling: min(event_band, time_ceiling).
     Spice soft-required cap is applied last: min(score, 0.60).
     """
     # User-set overrides (Health Card, put-back) are not spice-capped — explicit trust wins.
@@ -132,7 +147,9 @@ def compute_confidence(
     elif depletion_class == "STAPLE":
         score = _score_staple(pantry_item, classification, today, calibrated_days, denom)
     elif depletion_class == "UNIT_ITEM":
-        score = _score_unit_item(pantry_item)
+        score = _score_unit_item(
+            pantry_item, classification, today, calibrated_days, denom
+        )
     else:
         score = 0.0
 
@@ -234,7 +251,7 @@ def _score_staple(
     return _score_consumable(row, classification, today, calibrated_days, denom)
 
 
-def _score_unit_item(pantry_item: dict) -> float:
+def _unit_item_event_band(pantry_item: dict) -> float:
     remaining = pantry_item.get("quantity_remaining")
     if remaining is None:
         return 0.90
@@ -242,6 +259,54 @@ def _score_unit_item(pantry_item: dict) -> float:
     if q > 0:
         return 0.60
     return 0.00
+
+
+def _unit_item_time_ceiling(
+    pantry_item: dict,
+    classification: dict,
+    today: date,
+    calibrated_days: Optional[int],
+    denom: float,
+) -> float:
+    anchor = _to_date(pantry_item.get("purchase_date")) or _to_date(
+        pantry_item.get("added_at")
+    )
+    if anchor is None:
+        return 1.00
+
+    cal = calibrated_days
+    if cal is None:
+        cal = default_days_supply_for(classification, pantry_item)
+    cal = int(cal)
+
+    estimated = date.fromordinal(anchor.toordinal() + cal)
+    days_remaining = (estimated - today).days
+    adjusted = days_remaining / denom
+
+    low = cal * -0.5
+    quarter = cal * 0.25
+
+    if adjusted > quarter:
+        return 1.00
+    if adjusted > 0:
+        return 0.60
+    if adjusted > low:
+        return 0.20
+    return 0.10
+
+
+def _score_unit_item(
+    pantry_item: dict,
+    classification: dict,
+    today: date,
+    calibrated_days: Optional[int],
+    denom: float,
+) -> float:
+    event_band = _unit_item_event_band(pantry_item)
+    ceiling = _unit_item_time_ceiling(
+        pantry_item, classification, today, calibrated_days, denom
+    )
+    return min(event_band, ceiling)
 
 
 def get_calibrated_days_supply(

@@ -24,3 +24,19 @@ export function pantryIngredientNamesMatch(pantryName, recipeName) {
   }
   return true
 }
+
+/** Find a pantry variant row matching a recipe/trigger ingredient name. */
+export function findPantryVariantForIngredientName(pantryData, ingredientName) {
+  if (!pantryData?.grouped || !ingredientName) return null
+  const needle = String(ingredientName).trim()
+  for (const g of pantryData.grouped) {
+    const base = g.base_ingredient
+    for (const v of g.variants || []) {
+      const names = [base, v.normalized_name]
+      if (names.some((n) => pantryIngredientNamesMatch(n, needle))) {
+        return v
+      }
+    }
+  }
+  return null
+}

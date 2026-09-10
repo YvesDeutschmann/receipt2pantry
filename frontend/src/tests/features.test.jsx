@@ -15,13 +15,14 @@ vi.mock('../config/features', () => ({
   FEATURES: mockFeatures,
 }))
 
-const { getHousehold, getPantry } = vi.hoisted(() => ({
+const { getHousehold, getPantry, getReceiptSummary } = vi.hoisted(() => ({
   getHousehold: vi.fn(),
   getPantry: vi.fn(),
+  getReceiptSummary: vi.fn(),
 }))
 
 vi.mock('../services/apiClient', () => ({
-  api: { getHousehold, getPantry },
+  api: { getHousehold, getPantry, getReceiptSummary },
 }))
 
 vi.mock('../contexts/AuthContext', () => ({
@@ -52,7 +53,6 @@ vi.mock('../services/providerAttentionStore', () => ({
 
 import BottomTabBar from '../components/BottomTabBar'
 import TopNavBar from '../components/TopNavBar'
-import Dashboard from '../pages/Dashboard'
 import Auth from '../pages/Auth'
 
 function MealPlanRouteProbe() {
@@ -62,9 +62,10 @@ function MealPlanRouteProbe() {
 function TestAppRoutes({ mealPlanner }) {
   return (
     <Routes>
-      <Route index element={<Dashboard />} />
+      <Route index element={<Navigate to="/recipes" replace />} />
+      <Route path="recipes" element={<h1>Dinner</h1>} />
       {mealPlanner && <Route path="meal-plan" element={<MealPlanRouteProbe />} />}
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/recipes" replace />} />
     </Routes>
   )
 }
@@ -81,6 +82,12 @@ describe('meal planner feature flag', () => {
     }
     getHousehold.mockResolvedValue({ household: null })
     getPantry.mockResolvedValue({ grouped: [] })
+    getReceiptSummary.mockResolvedValue({
+      total_receipts: 0,
+      month_spend: 0,
+      total_items: 0,
+      recent: [],
+    })
   })
 
   it('BOTTOM_TAB_HIDES_MEAL_PLAN_WHEN_FLAG_OFF', () => {
@@ -103,14 +110,25 @@ describe('meal planner feature flag', () => {
     expect(screen.getByRole('link', { name: /what's for dinner/i })).toBeInTheDocument()
   })
 
-  it('MEAL_PLAN_ROUTE_REDIRECTS_TO_DASHBOARD_WHEN_FLAG_OFF', () => {
+  it('MEAL_PLAN_ROUTE_REDIRECTS_TO_RECIPES_WHEN_FLAG_OFF', () => {
     render(
       <MemoryRouter initialEntries={['/meal-plan']}>
         <TestAppRoutes mealPlanner={false} />
       </MemoryRouter>
     )
-    expect(screen.getByRole('heading', { name: /dashboard/i })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: /^dinner$/i })).toBeInTheDocument()
     expect(screen.queryByRole('heading', { name: /^meal plan$/i })).not.toBeInTheDocument()
+  })
+
+  it('TAB_BAR_HAS_NO_DASHBOARD_DINNER_IS_FIRST', () => {
+    render(
+      <MemoryRouter>
+        <BottomTabBar />
+      </MemoryRouter>
+    )
+    expect(screen.queryByRole('link', { name: /dashboard/i })).not.toBeInTheDocument()
+    const links = screen.getAllByRole('link')
+    expect(links[0]).toHaveAttribute('href', '/recipes')
   })
 
   it('BOTTOM_TAB_SHOWS_MEAL_PLAN_WHEN_FLAG_ON', () => {
@@ -172,5 +190,31 @@ describe('email auth feature flag', () => {
     )
     expect(screen.getByRole('button', { name: /sign in with google/i })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /use email instead/i })).toBeInTheDocument()
+  })
+})
+
+describe('Track 1 home routing', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    mockFeatures.mealPlanner = false
+    mockFeatures.emailAuth = false
+  })
+
+  it('INDEX_AND_AUTH_REDIRECT_TO_RECIPES', () => {
+    mockAuthUser.current = {
+      id: 'user-1',
+      email: 'test@example.com',
+      user_metadata: { onboarding_completed_at: '2026-01-01' },
+    }
+    render(
+      <MemoryRouter initialEntries={['/auth']}>
+        <Routes>
+          <Route path="/auth" element={<Auth />} />
+          <Route path="/recipes" element={<h1>Dinner</h1>} />
+        </Routes>
+      </MemoryRouter>
+    )
+    expect(screen.getByRole('heading', { name: /^dinner$/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /sign in with google/i })).not.toBeInTheDocument()
   })
 })

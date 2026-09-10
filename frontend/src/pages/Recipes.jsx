@@ -1,16 +1,23 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import { api, postDevLog } from '../services/apiClient'
 import { useAuth } from '../contexts/AuthContext'
 import { emit, emitRepeatable, FunnelEvent } from '../services/funnelTelemetry'
 import HealthCard from '../components/HealthCard'
 import IngredientCorrection from '../components/IngredientCorrection'
+import { APP_OVERLAY_Z_CLASS } from '../components/AdaptiveModal'
 import SuggestionDetailModal, {
   EXIT_CONFIRM_VIEW_THRESHOLD_MS,
 } from '../components/SuggestionDetailModal'
 import SuggestionRecipeCard from '../components/SuggestionRecipeCard'
 import PageHeader from '../components/PageHeader'
+import NeedsAttentionSection from '../components/NeedsAttentionSection'
 import PullToRefresh from '../components/PullToRefresh'
 import { buildCookIngredients, isStapleRecipeId } from '../utils/buildCookIngredients'
+import {
+  capCookTonight,
+  suggestionCardKey,
+} from '../utils/dinnerPickerRank'
 import {
   clientCookLoopChecks,
   compactCookLoopQaLog,
@@ -45,31 +52,28 @@ function cookConfirmationMessage(touched) {
   return `Used ${names.slice(0, 3).join(', ')} from your pantry.`
 }
 
-/** Map suggestion_pool row to recipe card shape. */
-function normalizePoolRow(row) {
-  const data = row.recipe_data || {}
-  const rid = row.recipe_id != null ? String(row.recipe_id) : ''
+function normalizeSuggestionCard(recipe) {
+  const fromPool = Boolean(recipe?.pool_suggestion_id)
   return {
-    id: row.id,
-    recipeIdForCook: rid,
-    title: row.recipe_name || data.title || 'Recipe',
-    image: row.recipe_image || data.image,
-    tier: 'cook_tonight',
-    servings: data.servings || 4,
-    extendedIngredients: data.extendedIngredients || [],
-    ingredient_flags: [],
-    _fromPool: true,
-    match_score: row.match_score,
+    ...recipe,
+    recipeIdForCook: recipe.id,
+    _fromPool: fromPool,
   }
 }
 
-function flattenPoolToCookTonight(pool, cookedPoolIds = new Set()) {
-  const p = pool || {}
-  const rows = [...(p.breakfast || []), ...(p.lunch || []), ...(p.dinner || [])]
-  return rows
-    .map(normalizePoolRow)
-    .filter((r) => !cookedPoolIds.has(r.id))
-    .sort((a, b) => (b.match_score || 0) - (a.match_score || 0))
+function normalizeSuggestionsPayload(data) {
+  const src = data || EMPTY_SUGGESTIONS
+  return {
+    use_soon_shelf: (src.use_soon_shelf || []).map(normalizeSuggestionCard),
+    cook_tonight: (src.cook_tonight || []).map(normalizeSuggestionCard),
+    probably_have: (src.probably_have || []).map(normalizeSuggestionCard),
+    check_first: (src.check_first || []).map(normalizeSuggestionCard),
+  }
+}
+
+async function fetchSuggestionsPayload(userId, householdId) {
+  const liveData = await api.getSuggestions(userId, householdId)
+  return { suggestions: normalizeSuggestionsPayload(liveData) }
 }
 
 function orderedUseSoonNames(shelfRecipes) {
@@ -98,42 +102,6 @@ function useSoonShelfSubtitle(shelfRecipes) {
   return `Recipes using your ${names[0]} and ${names[1]}`
 }
 
-async function fetchSuggestionsPayload(userId, householdId, cookedPoolIds = new Set()) {
-  let poolPayload = null
-  try {
-    poolPayload = await api.suggestions?.getPool?.(userId, householdId)
-  } catch (e) {
-    console.warn('Suggestion pool unavailable:', e)
-  }
-  let liveData = EMPTY_SUGGESTIONS
-  try {
-    liveData = await api.getSuggestions(userId, householdId)
-  } catch (e) {
-    console.warn('Live suggestions unavailable:', e)
-  }
-  const pool = poolPayload?.pool
-  const cookFromPool = flattenPoolToCookTonight(pool, cookedPoolIds)
-  if (cookFromPool.length > 0) {
-    return {
-      usingPool: true,
-      suggestions: {
-        ...EMPTY_SUGGESTIONS,
-        use_soon_shelf: liveData.use_soon_shelf || [],
-        cook_tonight: cookFromPool,
-      },
-    }
-  }
-  return {
-    usingPool: false,
-    suggestions: {
-      use_soon_shelf: liveData.use_soon_shelf || [],
-      cook_tonight: liveData.cook_tonight || [],
-      probably_have: liveData.probably_have || [],
-      check_first: liveData.check_first || [],
-    },
-  }
-}
-
 function Recipes() {
   const [suggestions, setSuggestions] = useState(EMPTY_SUGGESTIONS)
   const [loading, setLoading] = useState(true)
@@ -147,8 +115,9 @@ function Recipes() {
   const [detailModalOpen, setDetailModalOpen] = useState(false)
   const [exitConfirmRecipe, setExitConfirmRecipe] = useState(null)
   const [pantryData, setPantryData] = useState(null)
-  const [usingPool, setUsingPool] = useState(false)
+  const [showMoreCookTonight, setShowMoreCookTonight] = useState(false)
   const [cookingRecipeIds, setCookingRecipeIds] = useState(() => new Set())
+  const [dismissingCardKeys, setDismissingCardKeys] = useState(() => new Set())
 
   const { user } = useAuth()
   const userId = user?.id
@@ -164,6 +133,15 @@ function Recipes() {
   const syncCookingUi = useCallback(() => {
     setCookingRecipeIds(new Set(cookInFlightRef.current))
   }, [])
+
+  useEffect(() => {
+    setShowMoreCookTonight(false)
+    cookedPoolIdsRef.current = new Set()
+    exitConfirmSuppressedRef.current = new Set()
+    firstSuggestionEmitted.current = false
+    cookInFlightRef.current = new Set()
+    syncCookingUi()
+  }, [userId, syncCookingUi])
 
   const fetchPantry = useCallback(async () => {
     if (!userId) return
@@ -217,13 +195,8 @@ function Recipes() {
     }
     setError(null)
     try {
-      const { usingPool: fromPool, suggestions: next } = await fetchSuggestionsPayload(
-        userId,
-        householdId,
-        cookedPoolIdsRef.current
-      )
+      const { suggestions: next } = await fetchSuggestionsPayload(userId, householdId)
       initialLoadDoneRef.current = true
-      setUsingPool(fromPool)
       setSuggestions(next)
       const hasAnySuggestion =
         (next.use_soon_shelf?.length > 0) ||
@@ -247,7 +220,6 @@ function Recipes() {
         setError(apiError || 'Failed to load recipe suggestions.')
       }
       setSuggestions(EMPTY_SUGGESTIONS)
-      setUsingPool(false)
     } finally {
       setLoading(false)
     }
@@ -295,19 +267,10 @@ function Recipes() {
     void fetchPantry()
   }
 
-  const handleIngredientCorrected = async (action) => {
-    if (action === 'used_it_up' || action === 'never_had_it') {
-      await regeneratePoolThenReload()
-    } else {
-      await loadSuggestions()
-    }
-    void fetchPantry()
-  }
-
   const handleCookedIt = async (recipe) => {
-    if (!userId || !recipe?.id) return
-    const cardId = recipe.id
-    if (cookInFlightRef.current.has(cardId)) return
+    if (!userId || !recipe?.id) return false
+    const cardId = suggestionCardKey(recipe)
+    if (cookInFlightRef.current.has(cardId)) return false
 
     cookInFlightRef.current.add(cardId)
     syncCookingUi()
@@ -317,7 +280,7 @@ function Recipes() {
       setError(OPEN_RECIPE_MESSAGE)
       cookInFlightRef.current.delete(cardId)
       syncCookingUi()
-      return
+      return false
     }
 
     const recipeId = recipe.recipeIdForCook || recipe.id
@@ -338,7 +301,7 @@ function Recipes() {
         servings: recipe.servings || 4,
         ingredients,
         householdId: hh,
-        poolSuggestionId: recipe._fromPool ? recipe.id : undefined,
+        poolSuggestionId: recipe.pool_suggestion_id || undefined,
       })
       if (!firstCookEmitted.current) {
         firstCookEmitted.current = true
@@ -348,16 +311,18 @@ function Recipes() {
         recipeId: String(recipeId),
       })
       setExitConfirmRecipe(null)
-      if (recipe.id) {
-        exitConfirmSuppressedRef.current.add(recipe.id)
+      if (cardId) {
+        exitConfirmSuppressedRef.current.add(cardId)
       }
 
-      if (recipe._fromPool) {
-        cookedPoolIdsRef.current.add(recipe.id)
+      if (recipe.pool_suggestion_id) {
+        cookedPoolIdsRef.current.add(recipe.pool_suggestion_id)
         setSuggestions((prev) => {
           const next = { ...prev }
           for (const key of Object.keys(next)) {
-            next[key] = next[key].filter((r) => r.id !== recipe.id)
+            next[key] = next[key].filter(
+              (r) => suggestionCardKey(r) !== cardId
+            )
           }
           return next
         })
@@ -385,12 +350,7 @@ function Recipes() {
         }
       }
 
-      const { usingPool: fromPool, suggestions: updated } = await fetchSuggestionsPayload(
-        userId,
-        hh,
-        cookedPoolIdsRef.current
-      )
-      setUsingPool(fromPool)
+      const { suggestions: updated } = await fetchSuggestionsPayload(userId, hh)
       setSuggestions(updated)
       void fetchPantry()
 
@@ -417,32 +377,71 @@ function Recipes() {
           }
         })()
       }
+      return true
     } catch (err) {
       setError(err.response?.data?.error || COOK_PARTIAL_ERROR)
+      return false
     } finally {
       cookInFlightRef.current.delete(cardId)
       syncCookingUi()
     }
   }
 
-  const handleDismiss = async (recipe) => {
+  const removeCardFromSuggestions = (cardKey) => {
     setSuggestions((prev) => {
       const next = { ...prev }
       for (const key of Object.keys(next)) {
-        next[key] = next[key].filter((r) => r.id !== recipe.id)
+        next[key] = next[key].filter((r) => suggestionCardKey(r) !== cardKey)
       }
       return next
     })
-    if (!userId) return
+  }
+
+  const handleDismiss = async (recipe) => {
+    const cardKey = suggestionCardKey(recipe)
+    if (!cardKey || dismissingCardKeys.has(cardKey)) return
+
+    const snapshot = suggestions
+    removeCardFromSuggestions(cardKey)
+    setDismissingCardKeys((prev) => new Set(prev).add(cardKey))
+
+    if (
+      selectedRecipe &&
+      suggestionCardKey(selectedRecipe) === cardKey
+    ) {
+      setDetailModalOpen(false)
+      setSelectedRecipe(null)
+      setExitConfirmRecipe(null)
+    }
+
+    if (!userId) {
+      setDismissingCardKeys((prev) => {
+        const next = new Set(prev)
+        next.delete(cardKey)
+        return next
+      })
+      return
+    }
+
     try {
-      if (recipe._fromPool) {
-        await api.suggestions.swipe(userId, recipe.id, householdId)
+      if (recipe.pool_suggestion_id) {
+        await api.suggestions.swipe(userId, recipe.pool_suggestion_id, householdId)
         void maybeTriggerLowWatermarkRefill()
       } else {
         await api.dismissSuggestion(userId, recipe.id, householdId)
       }
     } catch (err) {
       console.error('dismiss failed', err)
+      const status = err.response?.status
+      if (status !== 404) {
+        setSuggestions(snapshot)
+      }
+    } finally {
+      setDismissingCardKeys((prev) => {
+        const next = new Set(prev)
+        next.delete(cardKey)
+        return next
+      })
     }
   }
 
@@ -459,12 +458,13 @@ function Recipes() {
   const handleDetailClose = (meta) => {
     setDetailModalOpen(false)
     const recipe = meta?.recipe
+    const cardKey = recipe ? suggestionCardKey(recipe) : null
     if (
-      recipe?.id &&
+      cardKey &&
       (meta?.viewDurationMs ?? 0) >= EXIT_CONFIRM_VIEW_THRESHOLD_MS &&
       meta?.instructionsReached &&
-      !exitConfirmSuppressedRef.current.has(recipe.id) &&
-      !cookInFlightRef.current.has(recipe.id)
+      !exitConfirmSuppressedRef.current.has(cardKey) &&
+      !cookInFlightRef.current.has(cardKey)
     ) {
       setExitConfirmRecipe(recipe)
     } else {
@@ -484,28 +484,32 @@ function Recipes() {
     if (!list || list.length === 0) return null
     return (
       <section key={key} className="mb-8">
-        <div className="mb-4">
-          <h2 className="text-xl font-display font-semibold text-cream mb-1">{title}</h2>
-          {subtitle ? <p className="text-sm text-sage-light">{subtitle}</p> : null}
+        <div className="mb-3">
+          <h2 className="eyebrow">{title}</h2>
+          {subtitle ? <p className="text-sm text-sage-light mt-1">{subtitle}</p> : null}
         </div>
-        {list.map((recipe) => (
-          <SuggestionRecipeCard
-            key={`${key}-${recipe.id}`}
-            recipe={recipe}
-            tier={key}
-            onCookedIt={handleCookedIt}
-            onDismiss={handleDismiss}
-            onExpand={handleExpand}
-            cookDisabled={cookingRecipeIds.has(recipe.id)}
-            cookBusy={cookingRecipeIds.has(recipe.id)}
-            pantryData={pantryData}
-            userId={userId}
-            onIngredientCorrected={handleIngredientCorrected}
-          />
-        ))}
+        {list.map((recipe) => {
+          const cardKey = suggestionCardKey(recipe)
+          return (
+            <SuggestionRecipeCard
+              key={`${key}-${cardKey}`}
+              recipe={recipe}
+              tier={key}
+              onDismiss={handleDismiss}
+              onExpand={handleExpand}
+              dismissBusy={dismissingCardKeys.has(cardKey)}
+            />
+          )
+        })}
       </section>
     )
   }
+
+  const cookTonightCap = capCookTonight(
+    suggestions.cook_tonight,
+    5,
+    showMoreCookTonight
+  )
 
   const hasAnyRecipes =
     (suggestions.use_soon_shelf?.length || 0) +
@@ -514,15 +518,16 @@ function Recipes() {
       (suggestions.check_first?.length || 0) >
     0
 
-  const selectedCookBusy = selectedRecipe ? cookingRecipeIds.has(selectedRecipe.id) : false
+  const selectedCookBusy = selectedRecipe
+    ? cookingRecipeIds.has(suggestionCardKey(selectedRecipe))
+    : false
 
   return (
     <PullToRefresh onRefresh={handleRefreshPull}>
       <div>
-        <PageHeader
-          title="Recipe Ideas"
-          subtitle="Discover recipes based on ingredients in your pantry."
-        />
+        <PageHeader title="Recipe Ideas" />
+
+        <NeedsAttentionSection variant="slim" />
 
         {cookedConfirmation && (
           <div className="mb-4 p-3 rounded-meald-md bg-forest-light text-cream text-center text-sm border border-forest-light">
@@ -571,66 +576,62 @@ function Recipes() {
           </div>
         )}
 
-        <div className="card">
-          {loading ? (
-            <div className="flex justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terra" />
+        {loading ? (
+          <div className="card flex justify-center py-12">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-terra" />
+          </div>
+        ) : !hasAnyRecipes ? (
+          <div className="card text-center py-12">
+            <div className="mx-auto w-16 h-16 bg-forest-light rounded-full flex items-center justify-center mb-4">
+              <svg
+                className="w-8 h-8 text-sage-light"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+                />
+              </svg>
             </div>
-          ) : !hasAnyRecipes ? (
-            <div className="text-center py-12">
-              <div className="mx-auto w-16 h-16 bg-forest-light rounded-full flex items-center justify-center mb-4">
-                <svg
-                  className="w-8 h-8 text-sage-light"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-                  />
-                </svg>
-              </div>
-              <h3 className="text-lg font-display font-medium text-cream mb-2">No suggestions yet</h3>
-              <p className="text-sage-light mb-4">
-                Pull down to refresh or add pantry items—we will match recipes to what you have.
-              </p>
-              <button type="button" className="btn btn-primary" onClick={() => void loadSuggestions()}>
-                Refresh suggestions
+            <h3 className="text-lg font-display font-medium text-cream mb-2">No suggestions yet</h3>
+            <p className="text-sage-light mb-4">
+              Pull down to refresh or add pantry items—we will match recipes to what you have.
+            </p>
+            <button type="button" className="btn btn-primary" onClick={() => void loadSuggestions()}>
+              Refresh suggestions
+            </button>
+          </div>
+        ) : (
+          <div className="w-full max-w-lg mx-auto">
+            {renderShelf(
+              'use_soon',
+              "Use before it's gone",
+              useSoonShelfSubtitle(suggestions.use_soon_shelf),
+              suggestions.use_soon_shelf
+            )}
+            {renderShelf('cook_tonight', 'Cook tonight', null, cookTonightCap.visible)}
+            {!showMoreCookTonight && cookTonightCap.hiddenCount > 0 ? (
+              <button
+                type="button"
+                className="btn-ghost w-full mb-8"
+                onClick={() => setShowMoreCookTonight(true)}
+              >
+                Show more ({cookTonightCap.hiddenCount})
               </button>
-            </div>
-          ) : (
-            <div className="w-full max-w-lg mx-auto">
-              {renderShelf(
-                'use_soon',
-                "Use before it's gone",
-                useSoonShelfSubtitle(suggestions.use_soon_shelf),
-                suggestions.use_soon_shelf
-              )}
-              {usingPool ? (
-                renderShelf(
-                  'cook_tonight',
-                  'Ready to cook',
-                  'From your suggestion pool',
-                  suggestions.cook_tonight
-                )
-              ) : (
-                <>
-                  {renderShelf('cook_tonight', 'Cook tonight', null, suggestions.cook_tonight)}
-                  {renderShelf(
-                    'probably_have',
-                    'Probably have everything',
-                    null,
-                    suggestions.probably_have
-                  )}
-                  {renderShelf('check_first', 'Quick check needed', null, suggestions.check_first)}
-                </>
-              )}
-            </div>
-          )}
-        </div>
+            ) : null}
+            {renderShelf(
+              'probably_have',
+              'Probably have everything',
+              null,
+              suggestions.probably_have
+            )}
+            {renderShelf('check_first', 'Quick check needed', null, suggestions.check_first)}
+          </div>
+        )}
 
         <SuggestionDetailModal
           isOpen={detailModalOpen}
@@ -642,36 +643,43 @@ function Recipes() {
           cookDisabled={selectedCookBusy}
           cookBusy={selectedCookBusy}
           onCookedIt={async (r) => {
-            await handleCookedIt(r)
-            handleDetailClose({ recipe: r, viewDurationMs: 0, instructionsReached: false })
+            const ok = await handleCookedIt(r)
+            if (ok) {
+              handleDetailClose({ recipe: r, viewDurationMs: 0, instructionsReached: false })
+            }
           }}
-          onIngredientCorrected={handleIngredientCorrected}
+          onIngredientCorrected={() => void loadSuggestions()}
         />
 
-        {exitConfirmRecipe && (
-          <div className="fixed bottom-0 inset-x-0 z-50 p-4 pb-safe pointer-events-none">
+        {exitConfirmRecipe &&
+          createPortal(
             <div
-              className="max-w-lg mx-auto rounded-meald-md bg-forest-mid border border-sage/30 p-3 flex flex-wrap items-center gap-3 pointer-events-auto shadow-meald-lg"
-              role="status"
+              className={`fixed bottom-0 inset-x-0 ${APP_OVERLAY_Z_CLASS} p-4 pb-tab-bar pointer-events-none`}
+              data-testid="exit-confirm-overlay"
             >
-              <p className="text-sm text-cream flex-1 min-w-[8rem]">Did you cook this?</p>
-              <button
-                type="button"
-                className="btn btn-primary text-sm py-2 px-4"
-                onClick={() => void handleCookedIt(exitConfirmRecipe)}
+              <div
+                className="max-w-lg mx-auto rounded-meald-md bg-forest-mid border border-sage/30 p-3 flex flex-wrap items-center gap-3 pointer-events-auto shadow-meald-lg"
+                role="status"
               >
-                Yes, cooked it
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary text-sm py-2 px-4"
-                onClick={() => dismissExitConfirm(exitConfirmRecipe.id)}
-              >
-                Not this time
-              </button>
-            </div>
-          </div>
-        )}
+                <p className="text-sm text-cream flex-1 min-w-[8rem]">Did you cook this?</p>
+                <button
+                  type="button"
+                  className="btn btn-primary text-sm py-2 px-4"
+                  onClick={() => void handleCookedIt(exitConfirmRecipe)}
+                >
+                  Yes, cooked it
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-secondary text-sm py-2 px-4"
+                  onClick={() => dismissExitConfirm(suggestionCardKey(exitConfirmRecipe))}
+                >
+                  Not this time
+                </button>
+              </div>
+            </div>,
+            document.body
+          )}
 
         {userId ? (
           <HealthCard
@@ -683,12 +691,10 @@ function Recipes() {
               setHealthCardItems([])
             }}
             onItemUpdated={async () => {
-              const { usingPool: fromPool, suggestions: updated } = await fetchSuggestionsPayload(
+              const { suggestions: updated } = await fetchSuggestionsPayload(
                 userId,
-                householdId,
-                cookedPoolIdsRef.current
+                householdId
               )
-              setUsingPool(fromPool)
               setSuggestions(updated)
               await fetchPantry()
             }}

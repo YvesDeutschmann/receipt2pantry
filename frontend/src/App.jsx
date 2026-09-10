@@ -4,7 +4,6 @@ import { ColdStartProvider } from './contexts/ColdStartContext'
 import { useAppSyncScheduler } from './hooks/useAppSyncScheduler'
 import { useProviderAttentionSync } from './hooks/useProviderAttentionSync'
 import AppShell from './components/AppShell'
-import Dashboard from './pages/Dashboard'
 import Pantry from './pages/Pantry'
 import Providers from './pages/Providers'
 import Settings from './pages/Settings'
@@ -45,7 +44,7 @@ function AppRoutes() {
                 </ProtectedRoute>
               }
             >
-              <Route index element={<Dashboard />} />
+              <Route index element={<Navigate to="/recipes" replace />} />
               <Route path="pantry" element={<Pantry />} />
               <Route path="recipes" element={<Recipes />} />
               {FEATURES.mealPlanner && (
@@ -54,7 +53,7 @@ function AppRoutes() {
               <Route path="settings" element={<Settings />} />
               <Route path="providers" element={<Providers />} />
             </Route>
-            <Route path="*" element={<Navigate to="/" replace />} />
+            <Route path="*" element={<Navigate to="/recipes" replace />} />
     </Routes>
   )
 }

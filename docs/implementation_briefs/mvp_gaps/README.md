@@ -33,8 +33,8 @@ Ordered by the roadmap milestone they serve. The **Gate** column is the conditio
 | [`00-scope-lock-cleanup.md`](00-scope-lock-cleanup.md) | M0 | Strip dev debug logging; hide deferred surfaces (multi-chain cards, voice-cooking entry points) | — | Cleaner UI, no behavior change |
 | [`01a-reconnect-ux.md`](01a-reconnect-ux.md) | M1 ⭐ | Frontend reconnect UX + `needs-reconnect`/`expired_credentials` surfacing | 00 | Yes |
 | [`01b-foreground-auto-sync.md`](01b-foreground-auto-sync.md) | M1 ⭐ | App-foreground auto-sync scheduler, **on by default**, graceful-degrade to reconnect | 01a | Yes |
-| [`01d-sync-feedback-surfaces.md`](01d-sync-feedback-surfaces.md) | M1 ⭐ | Selective sync toasts + persisted "Needs attention" for reconnect and fetch failures | 01b | Yes |
-| [`01e-import-reliability-surfaces.md`](01e-import-reliability-surfaces.md) | M1 ⭐ | Fetch-completed outcomes, per-store health row, honest receipt stats (Settings) | 01d (01e.3 independent) | Yes |
+| [`01d-sync-feedback-surfaces.md`](01d-sync-feedback-surfaces.md) | M1 ⭐ | Selective sync toasts + persisted "Needs attention" (Recipes since 07.3) | 01b | Yes |
+| [`01e-import-reliability-surfaces.md`](01e-import-reliability-surfaces.md) | M1 ⭐ | Fetch-completed outcomes, per-store health row, honest receipt stats (Settings since 07.2) | 01d (01e.3 independent) | Yes |
 | [`01e-import-reliability-gaps.md`](01e-import-reliability-gaps.md) | M1 ⭐ | Close 01e DoD holes: hook failed events, prefs lifecycle, classifier/skipped | 01e (partial) | Yes |
 | [`01c-resync-idempotency.md`](01c-resync-idempotency.md) | M1 ⭐ | Backend re-sync dedup hardening + connection-health signal | — (parallel to 01a/b) | Invisible (correctness) |
 | [`02a-suggestion-cost-caching.md`](02a-suggestion-cost-caching.md) | M2 | Spoonacular call budget: caching + pool reuse + cost telemetry | 01c | Faster suggestions |
@@ -43,6 +43,8 @@ Ordered by the roadmap milestone they serve. The **Gate** column is the conditio
 | [`04-weekly-loop-polish.md`](04-weekly-loop-polish.md) | M4 | Meal-plan flow trim + shopping-list basics + manual leftover marking polish | 02b | Yes |
 | [`05-substitution-readonly-stub.md`](05-substitution-readonly-stub.md) | M5 | Surface existing substitution data read-only; **no engine** | 02b | Yes |
 | [`06-launch-readiness.md`](06-launch-readiness.md) | M6 | Security/RLS review, prod secrets, crash/error monitoring, reconnect runbook, dual-platform QA gate | all above | Launch gate |
+| [`07-home-is-dinner.md`](07-home-is-dinner.md) | M2+ | Onboarding payoff on last step; receipt stats to Settings; Dinner default tab; Dashboard removed | 01e | Yes |
+| [`08-dinner-picker.md`](08-dinner-picker.md) | M2+ | Dinner list picker + MISE card chrome; enriched suggestion card DTO | 07 | Yes |
 
 ---
 

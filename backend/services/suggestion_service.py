@@ -17,6 +17,7 @@ from backend.services.confidence_engine import (
     _find_pantry_match,
     _to_date,
     compute_confidence,
+    default_days_supply_for,
     find_pantry_match_for_cook,
     get_calibrated_days_supply,
     get_engagement_multiplier,
@@ -81,21 +82,175 @@ def _attach_meta(
     return result
 
 
-def _pool_fallback_suggestion_result(
+def _pool_fallback_grouped(
     pool_store: "PoolStoreService",
     household_id: str,
-) -> Optional[Dict[str, Any]]:
-    """Try unused pool rows, then swiped (read-only)."""
+) -> Optional[Dict[str, List[Dict]]]:
+    """Unused pool rows, then swiped (read-only). Returns grouped rows or None."""
     grouped = pool_store.get_pool_grouped_by_meal(household_id, status="unused")
     if any(grouped.values()):
-        return _pool_grouped_to_suggestion_result(grouped)
+        return grouped
     grouped = pool_store.get_pool_grouped_by_meal(household_id, status="swiped")
     if any(grouped.values()):
-        return _pool_grouped_to_suggestion_result(grouped)
+        return grouped
     return None
 
 
-def _pool_row_to_suggestion_card(row: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+def _pool_fallback_suggestion_result(
+    pool_store: "PoolStoreService",
+    household_id: str,
+    *,
+    enrich_ctx: Optional[Dict[str, Any]] = None,
+) -> Optional[Dict[str, Any]]:
+    """Try unused pool rows, then swiped (read-only)."""
+    grouped = _pool_fallback_grouped(pool_store, household_id)
+    if grouped is None:
+        return None
+    return _pool_grouped_to_suggestion_result(grouped, enrich_ctx=enrich_ctx)
+
+
+def _lift_ready_in_minutes(recipe_data: Any) -> Optional[int]:
+    if not isinstance(recipe_data, dict):
+        return None
+    raw = recipe_data.get("readyInMinutes")
+    if raw is None:
+        return None
+    try:
+        minutes = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return minutes if minutes > 0 else None
+
+
+def _build_pool_ingredient_flags(
+    ingredients: List[Dict[str, Any]],
+    pantry_list: List[Dict],
+    user_prefs: Dict[str, Any],
+    use_soon_items: List[Dict],
+    classifications: Dict[str, Dict],
+    *,
+    today: date,
+    engagement_multiplier: float = 1.0,
+    calibrated_for_base: Optional[Callable[[str], int]] = None,
+) -> Tuple[List[Dict[str, Any]], List[Tuple[str, float]]]:
+    """Build flags for pool cards. Never suppresses; does not change tier."""
+    ingredient_flags: List[Dict[str, Any]] = []
+    required_conf_entries: List[Tuple[str, float]] = []
+    use_soon_ids = {str(x.get("id")) for x in use_soon_items if x.get("id")}
+
+    for ing in ingredients:
+        raw_name = (ing.get("name") or ing.get("original") or "").strip()
+        name = raw_name.lower()
+        if not name:
+            continue
+        aisle = ing.get("aisle")
+        pantry_item = find_best_match(pantry_list, name)
+        base_key = (
+            (pantry_item.get("base_ingredient") or "").strip().lower()
+            if pantry_item
+            else ""
+        )
+        cls_row = classifications.get(base_key, {})
+        soft_by_class = bool(cls_row.get("is_soft_required"))
+        soft_by_aisle = _is_spice_aisle(aisle)
+        is_soft = soft_by_class or soft_by_aisle
+
+        if pantry_item is None:
+            confidence = 0.0
+        else:
+            cal = (
+                calibrated_for_base(base_key)
+                if calibrated_for_base and base_key
+                else None
+            )
+            confidence = compute_confidence(
+                pantry_item,
+                user_prefs,
+                cls_row,
+                today=today,
+                calibrated_days=cal,
+                engagement_multiplier=engagement_multiplier,
+            )
+
+        is_use_soon = bool(
+            pantry_item
+            and str(pantry_item.get("id")) in use_soon_ids
+            and pantry_item.get("use_soon")
+        )
+        is_primary = not is_soft
+        if is_primary:
+            required_conf_entries.append((raw_name or name, confidence))
+
+        label = get_status_label(confidence, is_use_soon)
+        ingredient_flags.append(
+            {
+                "ingredient_name": raw_name or name,
+                "confidence": confidence,
+                "is_soft_required": is_soft,
+                "is_use_soon": is_use_soon,
+                "status_label": label,
+                "sub_class": cls_row.get("sub_class"),
+                "put_back_count": (
+                    int(pantry_item.get("put_back_count") or 0)
+                    if pantry_item
+                    else 0
+                ),
+            }
+        )
+
+    return ingredient_flags, required_conf_entries
+
+
+def _pantry_highlights_from_flags(flags: List[Dict[str, Any]]) -> List[str]:
+    highlights: List[str] = []
+    for flag in flags:
+        if flag.get("is_soft_required"):
+            continue
+        confidence = float(flag.get("confidence") or 0.0)
+        if confidence < 0.50:
+            continue
+        name = (flag.get("ingredient_name") or "").strip()
+        if name:
+            highlights.append(name)
+        if len(highlights) >= 3:
+            break
+    return highlights
+
+
+def _enrich_pool_card(
+    card: Dict[str, Any],
+    row: Dict[str, Any],
+    enrich_ctx: Dict[str, Any],
+) -> None:
+    """Mutate card with display fields. On failure, leave the thin match_score card."""
+    try:
+        recipe_data = row.get("recipe_data") or {}
+        card["readyInMinutes"] = _lift_ready_in_minutes(recipe_data)
+        ingredients = _pool_recipe_ingredient_dicts(recipe_data)
+        if ingredients:
+            flags, required = _build_pool_ingredient_flags(
+                ingredients,
+                enrich_ctx["pantry"],
+                enrich_ctx["user_prefs"],
+                enrich_ctx["use_soon_items"],
+                enrich_ctx["classifications"],
+                today=enrich_ctx["today"],
+                engagement_multiplier=enrich_ctx["engagement"],
+                calibrated_for_base=enrich_ctx.get("calibrated_for_base"),
+            )
+            card["ingredient_flags"] = flags
+            card["pantry_highlights"] = _pantry_highlights_from_flags(flags)
+            if card.get("tier") == "check_first" and required:
+                card["trigger_ingredient"] = min(required, key=lambda x: x[1])[0]
+    except Exception:
+        logger.warning("pool card enrich failed", exc_info=True)
+
+
+def _pool_row_to_suggestion_card(
+    row: Dict[str, Any],
+    *,
+    meal_type: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
     recipe_id = row.get("recipe_id")
     if recipe_id is None:
         return None
@@ -107,6 +262,8 @@ def _pool_row_to_suggestion_card(row: Dict[str, Any]) -> Optional[Dict[str, Any]
         tier = "probably_have"
     else:
         tier = "check_first"
+    pool_id = row.get("id")
+    slot = meal_type if meal_type in ("breakfast", "lunch", "dinner") else None
     return {
         "id": str(recipe_id),
         "title": row.get("recipe_name") or "",
@@ -115,17 +272,36 @@ def _pool_row_to_suggestion_card(row: Dict[str, Any]) -> Optional[Dict[str, Any]
         "ingredient_flags": [],
         "score": score,
         "trigger_ingredient": None,
+        "readyInMinutes": None,
+        "pantry_highlights": [],
+        "meal_type": slot,
+        "pool_suggestion_id": str(pool_id) if pool_id is not None else None,
     }
 
 
-def _ingredient_names_from_pool_row(row: Dict[str, Any]) -> List[str]:
-    data = row.get("recipe_data")
-    if not isinstance(data, dict):
+def _pool_recipe_ingredient_dicts(recipe_data: Any) -> List[Dict[str, Any]]:
+    """Prefer extendedIngredients; fall back to complex-search used/missed lists."""
+    if not isinstance(recipe_data, dict):
         return []
+    extended = recipe_data.get("extendedIngredients") or []
+    named_extended = [
+        ing
+        for ing in extended
+        if isinstance(ing, dict) and (ing.get("name") or "").strip()
+    ]
+    if named_extended:
+        return named_extended
+    out: List[Dict[str, Any]] = []
+    for key in ("usedIngredients", "missedIngredients"):
+        for ing in recipe_data.get(key) or []:
+            if isinstance(ing, dict):
+                out.append(ing)
+    return out
+
+
+def _ingredient_names_from_pool_row(row: Dict[str, Any]) -> List[str]:
     names: List[str] = []
-    for ing in data.get("extendedIngredients") or []:
-        if not isinstance(ing, dict):
-            continue
+    for ing in _pool_recipe_ingredient_dicts(row.get("recipe_data")):
         n = (ing.get("name") or "").strip()
         if n:
             names.append(n)
@@ -134,6 +310,8 @@ def _ingredient_names_from_pool_row(row: Dict[str, Any]) -> List[str]:
 
 def _pool_grouped_to_suggestion_result(
     grouped: Dict[str, List[Dict]],
+    *,
+    enrich_ctx: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, List[Dict]]:
     """Convert pool rows grouped by meal into SuggestionResult-shaped tiers."""
     results: Dict[str, List[Dict]] = {
@@ -142,11 +320,13 @@ def _pool_grouped_to_suggestion_result(
         "probably_have": [],
         "check_first": [],
     }
-    for rows in grouped.values():
+    for meal_type, rows in grouped.items():
         for row in rows:
-            card = _pool_row_to_suggestion_card(row)
+            card = _pool_row_to_suggestion_card(row, meal_type=meal_type)
             if not card:
                 continue
+            if enrich_ctx is not None:
+                _enrich_pool_card(card, row, enrich_ctx)
             results[card["tier"]].append(card)
     for key in ("cook_tonight", "probably_have", "check_first"):
         results[key].sort(key=lambda r: float(r.get("score") or 0.0), reverse=True)
@@ -266,6 +446,52 @@ class SuggestionService:
                 active.append(p)
         return active
 
+    def _build_pool_enrich_context(
+        self,
+        user_id: str,
+        household_id: Optional[str],
+        *,
+        today: date,
+    ) -> Dict[str, Any]:
+        pantry = self._load_active_pantry(user_id, household_id)
+        prefs_row = self.supabase.get_user_preferences(user_id)
+        user_prefs = dict(DEFAULT_USER_PREFS)
+        if prefs_row and prefs_row.get("depletion_multiplier") is not None:
+            user_prefs["depletion_multiplier"] = float(
+                prefs_row["depletion_multiplier"]
+            )
+        bases = [
+            (p.get("base_ingredient") or "").strip().lower()
+            for p in pantry
+            if p.get("base_ingredient")
+        ]
+        classifications = self.supabase.get_item_classifications_by_names(bases)
+        client = self._client_for_db()
+        engagement = get_engagement_multiplier(client, user_id)
+        calibrated_by_base: Dict[str, int] = {}
+
+        def calibrated_for_base(base: str) -> int:
+            if base not in calibrated_by_base:
+                cls = classifications.get(base, {})
+                calibrated_by_base[base] = get_calibrated_days_supply(
+                    client,
+                    user_id,
+                    base,
+                    int(default_days_supply_for(cls)),
+                )
+            return calibrated_by_base[base]
+
+        use_soon_items = self._active_use_soon_items(user_id, household_id, today)
+        return {
+            "pantry": pantry,
+            "user_prefs": user_prefs,
+            "classifications": classifications,
+            "use_soon_items": use_soon_items,
+            "today": today,
+            "engagement": engagement,
+            "calibrated_for_base": calibrated_for_base,
+        }
+
     def _attach_use_soon_when_pool_active(
         self,
         user_id: str,
@@ -280,21 +506,36 @@ class SuggestionService:
             use_soon_items = self._active_use_soon_items(user_id, household_id, today)
             if not use_soon_items:
                 return
+            card_by_pool_id: Dict[str, Dict[str, Any]] = {}
+            for tier_key in ("cook_tonight", "probably_have", "check_first"):
+                for existing in result.get(tier_key, []):
+                    pid = existing.get("pool_suggestion_id")
+                    if pid:
+                        card_by_pool_id[str(pid)] = existing
+
             seen: Set[str] = set()
             shelf: List[Dict] = []
-            for rows in grouped.values():
+            for meal_type, rows in grouped.items():
                 for row in rows:
-                    card = _pool_row_to_suggestion_card(row)
-                    if not card or card["id"] in seen:
+                    pool_id = row.get("id")
+                    pool_key = str(pool_id) if pool_id is not None else None
+                    card = card_by_pool_id.get(pool_key) if pool_key else None
+                    if not card:
+                        card = _pool_row_to_suggestion_card(row, meal_type=meal_type)
+                    if not card:
+                        continue
+                    dedupe_key = pool_key or card.get("id")
+                    if not dedupe_key or dedupe_key in seen:
                         continue
                     names = _ingredient_names_from_pool_row(row)
                     if not any(
                         find_pantry_match_for_cook(use_soon_items, n) for n in names
                     ):
                         continue
-                    seen.add(card["id"])
-                    card["tier"] = "use_soon"
-                    shelf.append(card)
+                    seen.add(dedupe_key)
+                    promoted = dict(card)
+                    promoted["tier"] = "use_soon"
+                    shelf.append(promoted)
             result["use_soon_shelf"] = shelf
         except Exception:
             logger.warning(
@@ -366,7 +607,12 @@ class SuggestionService:
                 grouped = self.pool_store.get_pool_grouped_by_meal(
                     household_id, status="unused"
                 )
-                result = _pool_grouped_to_suggestion_result(grouped)
+                enrich_ctx = self._build_pool_enrich_context(
+                    user_id, household_id, today=today
+                )
+                result = _pool_grouped_to_suggestion_result(
+                    grouped, enrich_ctx=enrich_ctx
+                )
                 has_cards = any(
                     result[k]
                     for k in (
@@ -420,12 +666,10 @@ class SuggestionService:
 
         calibrated_by_base: Dict[str, int] = {}
 
-        def calibrated_for(base: str) -> int:
+        def calibrated_for(base: str, pantry_item: Optional[Dict] = None) -> int:
             if base not in calibrated_by_base:
                 cls = classifications.get(base, {})
-                default = cls.get("default_days_supply")
-                if default is None:
-                    default = 45
+                default = default_days_supply_for(cls, pantry_item)
                 calibrated_by_base[base] = get_calibrated_days_supply(
                     client, user_id, base, int(default)
                 )
@@ -436,7 +680,11 @@ class SuggestionService:
             bid = str(p.get("id") or "")
             base = (p.get("base_ingredient") or "").strip().lower()
             cls = classifications.get(base, {})
-            cal = calibrated_for(base) if base else 45
+            cal = (
+                calibrated_for(base, p)
+                if base
+                else default_days_supply_for(cls, p)
+            )
             confidences_by_id[bid] = compute_confidence(
                 p,
                 user_prefs,
@@ -484,7 +732,11 @@ class SuggestionService:
             if len(pantry) > 0:
                 if self.pool_store is not None and household_id:
                     fb = _pool_fallback_suggestion_result(
-                        self.pool_store, household_id
+                        self.pool_store,
+                        household_id,
+                        enrich_ctx=self._build_pool_enrich_context(
+                            user_id, household_id, today=today
+                        ),
                     )
                     if fb is not None:
                         return _attach_meta(
@@ -538,7 +790,11 @@ class SuggestionService:
                 )
             if self.pool_store is not None and household_id:
                 fb = _pool_fallback_suggestion_result(
-                    self.pool_store, household_id
+                    self.pool_store,
+                    household_id,
+                    enrich_ctx=self._build_pool_enrich_context(
+                        user_id, household_id, today=today
+                    ),
                 )
                 if fb is not None:
                     return _attach_meta(
@@ -611,7 +867,11 @@ class SuggestionService:
             )
             if self.pool_store is not None and household_id:
                 fb = _pool_fallback_suggestion_result(
-                    self.pool_store, household_id
+                    self.pool_store,
+                    household_id,
+                    enrich_ctx=self._build_pool_enrich_context(
+                        user_id, household_id, today=today
+                    ),
                 )
                 if fb is not None:
                     return _attach_meta(
@@ -662,9 +922,7 @@ class SuggestionService:
         def cal_default(base: str) -> int:
             if calibrated_for_base:
                 return calibrated_for_base(base)
-            cls = classifications.get(base, {})
-            d = cls.get("default_days_supply")
-            return int(d) if d is not None else 45
+            return default_days_supply_for(classifications.get(base, {}))
 
         min_required = 1.0
         required_conf_entries: List[Tuple[str, float]] = []
@@ -758,6 +1016,8 @@ class SuggestionService:
             m = find_best_match(pantry_list, f["ingredient_name"])
             if m:
                 pk = _signal_key_for_pantry_item(m)
+            # Ranking-only: a swipe cannot distinguish appetite from missing ingredients,
+            # so dismiss counts must never reach compute_confidence / pantry belief.
             if pk and signals.get(pk, 0) >= ASPIRATIONAL_DISMISS_THRESHOLD:
                 c = max(0.0, c - ASPIRATIONAL_CONFIDENCE_PENALTY)
             penalized.append(c)
@@ -792,18 +1052,21 @@ class SuggestionService:
             "score": round(final_score, 3),
             "trigger_ingredient": trigger_ingredient,
             "missed_count": missed_count,
+            "readyInMinutes": _lift_ready_in_minutes(recipe),
+            "pantry_highlights": _pantry_highlights_from_flags(ingredient_flags),
+            "meal_type": meal_type if meal_type in ("breakfast", "lunch", "dinner") else None,
+            "pool_suggestion_id": None,
         }
 
-    def on_recipe_dismiss(self, user_id: str, recipe_id: int, household_id: Optional[str] = None) -> None:
-        """Increment dismiss signals for matched pantry ingredients (recipe details)."""
-        if household_id is None:
-            household_id = self._get_household_id(user_id)
+    def _increment_dismiss_signals_for_ingredients(
+        self,
+        user_id: str,
+        household_id: Optional[str],
+        extended_ingredients: List[Dict],
+    ) -> None:
         pantry = self._load_active_pantry(user_id, household_id)
-        if not self.recipe_service:
-            return
-        details = self.recipe_service.get_recipe_details(recipe_id)
         names: List[str] = []
-        for ing in details.get("extendedIngredients") or []:
+        for ing in extended_ingredients or []:
             name = (ing.get("name") or "").strip().lower()
             if not name:
                 continue
@@ -814,6 +1077,40 @@ class SuggestionService:
                     names.append(k)
         if names:
             self.supabase.increment_ingredient_dismiss_counts(user_id, names)
+
+    def on_pool_swipe(
+        self, user_id: str, household_id: str, suggestion_id: str
+    ) -> bool:
+        """Mark pool row swiped and increment ranking-only dismiss signals from stored recipe_data."""
+        if self.pool_store is None:
+            return False
+        row = self.pool_store.get_suggestion(suggestion_id, household_id)
+        if not row:
+            return False
+        ok = self.pool_store.update_status(suggestion_id, household_id, "swiped")
+        if not ok:
+            return False
+        recipe_data = row.get("recipe_data") or {}
+        self._increment_dismiss_signals_for_ingredients(
+            user_id,
+            household_id,
+            _pool_recipe_ingredient_dicts(recipe_data),
+        )
+        self.invalidate_suggestion_cache(user_id, household_id)
+        return True
+
+    def on_recipe_dismiss(self, user_id: str, recipe_id: int, household_id: Optional[str] = None) -> None:
+        """Increment dismiss signals for matched pantry ingredients (recipe details)."""
+        if household_id is None:
+            household_id = self._get_household_id(user_id)
+        if not self.recipe_service:
+            return
+        details = self.recipe_service.get_recipe_details(recipe_id)
+        self._increment_dismiss_signals_for_ingredients(
+            user_id,
+            household_id,
+            details.get("extendedIngredients") or [],
+        )
         if self.pool_store is not None and household_id:
             self.pool_store.mark_swiped_by_recipe_id(household_id, str(recipe_id))
         self.invalidate_suggestion_cache(user_id, household_id)

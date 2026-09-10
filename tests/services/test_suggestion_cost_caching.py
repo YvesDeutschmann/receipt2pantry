@@ -15,6 +15,7 @@ from backend.config import Config
 from backend.services.recipe_service import RecipeService
 from backend.services.suggestion_service import (
     SuggestionService,
+    _pool_fallback_suggestion_result,
     _pool_grouped_to_suggestion_result,
     create_suggestion_service,
 )
@@ -382,7 +383,7 @@ def test_pool_grouped_to_result_card_shape():
         {"breakfast": [], "lunch": [], "dinner": [_pool_row()]}
     )
     card = out["cook_tonight"][0]
-    assert set(card.keys()) == {
+    assert {
         "id",
         "title",
         "image",
@@ -390,10 +391,15 @@ def test_pool_grouped_to_result_card_shape():
         "ingredient_flags",
         "score",
         "trigger_ingredient",
-    }
+        "readyInMinutes",
+        "pantry_highlights",
+        "meal_type",
+        "pool_suggestion_id",
+    }.issubset(set(card.keys()))
     assert card["ingredient_flags"] == []
     assert card["trigger_ingredient"] is None
     assert isinstance(card["id"], str)
+    assert card["meal_type"] == "dinner"
 
 
 def _patch_suggestion_compute(monkeypatch):
@@ -824,3 +830,204 @@ def test_static_complex_search_has_no_budget_hook():
             body_src = ast.get_source_segment(source, node) or ""
             assert "_record_external_call" not in body_src
             assert "is_budget_exceeded" not in body_src
+
+
+# --- 08.1 dinner picker card DTO ---
+
+
+def _enriched_pool_row(**kwargs):
+    base = {
+        "id": "pool-uuid-1",
+        "recipe_id": "12345",
+        "recipe_name": "Egg Scramble",
+        "recipe_image": "https://img.test/egg.jpg",
+        "match_score": 0.92,
+        "meal_type": "dinner",
+        "recipe_data": {
+            "readyInMinutes": 25,
+            "extendedIngredients": [
+                {"name": "eggs"},
+                {"name": "cheddar"},
+            ],
+        },
+    }
+    base.update(kwargs)
+    return base
+
+
+def test_POOL_CARD_INCLUDES_READYIN_HIGHLIGHTS_MEAL_AND_POOL_ID(monkeypatch):
+    _patch_suggestion_compute(monkeypatch)
+    supabase, pantry_service, _ = _suggestion_pantry_setup()
+    pantry_service._get_pantry_items.return_value = [
+        make_pantry_item(
+            base_ingredient="eggs",
+            id="p-eggs",
+            depletion_class="CONSUMABLE",
+            purchase_date=TEST_DATE.isoformat(),
+        ),
+        make_pantry_item(
+            base_ingredient="cheddar",
+            id="p-cheddar",
+            depletion_class="CONSUMABLE",
+            purchase_date=TEST_DATE.isoformat(),
+        ),
+    ]
+    supabase.get_item_classifications_by_names.return_value = {
+        "eggs": {"item_name": "eggs", "default_days_supply": 45, "is_soft_required": False},
+        "cheddar": {
+            "item_name": "cheddar",
+            "default_days_supply": 45,
+            "is_soft_required": False,
+        },
+    }
+    recipe_service = MagicMock()
+    pool_store = MagicMock()
+    pool_store.get_pool_depth.return_value = {"breakfast": 0, "lunch": 0, "dinner": 1}
+    pool_store.get_pool_grouped_by_meal.return_value = {
+        "breakfast": [],
+        "lunch": [],
+        "dinner": [_enriched_pool_row()],
+    }
+    svc = SuggestionService(
+        supabase, pantry_service, recipe_service, MagicMock(), pool_store=pool_store
+    )
+    out = svc.get_recipe_suggestions("user-1", "hh", today=TEST_DATE)
+    card = out["cook_tonight"][0]
+    assert card["readyInMinutes"] == 25
+    assert "eggs" in [h.lower() for h in card["pantry_highlights"]]
+    assert card["meal_type"] == "dinner"
+    assert card["pool_suggestion_id"] == "pool-uuid-1"
+
+
+def test_POOL_MATCH_SCORE_TIER_UNCHANGED_WHEN_FLAGS_LOW(monkeypatch):
+    _patch_suggestion_compute(monkeypatch)
+    monkeypatch.setattr(
+        "backend.services.suggestion_service.compute_confidence", lambda *a, **k: 0.40
+    )
+    supabase, pantry_service, _ = _suggestion_pantry_setup()
+    recipe_service = MagicMock()
+    pool_store = MagicMock()
+    pool_store.get_pool_depth.return_value = {"breakfast": 0, "lunch": 0, "dinner": 1}
+    pool_store.get_pool_grouped_by_meal.return_value = {
+        "breakfast": [],
+        "lunch": [],
+        "dinner": [_enriched_pool_row(match_score=0.92)],
+    }
+    svc = SuggestionService(
+        supabase, pantry_service, recipe_service, MagicMock(), pool_store=pool_store
+    )
+    out = svc.get_recipe_suggestions("user-1", "hh", today=TEST_DATE)
+    assert out["cook_tonight"][0]["tier"] == "cook_tonight"
+
+
+def test_POOL_USE_SOON_ATTACH_STILL_RUNS(monkeypatch):
+    _patch_suggestion_compute(monkeypatch)
+    supabase, pantry_service, _ = _suggestion_pantry_setup()
+    pantry_service._get_pantry_items.return_value = [
+        make_pantry_item(
+            base_ingredient="spinach",
+            id="p-spin",
+            use_soon=True,
+            use_soon_expires="2026-04-12",
+        )
+    ]
+    recipe_service = MagicMock()
+    pool_store = MagicMock()
+    pool_store.get_pool_depth.return_value = {"breakfast": 0, "lunch": 0, "dinner": 1}
+    pool_store.get_pool_grouped_by_meal.return_value = {
+        "breakfast": [],
+        "lunch": [],
+        "dinner": [
+            {
+                **_enriched_pool_row(recipe_id="77", recipe_name="Spinach Pasta"),
+                "recipe_data": {
+                    "readyInMinutes": 20,
+                    "extendedIngredients": [{"name": "spinach"}],
+                },
+            }
+        ],
+    }
+    svc = SuggestionService(
+        supabase, pantry_service, recipe_service, MagicMock(), pool_store=pool_store
+    )
+    out = svc.get_recipe_suggestions("user-1", "hh", today=TEST_DATE)
+    assert len(out["use_soon_shelf"]) == 1
+    assert out["use_soon_shelf"][0]["tier"] == "use_soon"
+    assert out["use_soon_shelf"][0]["readyInMinutes"] == 20
+
+
+def test_POOL_ENRICH_THROW_KEEPS_THIN_CARD(monkeypatch):
+    _patch_suggestion_compute(monkeypatch)
+
+    def boom(*_a, **_k):
+        raise RuntimeError("enrich failed")
+
+    monkeypatch.setattr(
+        "backend.services.suggestion_service._build_pool_ingredient_flags", boom
+    )
+    supabase, pantry_service, _ = _suggestion_pantry_setup()
+    recipe_service = MagicMock()
+    pool_store = MagicMock()
+    pool_store.get_pool_depth.return_value = {"breakfast": 0, "lunch": 0, "dinner": 1}
+    pool_store.get_pool_grouped_by_meal.return_value = {
+        "breakfast": [],
+        "lunch": [],
+        "dinner": [_enriched_pool_row()],
+    }
+    svc = SuggestionService(
+        supabase, pantry_service, recipe_service, MagicMock(), pool_store=pool_store
+    )
+    out = svc.get_recipe_suggestions("user-1", "hh", today=TEST_DATE)
+    card = out["cook_tonight"][0]
+    assert card["tier"] == "cook_tonight"
+    assert card["pool_suggestion_id"] == "pool-uuid-1"
+    assert card["title"] == "Egg Scramble"
+
+
+def test_HIGHLIGHTS_OMITTED_WHEN_NO_PANTRY_MATCH(monkeypatch):
+    _patch_suggestion_compute(monkeypatch)
+    supabase, pantry_service, _ = _suggestion_pantry_setup()
+    pantry_service._get_pantry_items.return_value = [
+        make_pantry_item(
+            base_ingredient="unrelated item",
+            id="p-x",
+            depletion_class="CONSUMABLE",
+            purchase_date=TEST_DATE.isoformat(),
+        )
+    ]
+    recipe_service = MagicMock()
+    pool_store = MagicMock()
+    pool_store.get_pool_depth.return_value = {"breakfast": 0, "lunch": 0, "dinner": 1}
+    pool_store.get_pool_grouped_by_meal.return_value = {
+        "breakfast": [],
+        "lunch": [],
+        "dinner": [_enriched_pool_row()],
+    }
+    svc = SuggestionService(
+        supabase, pantry_service, recipe_service, MagicMock(), pool_store=pool_store
+    )
+    out = svc.get_recipe_suggestions("user-1", "hh", today=TEST_DATE)
+    assert out["cook_tonight"][0]["pantry_highlights"] == []
+
+
+def test_POOL_FALLBACK_PATH_HAS_POOL_SUGGESTION_ID(monkeypatch):
+    _patch_suggestion_compute(monkeypatch)
+    supabase, pantry_service, pantry = _suggestion_pantry_setup()
+    recipe_service = MagicMock()
+    recipe_service.get_recipes_by_pantry.return_value = []
+    pool_store = MagicMock()
+    pool_store.get_pool_depth.return_value = {"breakfast": 0, "lunch": 0, "dinner": 0}
+    pool_store.get_pool_grouped_by_meal.side_effect = [
+        {"breakfast": [], "lunch": [], "dinner": []},
+        {
+            "breakfast": [],
+            "lunch": [],
+            "dinner": [_enriched_pool_row()],
+        },
+    ]
+    svc = SuggestionService(
+        supabase, pantry_service, recipe_service, MagicMock(), pool_store=pool_store
+    )
+    out = svc.get_recipe_suggestions("user-1", "hh", today=TEST_DATE)
+    assert len(out["cook_tonight"]) == 1
+    assert out["cook_tonight"][0]["pool_suggestion_id"] == "pool-uuid-1"

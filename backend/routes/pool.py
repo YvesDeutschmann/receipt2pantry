@@ -80,6 +80,10 @@ def get_depth():
         return jsonify({"error": str(e)}), 500
 
 
+def _get_suggestion_service():
+    return current_app.config.get("SUGGESTION_SERVICE")
+
+
 @pool_bp.route("/suggestions/pool/<suggestion_id>/swipe", methods=["POST"])
 def swipe_suggestion(suggestion_id):
     user_id = get_user_id_from_request()
@@ -92,7 +96,11 @@ def swipe_suggestion(suggestion_id):
         household_id = _resolve_household_id(
             user_id, (request.get_json() or {}).get("household_id")
         )
-        ok = store.update_status(suggestion_id, household_id, "swiped")
+        svc = _get_suggestion_service()
+        if svc is not None:
+            ok = svc.on_pool_swipe(user_id, household_id, suggestion_id)
+        else:
+            ok = store.update_status(suggestion_id, household_id, "swiped")
         if not ok:
             return jsonify({"error": "Suggestion not found"}), 404
         return jsonify({"ok": True})
