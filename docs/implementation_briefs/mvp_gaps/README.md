@@ -45,6 +45,7 @@ Ordered by the roadmap milestone they serve. The **Gate** column is the conditio
 | [`06-launch-readiness.md`](06-launch-readiness.md) | M6 | Security/RLS review, prod secrets, crash/error monitoring, reconnect runbook, dual-platform QA gate | all above | Launch gate |
 | [`07-home-is-dinner.md`](07-home-is-dinner.md) | M2+ | Onboarding payoff on last step; receipt stats to Settings; Dinner default tab; Dashboard removed | 01e | Yes |
 | [`08-dinner-picker.md`](08-dinner-picker.md) | M2+ | Dinner list picker + MISE card chrome; enriched suggestion card DTO | 07 | Yes |
+| [`09-pantry-reach-and-ghost-rows.md`](09-pantry-reach-and-ghost-rows.md) | M2+ | Nameless pantry row ingest/GET filter + Add FAB above tab bar | 4.4 pantry view | Yes |
 
 ---
 
