@@ -2,19 +2,7 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useOnboarding } from '../../contexts/OnboardingContext'
 import OnboardingPayoffPanel from '../../components/onboarding/OnboardingPayoffPanel'
-
-const RESTRICTION_CHIPS = [
-  { code: 'tree_nuts', label: 'Tree nuts' },
-  { code: 'peanuts', label: 'Peanuts' },
-  { code: 'shellfish', label: 'Shellfish' },
-  { code: 'fish', label: 'Fish' },
-  { code: 'dairy', label: 'Dairy' },
-  { code: 'eggs', label: 'Eggs' },
-  { code: 'gluten', label: 'Gluten / Wheat' },
-  { code: 'soy', label: 'Soy' },
-  { code: 'sesame', label: 'Sesame' },
-  { code: 'other', label: 'Something else →' },
-]
+import DietaryRestrictionChips from '../../components/onboarding/DietaryRestrictionChips'
 
 function DietaryRestrictions() {
   const navigate = useNavigate()
@@ -96,11 +84,6 @@ function DietaryRestrictions() {
     navigate('/onboarding/bridge')
   }
 
-  const isSelected = (code) => {
-    if (code === 'other') return otherRestriction.trim().length > 0
-    return rawDietaryRestrictions.includes(code)
-  }
-
   if (householdLoading || !householdResolved) {
     return (
       <div className="min-h-screen bg-forest flex flex-col items-center justify-center px-4">
@@ -150,43 +133,15 @@ function DietaryRestrictions() {
             : 'This covers your whole household. You can update this any time in settings.'}
         </p>
 
-        <div className="grid grid-cols-2 gap-3 mb-6">
-          {RESTRICTION_CHIPS.map(({ code, label }) => (
-            <button
-              key={code}
-              type="button"
-              onClick={() => handleChipClick(code)}
-              className={`min-h-touch rounded-meald-md px-4 py-3 text-left text-sm font-medium transition-colors ${
-                isSelected(code)
-                  ? 'bg-terra/20 text-terra-light border-2 border-terra'
-                  : 'bg-forest-light text-sage-light border-2 border-transparent hover:border-forest-mid'
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-
-        {showOtherInput && (
-          <div className="mb-6">
-            <input
-              type="text"
-              value={otherRestriction}
-              onChange={(e) => handleOtherTextChange(e.target.value)}
-              placeholder="e.g. FODMAP, histamine intolerance"
-              className="input"
-              autoFocus
-            />
-          </div>
-        )}
-
-        <button
-          type="button"
-          onClick={handleNoRestrictionsClick}
-          className="w-full py-3 rounded-meald-md border-2 border-forest-light text-sage-light hover:border-sage hover:text-cream transition-colors text-sm font-medium mb-6"
-        >
-          No dietary restrictions
-        </button>
+        <DietaryRestrictionChips
+          selectedCodes={rawDietaryRestrictions}
+          otherRestriction={otherRestriction}
+          noRestrictions={noRestrictions}
+          showOtherInput={showOtherInput}
+          onChipClick={handleChipClick}
+          onNoRestrictionsClick={handleNoRestrictionsClick}
+          onOtherTextChange={handleOtherTextChange}
+        />
 
         {inlineError && (
           <p className="text-sm text-[var(--color-error)] mb-4">
