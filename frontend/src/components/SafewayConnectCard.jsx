@@ -9,6 +9,7 @@ import { useSafewaySync, STATUS } from '../hooks/useSafewaySync';
 import { api } from '../services/apiClient';
 import SyncSuccessAlert from './SyncSuccessAlert';
 import ReconnectBanner from './ReconnectBanner';
+import SyncHealthRow from './SyncHealthRow';
 
 function DevMockSafewayBlock({ userId, className = '' }) {
   const [mockStatus, setMockStatus] = useState('idle');
@@ -150,6 +151,11 @@ export default function SafewayConnectCard({ userId, className = '' }) {
           </button>
         )}
       </div>
+
+      <SyncHealthRow
+        provider="safeway"
+        syncInProgress={status === STATUS.SKIPPED}
+      />
 
       {status === STATUS.AUTHENTICATING && (
         <p className="text-sage-light text-sm">

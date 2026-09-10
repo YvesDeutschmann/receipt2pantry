@@ -1,9 +1,11 @@
 import { useEffect } from 'react';
-import { classifyError } from '../components/ReconnectBanner';
+import { classifySyncFailure } from '../services/syncOutcomeClassifier';
 import {
   setNeedsReconnect,
+  setFetchFailed,
   clearProvider,
 } from '../services/providerAttentionStore';
+import { recordTerminalOutcome } from '../services/syncHealthStore';
 
 const PROVIDERS = ['safeway', 'costco'];
 
@@ -16,16 +18,44 @@ export function useProviderAttentionSync() {
     const cleanups = PROVIDERS.map((provider) => {
       const onNeedsReconnect = () => {
         void setNeedsReconnect(provider);
+        void recordTerminalOutcome(provider, { outcome: 'needs_reconnect' });
       };
 
-      const onCompleted = () => {
-        void clearProvider(provider);
+      const onCompleted = (e) => {
+        const outcome = e.detail?.outcome;
+        if (outcome === 'completed_empty' || outcome === 'completed_items') {
+          void clearProvider(provider);
+          void recordTerminalOutcome(provider, {
+            outcome,
+            receiptsStored: e.detail?.receipts_stored ?? 0,
+          });
+        }
       };
 
       const onError = (e) => {
-        if (classifyError(e.detail?.message) === 'expired') {
-          void setNeedsReconnect(provider);
+        const outcome = e.detail?.outcome;
+        if (outcome === 'failed') {
+          void setFetchFailed(provider);
+          void recordTerminalOutcome(provider, { outcome: 'failed' });
+          return;
         }
+        if (outcome === 'needs_reconnect') {
+          void setNeedsReconnect(provider);
+          void recordTerminalOutcome(provider, { outcome: 'needs_reconnect' });
+          return;
+        }
+        if (
+          classifySyncFailure({
+            reason: e.detail?.reason,
+            message: e.detail?.message,
+          }) === 'expired'
+        ) {
+          void setNeedsReconnect(provider);
+          void recordTerminalOutcome(provider, { outcome: 'needs_reconnect' });
+          return;
+        }
+        void setFetchFailed(provider);
+        void recordTerminalOutcome(provider, { outcome: 'failed' });
       };
 
       window.addEventListener(`${provider}-sync-needs-reconnect`, onNeedsReconnect);

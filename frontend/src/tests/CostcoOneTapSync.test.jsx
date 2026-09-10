@@ -9,6 +9,17 @@ vi.mock('@capacitor/core', () => ({
   },
 }))
 
+const { subscribeHealthMock } = vi.hoisted(() => ({
+  subscribeHealthMock: vi.fn((listener) => {
+    listener({})
+    return () => {}
+  }),
+}))
+
+vi.mock('../services/syncHealthStore', () => ({
+  subscribeHealth: (...args) => subscribeHealthMock(...args),
+}))
+
 vi.mock('../hooks/useCostcoSync', () => ({
   useCostcoSync: vi.fn(),
   STATUS: {
@@ -18,6 +29,7 @@ vi.mock('../hooks/useCostcoSync', () => ({
     SUBMITTING: 'submitting',
     SUCCESS: 'success',
     ERROR: 'error',
+    SKIPPED: 'skipped',
   },
 }))
 
@@ -38,6 +50,10 @@ describe('CostcoOneTapSync', () => {
   beforeEach(() => {
     vi.useFakeTimers()
     vi.mocked(useCostcoSync).mockReturnValue({ ...defaultHookReturn })
+    subscribeHealthMock.mockImplementation((listener) => {
+      listener({})
+      return () => {}
+    })
   })
 
   afterEach(() => {
@@ -112,6 +128,59 @@ describe('CostcoOneTapSync', () => {
     render(<CostcoOneTapSync userId="test-user-id" />)
     expect(screen.getByText(/Sync complete/)).toBeInTheDocument()
     expect(screen.getByText(/3 receipt/)).toBeInTheDocument()
+  })
+
+  it('HIDES_HEALTH_WHEN_NO_RECORD', () => {
+    vi.mocked(useCostcoSync).mockReturnValue({ ...defaultHookReturn, isNative: true })
+    render(<CostcoOneTapSync userId="test-user-id" />)
+    expect(screen.queryByText(/Last synced/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/Sync in progress/i)).not.toBeInTheDocument()
+  })
+
+  it('RENDERS_NO_NEW_RECEIPTS_ON_COMPLETED_EMPTY', () => {
+    subscribeHealthMock.mockImplementation((listener) => {
+      listener({
+        costco: {
+          lastAttemptAt: Date.now() - 60_000,
+          lastOutcome: 'completed_empty',
+          lastCompletedAt: Date.now() - 60_000,
+          receiptsStored: 0,
+          lastToastedOutcome: null,
+        },
+      })
+      return () => {}
+    })
+    vi.mocked(useCostcoSync).mockReturnValue({ ...defaultHookReturn, isNative: true })
+    render(<CostcoOneTapSync userId="test-user-id" />)
+    expect(screen.getByText(/No new receipts · Last synced/i)).toBeInTheDocument()
+  })
+
+  it('RENDERS_LAST_SYNC_AT_WHEN_HEALTH_PRESENT', () => {
+    subscribeHealthMock.mockImplementation((listener) => {
+      listener({
+        costco: {
+          lastAttemptAt: Date.now() - 120_000,
+          lastOutcome: 'completed_items',
+          lastCompletedAt: Date.now() - 120_000,
+          receiptsStored: 2,
+          lastToastedOutcome: null,
+        },
+      })
+      return () => {}
+    })
+    vi.mocked(useCostcoSync).mockReturnValue({ ...defaultHookReturn, isNative: true })
+    render(<CostcoOneTapSync userId="test-user-id" />)
+    expect(screen.getByText(/Synced 2 receipts · Last synced/i)).toBeInTheDocument()
+  })
+
+  it('RENDERS_SYNC_IN_PROGRESS_ON_SKIPPED_STATUS', () => {
+    vi.mocked(useCostcoSync).mockReturnValue({
+      ...defaultHookReturn,
+      isNative: true,
+      status: STATUS.SKIPPED,
+    })
+    render(<CostcoOneTapSync userId="test-user-id" />)
+    expect(screen.getByText('Sync in progress')).toBeInTheDocument()
   })
 
   it('RECONNECT_BANNER_MOUNTED_IN_COSTCO_CARD', () => {

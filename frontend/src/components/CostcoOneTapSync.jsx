@@ -8,6 +8,7 @@ import { useCostcoSync, STATUS } from '../hooks/useCostcoSync';
 import { api } from '../services/apiClient';
 import SyncSuccessAlert from './SyncSuccessAlert';
 import ReconnectBanner from './ReconnectBanner';
+import SyncHealthRow from './SyncHealthRow';
 import { COSTCO_RECONNECT_MESSAGE } from '../services/costcoSilentSyncOutcome';
 
 function DevMockCostcoBlock({ userId, onSyncSuccess, className = '' }) {
@@ -164,6 +165,11 @@ export default function CostcoOneTapSync({ userId, className = '', onSyncSuccess
           </button>
         )}
       </div>
+
+      <SyncHealthRow
+        provider="costco"
+        syncInProgress={status === STATUS.SKIPPED}
+      />
 
       {status === STATUS.AUTHENTICATING && (
         <p className="text-sage-light text-sm">

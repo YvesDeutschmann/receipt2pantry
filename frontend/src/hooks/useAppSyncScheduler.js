@@ -10,11 +10,15 @@ import { parseSafewayReceipt } from '../services/safewayReceiptParser';
 import { submitSilentReceipts } from '../services/costcoSilentIngest';
 import { api } from '../services/apiClient';
 import { logPhase, reportAnomaly, SyncPhase } from '../services/syncEventLog';
-import {
-  classifyCostcoSilentResult,
-  isTerminalSilentReconnectResult,
-} from '../services/costcoSilentSyncOutcome';
+import { isTerminalSilentReconnectResult } from '../services/costcoSilentSyncOutcome';
 import { classifySafewaySilentResult } from '../services/safewaySilentSyncOutcome';
+import {
+  mapCostcoSilentToOutcome,
+  mapSafewaySilentToOutcome,
+  SYNC_OUTCOMES,
+} from '../services/syncOutcomeMapper';
+import { classifySyncFailure } from '../services/syncOutcomeClassifier';
+import { ensureLegacyKeysDeleted, lastRunKey, writeLastRun } from '../services/syncPrefKeys';
 import {
   isCostcoReconnectCooldownActive,
   setCostcoReconnectCooldown,
@@ -38,24 +42,24 @@ const hasCostcoTokens = costcoBridge.hasStoredTokens;
 // TODO: replace with runSafewaySilentSync once silent_sync Phase 3 is merged
 async function adaptSafewaySilentSync(userId) {
   if (await isSafewayReconnectCooldownActive()) {
-    return { outcome: 'skipped', reason: 'reconnect_cooldown' };
+    return { outcome: SYNC_OUTCOMES.SKIPPED, reason: 'reconnect_cooldown' };
   }
 
   const syncResult = await safewayBridge.startSilentSync();
-  const kind = classifySafewaySilentResult(syncResult);
+  const extractKind = classifySafewaySilentResult(syncResult);
 
-  if (kind === 'skipped') {
-    return { outcome: 'skipped' };
+  if (extractKind === 'skipped') {
+    return { outcome: SYNC_OUTCOMES.SKIPPED, reason: syncResult?.reason };
   }
-  if (kind === 'timeout') {
-    return { outcome: 'error', message: 'silent_timeout' };
+  if (extractKind === 'timeout') {
+    return { outcome: SYNC_OUTCOMES.FAILED, reason: 'silent_timeout', message: 'silent_timeout' };
   }
-  if (kind === 'needs_reconnect') {
+  if (extractKind === 'needs_reconnect') {
     await setSafewayReconnectCooldown();
-    return { outcome: 'needs_reconnect', message: syncResult?.reason || 'needs_reconnect' };
+    return { outcome: SYNC_OUTCOMES.NEEDS_RECONNECT, message: syncResult?.reason || 'needs_reconnect' };
   }
-  if (kind === 'error') {
-    return { outcome: 'error', message: 'missing_club_card' };
+  if (extractKind === 'error') {
+    return { outcome: SYNC_OUTCOMES.FAILED, reason: 'missing_club_card', message: 'missing_club_card' };
   }
 
   try {
@@ -69,18 +73,53 @@ async function adaptSafewaySilentSync(userId) {
       /* non-fatal */
     }
 
-    const raw = await fetchSafewayReceipts({
-      accessToken: syncResult.accessToken,
-      clubCard: syncResult.clubCard,
-      knownOrderIds,
-      daysOverride: 3,
-      cookieHeader: syncResult.cookieHeader,
-    });
-    const receipts = (raw || []).map((r) => parseSafewayReceipt(r)).filter(Boolean);
+    let rawCount = 0;
+    let parsedCount = 0;
+    let receipts = [];
 
-    if (receipts.length === 0) {
-      await clearSafewayReconnectCooldown();
-      return { outcome: 'synced', tier: 'silent', receipts_stored: 0, items_added: 0 };
+    try {
+      const raw = await fetchSafewayReceipts({
+        accessToken: syncResult.accessToken,
+        clubCard: syncResult.clubCard,
+        knownOrderIds,
+        daysOverride: 3,
+        cookieHeader: syncResult.cookieHeader,
+      });
+      rawCount = (raw || []).length;
+      receipts = (raw || []).map((r) => parseSafewayReceipt(r)).filter(Boolean);
+      parsedCount = receipts.length;
+    } catch (err) {
+      const msg = err?.message || String(err);
+      if (
+        classifySyncFailure({
+          status: err?.status,
+          reason: err?.reason,
+          message: err?.message,
+        }) === 'expired'
+      ) {
+        await setSafewayReconnectCooldown();
+        return { outcome: SYNC_OUTCOMES.NEEDS_RECONNECT };
+      }
+      return { outcome: SYNC_OUTCOMES.FAILED, reason: 'fetch_error', message: msg };
+    }
+
+    const mapped = mapSafewaySilentToOutcome(syncResult, {
+      rawCount,
+      parsedCount,
+      fetchCompleted: true,
+    });
+
+    if (mapped.outcome === SYNC_OUTCOMES.FAILED) {
+      return { outcome: SYNC_OUTCOMES.FAILED, reason: mapped.reason, message: mapped.reason };
+    }
+
+    if (mapped.outcome === SYNC_OUTCOMES.COMPLETED_EMPTY) {
+      return {
+        outcome: SYNC_OUTCOMES.COMPLETED_EMPTY,
+        tier: 'silent',
+        receipts_stored: 0,
+        items_added: 0,
+      };
     }
 
     const finalBackend = await api.ingestReceipts('safeway', receipts, userId);
@@ -90,93 +129,95 @@ async function adaptSafewaySilentSync(userId) {
         .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
         .catch(() => {});
     }
-    await clearSafewayReconnectCooldown();
     return {
-      outcome: 'synced',
+      outcome: SYNC_OUTCOMES.COMPLETED_ITEMS,
       tier: 'silent',
       receipts_stored: finalBackend.receipts_stored ?? receipts.length,
       items_added: itemsAdded,
     };
   } catch (err) {
-    const status = err?.status;
     const msg = err?.message || String(err);
-    const isAuth =
-      status === 401 ||
-      status === 403 ||
-      /401|403|unauthorized|forbidden/i.test(msg);
-    if (isAuth) {
+    if (
+      classifySyncFailure({
+        status: err?.status,
+        reason: err?.reason,
+        message: err?.message,
+      }) === 'expired'
+    ) {
       await setSafewayReconnectCooldown();
-      return { outcome: 'needs_reconnect' };
+      return { outcome: SYNC_OUTCOMES.NEEDS_RECONNECT };
     }
-    return { outcome: 'error', message: msg };
+    return { outcome: SYNC_OUTCOMES.FAILED, reason: 'fetch_error', message: msg };
   }
 }
 
 // TODO: replace with runCostcoSilentSync once silent_sync Phase 3 is merged
 async function adaptCostcoSilentSync(userId) {
   if (await isCostcoReconnectCooldownActive()) {
-    return { outcome: 'skipped', reason: 'reconnect_cooldown' };
+    return { outcome: SYNC_OUTCOMES.SKIPPED, reason: 'reconnect_cooldown' };
   }
 
   const result = await costcoBridge.startSilentSync();
-  const kind = classifyCostcoSilentResult(result);
+  const mapped = mapCostcoSilentToOutcome(result);
 
-  if (kind === 'skipped') {
-    return { outcome: 'skipped' };
+  if (mapped.outcome === SYNC_OUTCOMES.SKIPPED) {
+    return { outcome: SYNC_OUTCOMES.SKIPPED, reason: mapped.reason };
   }
-  if (kind === 'timeout') {
-    return { outcome: 'error', message: 'silent_timeout' };
-  }
-  if (kind === 'needs_reconnect') {
+  if (mapped.outcome === SYNC_OUTCOMES.NEEDS_RECONNECT) {
     if (isTerminalSilentReconnectResult(result)) {
       await setCostcoReconnectCooldown();
     }
-    return { outcome: 'needs_reconnect', message: result?.reason || 'needs_reconnect' };
+    return { outcome: SYNC_OUTCOMES.NEEDS_RECONNECT, message: mapped.reason || 'needs_reconnect' };
   }
-  if (kind === 'tokens_only') {
-    return { outcome: 'error', message: 'tokens_only' };
+  if (mapped.outcome === SYNC_OUTCOMES.FAILED) {
+    return { outcome: SYNC_OUTCOMES.FAILED, reason: mapped.reason, message: mapped.reason };
   }
 
   try {
-    const receipts = result.receipts ?? [];
-    if (receipts.length > 0) {
-      const finalBackend = await submitSilentReceipts(receipts, userId, {
-        getCurrentUserId: () => userId,
-      });
-      const itemsAdded = finalBackend.items_added_to_pantry ?? 0;
-      if (itemsAdded > 3) {
-        void api.suggestions
-          .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
-          .catch(() => {});
-      }
-      if (result.idToken || result.accessToken) {
-        try {
-          await api.connectCostcoFromApp(userId, result);
-          await clearCostcoReconnectCooldown();
-        } catch (connectErr) {
-          console.warn(
-            '[AppSyncScheduler] costco connect-from-app failed:',
-            redact(connectErr?.message || connectErr)
-          );
-        }
-      }
+    const receipts = mapped.receipts ?? [];
+
+    if (mapped.outcome === SYNC_OUTCOMES.COMPLETED_EMPTY) {
       return {
-        outcome: 'synced',
+        outcome: SYNC_OUTCOMES.COMPLETED_EMPTY,
         tier: 'silent',
-        receipts_stored: finalBackend.receipts_stored ?? receipts.length,
-        items_added: itemsAdded,
+        receipts_stored: 0,
+        items_added: 0,
       };
     }
 
-    return { outcome: 'synced', tier: 'silent', receipts_stored: 0, items_added: 0 };
+    const finalBackend = await submitSilentReceipts(receipts, userId, {
+      getCurrentUserId: () => userId,
+    });
+    const itemsAdded = finalBackend.items_added_to_pantry ?? 0;
+    if (itemsAdded > 3) {
+      void api.suggestions
+        .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
+        .catch(() => {});
+    }
+    if (result.idToken || result.accessToken) {
+      try {
+        await api.connectCostcoFromApp(userId, result);
+      } catch (connectErr) {
+        console.warn(
+          '[AppSyncScheduler] costco connect-from-app failed:',
+          redact(connectErr?.message || connectErr)
+        );
+      }
+    }
+    return {
+      outcome: SYNC_OUTCOMES.COMPLETED_ITEMS,
+      tier: 'silent',
+      receipts_stored: finalBackend.receipts_stored ?? receipts.length,
+      items_added: itemsAdded,
+    };
   } catch (err) {
     const msg = err?.message || String(err);
     const isTokenError = /token.*invalid|token.*expired|65535|in-webview fetch/i.test(msg);
     if (isTokenError) {
       await setCostcoReconnectCooldown();
-      return { outcome: 'needs_reconnect' };
+      return { outcome: SYNC_OUTCOMES.NEEDS_RECONNECT };
     }
-    return { outcome: 'error', message: msg };
+    return { outcome: SYNC_OUTCOMES.FAILED, reason: 'ingest_error', message: msg };
   }
 }
 
@@ -200,13 +241,23 @@ function dispatchEvent(provider, phase, detail) {
   window.dispatchEvent(new CustomEvent(`${provider}-sync-${phase}`, { detail }));
 }
 
+async function clearProviderReconnectCooldown(provider) {
+  if (provider === 'safeway') {
+    await clearSafewayReconnectCooldown();
+  } else {
+    await clearCostcoReconnectCooldown();
+  }
+}
+
 async function dispatchOutcomeEvent(provider, result) {
   switch (result?.outcome) {
-    case 'synced':
+    case SYNC_OUTCOMES.COMPLETED_EMPTY:
+    case SYNC_OUTCOMES.COMPLETED_ITEMS:
       dispatchEvent(provider, 'completed', {
         tier: result.tier,
         receipts_stored: result.receipts_stored,
         items_added: result.items_added,
+        outcome: result.outcome,
       });
       void logPhase(provider, SyncPhase.SYNC_SUCCEEDED, {
         mode: 'silent',
@@ -214,33 +265,39 @@ async function dispatchOutcomeEvent(provider, result) {
           tier: result.tier,
           receipts_stored: result.receipts_stored ?? 0,
           items_added: result.items_added ?? 0,
+          outcome: result.outcome,
         },
       });
-      await Preferences.set({ key: `sync_lastRun_${provider}`, value: String(Date.now()) });
+      await writeLastRun(provider);
+      await clearProviderReconnectCooldown(provider);
       break;
-    case 'skipped':
+    case SYNC_OUTCOMES.SKIPPED:
       dispatchEvent(provider, 'skipped');
       void logPhase(provider, SyncPhase.SYNC_SKIPPED, {
         mode: 'silent',
         reason: result.reason || 'skipped',
       });
       break;
-    case 'needs_reconnect':
+    case SYNC_OUTCOMES.NEEDS_RECONNECT:
       dispatchEvent(provider, 'needs-reconnect');
       void reportAnomaly(provider, SyncPhase.NEEDS_RECONNECT, {
         mode: 'silent',
         reason: result.message || 'needs_reconnect',
       });
       break;
-    case 'error':
-      dispatchEvent(provider, 'error', { message: result.message });
+    case SYNC_OUTCOMES.FAILED:
+      dispatchEvent(provider, 'error', {
+        message: result.message,
+        reason: result.reason,
+        outcome: 'failed',
+      });
       void reportAnomaly(provider, SyncPhase.SYNC_FAILED, {
         mode: 'silent',
-        reason: result.message || 'error',
+        reason: result.reason || result.message || 'failed',
       });
       break;
     default:
-      dispatchEvent(provider, 'error', { message: 'Unknown sync outcome' });
+      dispatchEvent(provider, 'error', { message: 'Unknown sync outcome', outcome: 'failed' });
       void reportAnomaly(provider, SyncPhase.SYNC_FAILED, {
         mode: 'silent',
         reason: 'unknown_outcome',
@@ -250,9 +307,12 @@ async function dispatchOutcomeEvent(provider, result) {
 }
 
 async function shouldRun(provider) {
+  await ensureLegacyKeysDeleted();
+  const key = lastRunKey(provider);
+  if (!key) return false;
   const { minResyncMsOverride } = readFlags();
   const threshold = minResyncMsOverride ?? DEFAULT_MIN_RESYNC_MS;
-  const { value } = await Preferences.get({ key: `sync_lastRun_${provider}` });
+  const { value } = await Preferences.get({ key });
   const last = value ? Number(value) : 0;
   return Date.now() - last >= threshold;
 }
@@ -309,7 +369,7 @@ export function useAppSyncScheduler({ userId }) {
             mode: 'silent',
             reason: msg.slice(0, 500),
           });
-          dispatchEvent(p.name, 'error', { message: msg });
+          dispatchEvent(p.name, 'error', { message: msg, outcome: 'failed' });
         } finally {
           syncingRef.current[p.name] = false;
         }

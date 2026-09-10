@@ -1,12 +1,62 @@
 """Supabase database service"""
 
-from typing import Dict, List, Optional
-from datetime import datetime
+from typing import Any, Dict, List, Optional
+from datetime import date, datetime, timezone
 from supabase import create_client, Client
 from backend.utils.exceptions import DatabaseException
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
+
+_RECEIPT_SUMMARY_COLUMNS = "id, provider, order_date, total_amount, num_items"
+
+
+def _coerce_receipt_date(value: Any) -> Optional[date]:
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        if value.tzinfo is not None:
+            return value.astimezone(timezone.utc).date()
+        return value.date()
+    if isinstance(value, date):
+        return value
+    if isinstance(value, str):
+        text = value.strip()
+        if not text:
+            return None
+        try:
+            return date.fromisoformat(text[:10])
+        except ValueError:
+            return None
+    return None
+
+
+def _coerce_amount(value: Any) -> float:
+    if value is None:
+        return 0.0
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
+def _coerce_count(value: Any) -> int:
+    if value is None:
+        return 0
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _lean_receipt_row(row: Dict[str, Any]) -> Dict[str, Any]:
+    return {
+        "id": row.get("id"),
+        "provider": row.get("provider"),
+        "order_date": row.get("order_date"),
+        "total_amount": row.get("total_amount"),
+        "num_items": row.get("num_items"),
+    }
 
 
 class SupabaseService:
@@ -57,6 +107,55 @@ class SupabaseService:
         except Exception as e:
             logger.error(f"Failed to get receipts for user {user_id}: {e}")
             raise DatabaseException(f"Failed to retrieve receipts: {e}")
+
+    def get_user_receipt_summary(
+        self, user_id: str, *, today: Optional[date] = None
+    ) -> Dict[str, Any]:
+        """
+        Lean per-user receipt aggregates. Never selects raw_data.
+
+        Args:
+            user_id: Signed-in user ID
+            today: Calendar day for month_spend (UTC month of this date)
+        """
+        anchor = today if today is not None else date.today()
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            response = (
+                client.table("receipts")
+                .select(_RECEIPT_SUMMARY_COLUMNS)
+                .eq("user_id", user_id)
+                .order("order_date", desc=True)
+                .execute()
+            )
+            rows = response.data if response.data else []
+        except Exception as e:
+            logger.error(f"Failed to get receipt summary for user {user_id}: {e}")
+            raise DatabaseException(f"Failed to retrieve receipt summary: {e}")
+
+        month_spend = 0.0
+        total_items = 0
+        for row in rows:
+            parsed = _coerce_receipt_date(row.get("order_date"))
+            if (
+                parsed is not None
+                and parsed.year == anchor.year
+                and parsed.month == anchor.month
+            ):
+                month_spend += _coerce_amount(row.get("total_amount"))
+            total_items += _coerce_count(row.get("num_items"))
+
+        sorted_rows = sorted(
+            rows,
+            key=lambda row: _coerce_receipt_date(row.get("order_date")) or date.min,
+            reverse=True,
+        )
+        return {
+            "total_receipts": len(rows),
+            "month_spend": round(month_spend, 2),
+            "total_items": total_items,
+            "recent": [_lean_receipt_row(row) for row in sorted_rows[:5]],
+        }
     
     def get_receipt_by_order_id(self, order_id: str) -> Optional[Dict]:
         """

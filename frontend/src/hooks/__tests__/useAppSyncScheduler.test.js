@@ -7,6 +7,8 @@ const {
   listenerRemoveMock,
   preferencesGetMock,
   preferencesSetMock,
+  preferencesRemoveMock,
+  preferencesStore,
   readFlagsMock,
   startSafewaySilentSyncMock,
   fetchSafewayReceiptsMock,
@@ -17,12 +19,27 @@ const {
   setCostcoCooldownMock,
   isSafewayCooldownMock,
   setSafewayCooldownMock,
-} = vi.hoisted(() => ({
+  clearCostcoReconnectCooldownMock,
+} = vi.hoisted(() => {
+  const preferencesStore = new Map();
+  return {
   isNativePlatformMock: vi.fn(() => true),
   addListenerMock: vi.fn(),
   listenerRemoveMock: vi.fn(),
-  preferencesGetMock: vi.fn(() => Promise.resolve({ value: null })),
-  preferencesSetMock: vi.fn(() => Promise.resolve()),
+  preferencesStore,
+  preferencesGetMock: vi.fn(({ key }) =>
+    Promise.resolve({
+      value: preferencesStore.has(key) ? preferencesStore.get(key) : null,
+    })
+  ),
+  preferencesSetMock: vi.fn(({ key, value }) => {
+    preferencesStore.set(key, value);
+    return Promise.resolve();
+  }),
+  preferencesRemoveMock: vi.fn(({ key }) => {
+    preferencesStore.delete(key);
+    return Promise.resolve();
+  }),
   readFlagsMock: vi.fn(() => ({ minResyncMsOverride: null })),
   startSafewaySilentSyncMock: vi.fn(),
   fetchSafewayReceiptsMock: vi.fn(() => Promise.resolve([])),
@@ -33,7 +50,9 @@ const {
   setCostcoCooldownMock: vi.fn(() => Promise.resolve()),
   isSafewayCooldownMock: vi.fn(() => Promise.resolve(false)),
   setSafewayCooldownMock: vi.fn(() => Promise.resolve()),
-}));
+  clearCostcoReconnectCooldownMock: vi.fn(() => Promise.resolve()),
+  };
+});
 
 let appStateHandler = null;
 
@@ -53,6 +72,7 @@ vi.mock('@capacitor/preferences', () => ({
   Preferences: {
     get: (...args) => preferencesGetMock(...args),
     set: (...args) => preferencesSetMock(...args),
+    remove: (...args) => preferencesRemoveMock(...args),
   },
 }));
 
@@ -84,7 +104,7 @@ vi.mock('../../services/costcoWebViewBridge', async (importOriginal) => {
     startSilentSync: (...args) => startCostcoSilentSyncMock(...args),
     isCostcoReconnectCooldownActive: (...args) => isCostcoCooldownMock(...args),
     setCostcoReconnectCooldown: (...args) => setCostcoCooldownMock(...args),
-    clearCostcoReconnectCooldown: vi.fn(() => Promise.resolve()),
+    clearCostcoReconnectCooldown: (...args) => clearCostcoReconnectCooldownMock(...args),
   };
 });
 
@@ -120,8 +140,11 @@ vi.mock('../../services/syncEventLog', () => ({
 }));
 
 import { useAppSyncScheduler } from '../useAppSyncScheduler';
+import { setSyncUserId, __resetSyncPrefKeysForTests } from '../../services/syncPrefKeys';
 
 const userId = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+const namespacedSafewayLastRun = `sync_lastRun_safeway_${userId}`;
+const namespacedCostcoLastRun = `sync_lastRun_costco_${userId}`;
 
 function setupListenerCapture() {
   addListenerMock.mockImplementation((_event, handler) => {
@@ -155,6 +178,9 @@ describe('useAppSyncScheduler', () => {
   let lsStore;
 
   beforeEach(() => {
+    __resetSyncPrefKeysForTests();
+    setSyncUserId(userId);
+    preferencesStore.clear();
     lsStore = new Map();
     vi.stubGlobal('localStorage', {
       getItem: (k) => (lsStore.has(k) ? lsStore.get(k) : null),
@@ -177,8 +203,19 @@ describe('useAppSyncScheduler', () => {
     isNativePlatformMock.mockReturnValue(true);
     localStorage.removeItem('SYNC_AUTO_ENABLED');
     readFlagsMock.mockReturnValue({ minResyncMsOverride: null });
-    preferencesGetMock.mockResolvedValue({ value: null });
-    preferencesSetMock.mockResolvedValue(undefined);
+    preferencesGetMock.mockImplementation(({ key }) =>
+      Promise.resolve({
+        value: preferencesStore.has(key) ? preferencesStore.get(key) : null,
+      })
+    );
+    preferencesSetMock.mockImplementation(({ key, value }) => {
+      preferencesStore.set(key, value);
+      return Promise.resolve();
+    });
+    preferencesRemoveMock.mockImplementation(({ key }) => {
+      preferencesStore.delete(key);
+      return Promise.resolve();
+    });
     hasSafewayTokensMock.mockResolvedValue(true);
     hasCostcoTokensMock.mockResolvedValue(true);
     isCostcoCooldownMock.mockResolvedValue(false);
@@ -284,6 +321,7 @@ describe('useAppSyncScheduler', () => {
       await Promise.resolve();
     });
     startSafewaySilentSyncMock.mockClear();
+    preferencesStore.clear();
     await act(async () => {
       appStateHandler?.({ isActive: true });
       appStateHandler?.({ isActive: true });
@@ -295,9 +333,25 @@ describe('useAppSyncScheduler', () => {
     expect(startSafewaySilentSyncMock).toHaveBeenCalledTimes(1);
   });
 
+  it('SHOULD_RUN_DELETES_UNSCOPED_LASTRUN', async () => {
+    const legacyTimestamp = '1700000000000';
+    preferencesStore.set('sync_lastRun_safeway', legacyTimestamp);
+    preferencesStore.set('sync_lastRun_costco', legacyTimestamp);
+
+    renderHook(() => useAppSyncScheduler({ userId }));
+    await flushMountAndDebounce();
+
+    expect(preferencesStore.has('sync_lastRun_safeway')).toBe(false);
+    expect(preferencesRemoveMock).toHaveBeenCalledWith({ key: 'sync_lastRun_safeway' });
+    const namespaced = preferencesStore.get(namespacedSafewayLastRun);
+    if (namespaced !== undefined) {
+      expect(namespaced).not.toBe(legacyTimestamp);
+    }
+  });
+
   it('SKIPS_WHEN_THROTTLE_NOT_EXPIRED — safeway skipped, costco runs', async () => {
     preferencesGetMock.mockImplementation(({ key }) => {
-      if (key === 'sync_lastRun_safeway') {
+      if (key === namespacedSafewayLastRun) {
         return Promise.resolve({ value: String(Date.now() - 30 * 60 * 1000) });
       }
       return Promise.resolve({ value: null });
@@ -329,7 +383,7 @@ describe('useAppSyncScheduler', () => {
     renderHook(() => useAppSyncScheduler({ userId }));
     await flushMountAndDebounce();
     expect(preferencesSetMock).toHaveBeenCalledWith({
-      key: 'sync_lastRun_safeway',
+      key: namespacedSafewayLastRun,
       value: '1700000000000',
     });
     nowSpy.mockRestore();
@@ -343,7 +397,7 @@ describe('useAppSyncScheduler', () => {
     renderHook(() => useAppSyncScheduler({ userId }));
     await flushMountAndDebounce();
     expect(preferencesSetMock).not.toHaveBeenCalledWith(
-      expect.objectContaining({ key: 'sync_lastRun_safeway' })
+      expect.objectContaining({ key: namespacedSafewayLastRun })
     );
   });
 
@@ -402,7 +456,7 @@ describe('useAppSyncScheduler', () => {
     await flushMountAndDebounce();
     expect(setSafewayCooldownMock).toHaveBeenCalled();
     expect(preferencesSetMock).not.toHaveBeenCalledWith(
-      expect.objectContaining({ key: 'sync_lastRun_safeway' })
+      expect.objectContaining({ key: namespacedSafewayLastRun })
     );
   });
 
@@ -420,6 +474,27 @@ describe('useAppSyncScheduler', () => {
     expect(errorListener).toHaveBeenCalled();
     window.removeEventListener('safeway-sync-needs-reconnect', reconnectListener);
     window.removeEventListener('safeway-sync-error', errorListener);
+  });
+
+  it('SAFEWAY_FETCH_ORDER_ID_401_IS_FAILED_NOT_RECONNECT', async () => {
+    hasCostcoTokensMock.mockResolvedValue(false);
+    fetchSafewayReceiptsMock.mockRejectedValue(new Error('order 401123'));
+    const reconnectListener = vi.fn();
+    const errorListener = vi.fn();
+    const completedListener = vi.fn();
+    window.addEventListener('safeway-sync-needs-reconnect', reconnectListener);
+    window.addEventListener('safeway-sync-error', errorListener);
+    window.addEventListener('safeway-sync-completed', completedListener);
+    renderHook(() => useAppSyncScheduler({ userId }));
+    await flushMountAndDebounce();
+    expect(setSafewayCooldownMock).not.toHaveBeenCalled();
+    expect(reconnectListener).not.toHaveBeenCalled();
+    expect(errorListener).toHaveBeenCalled();
+    expect(errorListener.mock.calls[0][0].detail.outcome).toBe('failed');
+    expect(completedListener).not.toHaveBeenCalled();
+    window.removeEventListener('safeway-sync-needs-reconnect', reconnectListener);
+    window.removeEventListener('safeway-sync-error', errorListener);
+    window.removeEventListener('safeway-sync-completed', completedListener);
   });
 
   it('SAFEWAY_COOLDOWN_SKIPS_BEFORE_SILENT', async () => {
@@ -467,7 +542,7 @@ describe('useAppSyncScheduler', () => {
     expect(skippedListener).toHaveBeenCalled();
     expect(reconnectListener).not.toHaveBeenCalled();
     expect(preferencesSetMock).not.toHaveBeenCalledWith(
-      expect.objectContaining({ key: 'sync_lastRun_costco' })
+      expect.objectContaining({ key: namespacedCostcoLastRun })
     );
     window.removeEventListener('costco-sync-skipped', skippedListener);
     window.removeEventListener('costco-sync-needs-reconnect', reconnectListener);
@@ -486,7 +561,7 @@ describe('useAppSyncScheduler', () => {
     expect(reconnectListener).toHaveBeenCalled();
     expect(setCostcoCooldownMock).toHaveBeenCalled();
     expect(preferencesSetMock).not.toHaveBeenCalledWith(
-      expect.objectContaining({ key: 'sync_lastRun_costco' })
+      expect.objectContaining({ key: namespacedCostcoLastRun })
     );
     window.removeEventListener('costco-sync-needs-reconnect', reconnectListener);
   });
@@ -594,5 +669,45 @@ describe('useAppSyncScheduler', () => {
     localStorage.setItem('SYNC_AUTO_ENABLED', '0');
     await simulateAppActive();
     expect(startSafewaySilentSyncMock).not.toHaveBeenCalled();
+  });
+
+  it('EMPTY_WITHOUT_TERMINAL_RESPONSE_DOES_NOT_CLEAR_COOLDOWN', async () => {
+    hasSafewayTokensMock.mockResolvedValue(false);
+    clearCostcoReconnectCooldownMock.mockClear();
+    startCostcoSilentSyncMock.mockResolvedValue({ receipts: [] });
+    const completedListener = vi.fn();
+    const errorListener = vi.fn();
+    window.addEventListener('costco-sync-completed', completedListener);
+    window.addEventListener('costco-sync-error', errorListener);
+    renderHook(() => useAppSyncScheduler({ userId }));
+    await flushMountAndDebounce();
+    expect(clearCostcoReconnectCooldownMock).not.toHaveBeenCalled();
+    expect(preferencesSetMock).not.toHaveBeenCalledWith(
+      expect.objectContaining({ key: namespacedCostcoLastRun })
+    );
+    expect(completedListener).not.toHaveBeenCalled();
+    expect(errorListener).toHaveBeenCalled();
+    window.removeEventListener('costco-sync-completed', completedListener);
+    window.removeEventListener('costco-sync-error', errorListener);
+  });
+
+  it('COMPLETED_EMPTY_FROM_WEBVIEW_WRITES_LASTRUN', async () => {
+    hasSafewayTokensMock.mockResolvedValue(false);
+    clearCostcoReconnectCooldownMock.mockClear();
+    const nowSpy = vi.spyOn(Date, 'now').mockReturnValue(1_700_000_000_000);
+    startCostcoSilentSyncMock.mockResolvedValue({ receipts: [], _fromWebView: true });
+    const completedListener = vi.fn();
+    window.addEventListener('costco-sync-completed', completedListener);
+    renderHook(() => useAppSyncScheduler({ userId }));
+    await flushMountAndDebounce();
+    expect(clearCostcoReconnectCooldownMock).toHaveBeenCalled();
+    expect(preferencesSetMock).toHaveBeenCalledWith({
+      key: namespacedCostcoLastRun,
+      value: '1700000000000',
+    });
+    expect(completedListener).toHaveBeenCalled();
+    expect(completedListener.mock.calls[0][0].detail.outcome).toBe('completed_empty');
+    nowSpy.mockRestore();
+    window.removeEventListener('costco-sync-completed', completedListener);
   });
 });

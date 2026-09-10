@@ -2,7 +2,7 @@
  * Persisted sync attempt telemetry per provider (Preferences + localStorage fallback).
  */
 
-const STORAGE_KEY_PREFIX = 'sync_telemetry_';
+import { telemetryKey, getSyncUserId, ensureLegacyKeysDeleted } from './syncPrefKeys';
 
 const FAILURE_REASON_KEYS = new Set([
   'cookie_missing',
@@ -20,6 +20,9 @@ const FAILURE_REASON_KEYS = new Set([
 /** @type {boolean | null} */
 let _preferencesAvailableCache = null;
 
+/** @type {Map<string, object>} */
+const memoryStore = new Map();
+
 async function isPreferencesAvailable(probeKey) {
   if (_preferencesAvailableCache !== null) return _preferencesAvailableCache;
   try {
@@ -33,7 +36,10 @@ async function isPreferencesAvailable(probeKey) {
 }
 
 function storageKey(provider) {
-  return `${STORAGE_KEY_PREFIX}${provider}`;
+  const key = telemetryKey(provider);
+  if (key) return key;
+  if (!getSyncUserId()) return null;
+  return `sync_telemetry_${provider}`;
 }
 
 function defaultTelemetryBlob() {
@@ -109,7 +115,12 @@ function normalizeBlob(raw) {
 
 async function loadBlob(provider) {
   const key = storageKey(provider);
+  if (!key) {
+    return normalizeBlob(memoryStore.get(provider));
+  }
+
   try {
+    await ensureLegacyKeysDeleted();
     const usePrefs = await isPreferencesAvailable(key);
     if (usePrefs) {
       const { Preferences } = await import('@capacitor/preferences');
@@ -138,8 +149,14 @@ async function loadBlob(provider) {
 
 async function saveBlob(provider, blob) {
   const key = storageKey(provider);
+  if (!key) {
+    memoryStore.set(provider, blob);
+    return;
+  }
+
   const json = JSON.stringify(blob);
   try {
+    await ensureLegacyKeysDeleted();
     const usePrefs = await isPreferencesAvailable(key);
     if (usePrefs) {
       const { Preferences } = await import('@capacitor/preferences');
@@ -242,4 +259,10 @@ export async function reset(provider) {
   } catch {
     /* never throw */
   }
+}
+
+/** @internal Reset module state for tests. */
+export function __resetSyncTelemetryForTests() {
+  memoryStore.clear();
+  _preferencesAvailableCache = null;
 }

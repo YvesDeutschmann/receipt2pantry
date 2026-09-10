@@ -1,24 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
+import { classifyError, classifySyncFailure } from '../services/syncOutcomeClassifier';
 
-/**
- * @param {string | undefined} message
- * @returns {'expired' | 'transient' | 'unknown'}
- */
-export function classifyError(message) {
-  if (!message) return 'unknown';
-  const lower = message.toLowerCase();
-  if (
-    /session.?expired|token.?expired|token.?invalid|credentials.?expired|401|403|forbidden|unauthorized/.test(
-      lower
-    )
-  ) {
-    return 'expired';
-  }
-  if (/network|timeout|fetch.?failed|connection.?refused|offline/.test(lower)) {
-    return 'transient';
-  }
-  return 'unknown';
-}
+export { classifyError };
 
 /**
  * @param {{
@@ -49,7 +32,17 @@ export default function ReconnectBanner({ provider, onReconnect, storeName, test
 
   useEffect(() => {
     const onSyncError = (e) => {
-      if (classifyError(e.detail?.message) === 'expired') {
+      if (e.detail?.outcome === 'failed') return;
+      if (e.detail?.outcome === 'needs_reconnect') {
+        show();
+        return;
+      }
+      if (
+        classifySyncFailure({
+          reason: e.detail?.reason,
+          message: e.detail?.message,
+        }) === 'expired'
+      ) {
         show();
       }
     };

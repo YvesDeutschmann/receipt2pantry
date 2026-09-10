@@ -13,12 +13,21 @@ function renderSettings() {
 
 const {
   getHousehold,
+  getReceiptSummary,
   triggerGeneration,
   healthCheck,
   devCookLoopReset,
   devCookLoopRun,
 } = vi.hoisted(() => ({
   getHousehold: vi.fn(),
+  getReceiptSummary: vi.fn(() =>
+    Promise.resolve({
+      total_receipts: 0,
+      month_spend: 0,
+      total_items: 0,
+      recent: [],
+    })
+  ),
   triggerGeneration: vi.fn(() =>
     Promise.resolve({ status: 'completed', suggestions_generated: 5 })
   ),
@@ -46,6 +55,7 @@ vi.mock('../services/supabaseClient', () => ({
 vi.mock('../services/apiClient', () => ({
   api: {
     getHousehold,
+    getReceiptSummary,
     devResetOnboarding: vi.fn(),
     devCookLoopReset,
     devCookLoopRun,
