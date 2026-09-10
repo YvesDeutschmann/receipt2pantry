@@ -387,6 +387,53 @@ class TestHouseholdRoutes:
         assert response.status_code == 403
 
     # =========================================================================
+    # PUT /api/households/profile tests
+    # =========================================================================
+
+    def test_update_profile_member_diet_returns_403(
+        self, client_with_service, mock_household_service
+    ):
+        mock_household_service.update_household_profile.side_effect = AuthorizationException(
+            "Only the household owner can update dietary restrictions"
+        )
+
+        response = client_with_service.put(
+            "/api/households/profile",
+            data=json.dumps({"dietary_restrictions": ["gluten"]}),
+            content_type="application/json",
+            headers={"X-User-Id": "user-789"},
+        )
+
+        assert response.status_code == 403
+        mock_household_service.update_household_profile.assert_called_once_with(
+            "user-789",
+            size=None,
+            dietary_restrictions=["gluten"],
+            suggestion_meal_slots=None,
+        )
+
+    def test_update_profile_owner_diet_returns_200(
+        self, client_with_service, mock_household_service
+    ):
+        mock_household_service.update_household_profile.return_value = {
+            "id": "household-123",
+            "name": "Test Family",
+            "dietary_restrictions": ["gluten"],
+            "role": "owner",
+        }
+
+        response = client_with_service.put(
+            "/api/households/profile",
+            data=json.dumps({"dietary_restrictions": ["gluten"]}),
+            content_type="application/json",
+            headers={"X-User-Id": "user-456"},
+        )
+
+        assert response.status_code == 200
+        data = json.loads(response.data)
+        assert data["household"]["dietary_restrictions"] == ["gluten"]
+
+    # =========================================================================
     # POST /api/households/dietary/merge tests
     # =========================================================================
 

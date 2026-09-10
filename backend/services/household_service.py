@@ -387,12 +387,15 @@ class HouseholdService:
         suggestion_meal_slots: Optional[Dict[str, Any]] = None,
     ) -> Dict:
         """
-        Update household profile fields (any household member can update).
+        Update household profile fields.
+
+        Size may be updated by any household member. Dietary restrictions may only
+        be replaced (full array) by the household owner; members use merge_dietary.
 
         Args:
             user_id: User ID (must be in a household)
             size: New household size (1-99), optional
-            dietary_restrictions: New dietary restrictions list, optional
+            dietary_restrictions: New dietary restrictions list, optional (owner only)
             suggestion_meal_slots: Which meal types to use for suggestion pool (breakfast/lunch/dinner booleans), optional
 
         Returns:
@@ -400,10 +403,19 @@ class HouseholdService:
 
         Raises:
             ValidationException: If user not in household or validation fails
+            AuthorizationException: If a non-owner attempts to replace dietary_restrictions
         """
         household = self.supabase.get_user_household(user_id)
         if not household:
             raise ValidationException("You are not a member of any household")
+
+        if dietary_restrictions is not None:
+            if not isinstance(dietary_restrictions, list):
+                raise ValidationException("dietary_restrictions must be a list")
+            if household.get("role") != "owner":
+                raise AuthorizationException(
+                    "Only the household owner can update dietary restrictions"
+                )
 
         updates = {}
         if size is not None:
