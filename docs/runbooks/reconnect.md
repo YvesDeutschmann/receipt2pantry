@@ -33,7 +33,7 @@ Supabase auth (Meald login) can still be valid while a **store** session is expi
 3. Ask for a **screenshot** of any of:
    - Amber **Reconnect {Store}** banner on the Providers screen
    - Edge toast: **"{Store} needs reconnect"**
-   - Dashboard **Needs attention** block with a Reconnect link
+   - Dinner (`/recipes`) **Needs attention** banner with a Reconnect / Try again link
 
 **What operators must not do:**
 
@@ -70,7 +70,7 @@ Safeway auth runs client-side in the WebView bridge; reconnect is driven almost 
 1. **Which store?** Safeway or Costco.
 2. **Network check:** User can reach the store's website in a mobile browser (rules out geo/network block).
 3. **Send user to Providers:**
-   - **Dashboard** `/` → **Needs attention** → **Reconnect** → `/providers`, or
+   - **Dinner** `/recipes` → **Needs attention** → **Reconnect** / **Try again** → `/providers`, or
    - **Settings** → **Connected Stores** → **Manage** → `/providers`
 4. On **Providers**, user taps **Reconnect {Store}** (amber banner) or **Connect** / **Sync** → complete WebView sign-in.
 5. After reconnect, tap **Sync Now** / **Silent Sync** on the same screen if pantry is still stale.
@@ -157,6 +157,6 @@ UPDATE grocery_accounts SET connection_status = 'needs_reconnect' ...
 ## Verification checklist
 
 - [ ] Support can follow resolution steps without referencing `connection_status`
-- [ ] Nav paths match app: Dashboard Needs attention, Settings → Connected Stores → Manage → `/providers`
+- [ ] Nav paths match app: Dinner `/recipes` Needs attention, Settings → Connected Stores → Manage → `/providers`
 - [ ] Forced-reconnect **primary** path documented for Area 5 device QA
 - [ ] Forced-reconnect smoke on **physical iOS + Android** signed off in Area 5 (not owned by this runbook alone)

@@ -279,6 +279,11 @@ body {
   padding: var(--space-4) var(--space-5);
 }
 
+.card-flush {
+  padding: 0;
+  overflow: hidden;
+}
+
 .card-accent {
   position: relative;
   overflow: hidden;

@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import React, { useState, useEffect, useMemo, useContext, createContext } from 'react'
 import { render, screen, within, waitFor, act, fireEvent } from '@testing-library/react'
 import { MemoryRouter, Routes, Route } from 'react-router-dom'
 import { expectNotBlocked } from './helpers/invariants'
-import { OnboardingProvider } from '../contexts/OnboardingContext'
+import OnboardingRoute from '../components/OnboardingRoute'
 import StaplesTemplate from '../pages/onboarding/StaplesTemplate'
 
 const { hapticImpact } = vi.hoisted(() => ({
@@ -33,30 +34,75 @@ const mockApi = vi.hoisted(() => ({
 
 vi.mock('../services/apiClient', () => ({ api: mockApi }))
 
+const authSnapshot = vi.hoisted(() => ({
+  onboardingComplete: false,
+  user: {
+    id: 'user-1',
+    app_metadata: { provider: 'email' },
+    user_metadata: {},
+  },
+  loading: false,
+}))
+
+let bumpAuth = () => {}
+
+const mockUpdateUser = vi.hoisted(() =>
+  vi.fn((payload) => {
+    if (payload?.data?.onboarding_completed_at) {
+      authSnapshot.onboardingComplete = true
+      authSnapshot.user = {
+        ...authSnapshot.user,
+        user_metadata: {
+          ...authSnapshot.user.user_metadata,
+          ...payload.data,
+        },
+      }
+      bumpAuth()
+    }
+    return Promise.resolve({
+      data: {
+        user: {
+          user_metadata: { ...(payload?.data || {}) },
+        },
+      },
+      error: null,
+    })
+  })
+)
+
 vi.mock('../services/supabaseClient', () => ({
   supabase: {
     auth: {
       getSession: vi.fn().mockResolvedValue({ data: { session: null } }),
-      updateUser: vi.fn((payload) =>
-        Promise.resolve({
-          data: {
-            user: {
-              user_metadata: { ...(payload?.data || {}) },
-            },
-          },
-          error: null,
-        })
-      ),
+      updateUser: (...args) => mockUpdateUser(...args),
     },
   },
 }))
 
+const AuthTestContext = createContext(null)
+
 vi.mock('../contexts/AuthContext', () => ({
-  useAuth: () => ({
-    user: { id: 'user-1', app_metadata: { provider: 'email' } },
-    session: { provider: 'email' },
-    signOut: vi.fn().mockResolvedValue(undefined),
-  }),
+  AuthProvider: ({ children }) => {
+    const [onboardingComplete, setOnboardingComplete] = useState(false)
+    useEffect(() => {
+      bumpAuth = () => setOnboardingComplete(true)
+      return () => {
+        bumpAuth = () => {}
+      }
+    }, [])
+    const value = useMemo(
+      () => ({
+        user: authSnapshot.user,
+        session: { provider: 'email' },
+        loading: authSnapshot.loading,
+        onboardingComplete,
+        signOut: vi.fn().mockResolvedValue(undefined),
+      }),
+      [onboardingComplete]
+    )
+    return <AuthTestContext.Provider value={value}>{children}</AuthTestContext.Provider>
+  },
+  useAuth: () => useContext(AuthTestContext),
 }))
 
 const coldStart = vi.hoisted(() => ({
@@ -79,6 +125,8 @@ vi.mock('../components/voice/VoiceInputSheet', () => ({
     return null
   },
 }))
+
+import { AuthProvider } from '../contexts/AuthContext'
 
 /** 14 items, 6 pre-selected — matches S1-01/S1-03 fixture */
 const template = {
@@ -117,29 +165,67 @@ const template = {
 
 function renderStaples() {
   return render(
-    <MemoryRouter initialEntries={['/onboarding/pantry-setup']}>
-      <Routes>
-        <Route
-          path="/onboarding/pantry-setup"
-          element={
-            <OnboardingProvider>
-              <StaplesTemplate />
-            </OnboardingProvider>
-          }
-        />
-        <Route path="/" element={<div data-testid="home-dest">Home</div>} />
-        <Route path="/onboarding/bridge" element={<div data-testid="bridge-dest">Bridge</div>} />
-      </Routes>
-    </MemoryRouter>
+    <AuthProvider>
+      <MemoryRouter initialEntries={['/onboarding/pantry-setup']}>
+        <Routes>
+          <Route path="/onboarding" element={<OnboardingRoute />}>
+            <Route path="pantry-setup" element={<StaplesTemplate />} />
+          </Route>
+          <Route path="/recipes" element={<div data-testid="recipes-dest">Recipes</div>} />
+          <Route path="/onboarding/bridge" element={<div data-testid="bridge-dest">Bridge</div>} />
+        </Routes>
+      </MemoryRouter>
+    </AuthProvider>
   )
 }
 
+async function confirmToPayoff() {
+  renderStaples()
+  await screen.findByText('Olive oil')
+  mockApi.confirmStaples.mockResolvedValueOnce({ receipt_matched: 0, added: 6 })
+  fireEvent.click(screen.getByRole('button', { name: /Done/i }))
+  await screen.findByText(/You're all set/i)
+}
+
+function installUpdateUserMock() {
+  mockUpdateUser.mockImplementation((payload) => {
+    if (payload?.data?.onboarding_completed_at) {
+      authSnapshot.onboardingComplete = true
+      authSnapshot.user = {
+        ...authSnapshot.user,
+        user_metadata: {
+          ...authSnapshot.user.user_metadata,
+          ...payload.data,
+        },
+      }
+      bumpAuth()
+    }
+    return Promise.resolve({
+      data: {
+        user: {
+          user_metadata: { ...(payload?.data || {}) },
+        },
+      },
+      error: null,
+    })
+  })
+}
+
 beforeEach(() => {
+  authSnapshot.onboardingComplete = false
+  authSnapshot.user = {
+    id: 'user-1',
+    app_metadata: { provider: 'email' },
+    user_metadata: {},
+  }
   mockApi.getStaplesTemplate.mockResolvedValue(template)
   mockApi.getStaplesReceiptMatches.mockResolvedValue({ matches: [] })
   mockApi.confirmStaples.mockReset()
   mockApi.confirmStaples.mockResolvedValue({ receipt_matched: 0, added: 6 })
   mockApi.getPantry.mockResolvedValue({ grouped: [] })
+  mockApi.suggestions.triggerGeneration.mockClear()
+  mockUpdateUser.mockClear()
+  installUpdateUserMock()
   hapticImpact.mockClear()
 })
 
@@ -148,7 +234,7 @@ afterEach(() => {
 })
 
 describe('StaplesTemplate cold-start E2E', () => {
-  it('ARC-01 / 1.1 / S1-01 / S1-02 / S1-03: golden path — defaults, haptics, batch, routes to home', async () => {
+  it('ARC-01 / 1.1 / S1-01 / S1-02 / S1-03: golden path — defaults, haptics, batch, payoff then complete', async () => {
     renderStaples()
     await screen.findByText('Olive oil')
 
@@ -161,7 +247,11 @@ describe('StaplesTemplate cold-start E2E', () => {
     const doneBtn = screen.getByRole('button', { name: /Done/i })
     fireEvent.click(doneBtn)
 
-    await screen.findByTestId('home-dest', {}, { timeout: 15000 })
+    await screen.findByText(/You're all set/i)
+    expect(mockUpdateUser).not.toHaveBeenCalled()
+    expect(mockApi.suggestions.triggerGeneration).toHaveBeenCalledWith('user-1', {
+      triggerReason: 'onboarding',
+    })
 
     expect(mockApi.confirmStaples).toHaveBeenCalledTimes(1)
     const [, selected, skip] = mockApi.confirmStaples.mock.calls[0]
@@ -178,6 +268,50 @@ describe('StaplesTemplate cold-start E2E', () => {
     )
     expect(skip).toBe(false)
     expect(screen.queryByTestId('bridge-dest')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: /What's for Dinner/i }))
+    await waitFor(() => {
+      expect(mockUpdateUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            onboarding_completed_at: expect.any(String),
+          }),
+        })
+      )
+    })
+    await waitFor(() => {
+      expect(screen.getByTestId('recipes-dest')).toBeInTheDocument()
+    })
+  })
+
+  it('CONFIRM_DOES_NOT_WRITE_ONBOARDING_COMPLETED_AT', async () => {
+    await confirmToPayoff()
+    expect(mockUpdateUser).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('recipes-dest')).not.toBeInTheDocument()
+  })
+
+  it('CONFIRM_WARMS_SUGGESTION_POOL', async () => {
+    await confirmToPayoff()
+    expect(mockApi.suggestions.triggerGeneration).toHaveBeenCalledWith('user-1', {
+      triggerReason: 'onboarding',
+    })
+  })
+
+  it('PAYOFF_TAP_WRITES_COMPLETED_AND_NAVIGATES_RECIPES', async () => {
+    await confirmToPayoff()
+    fireEvent.click(screen.getByRole('button', { name: /What's for Dinner/i }))
+    await waitFor(() => {
+      expect(mockUpdateUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            onboarding_completed_at: expect.any(String),
+          }),
+        })
+      )
+    })
+    await waitFor(() => {
+      expect(screen.getByTestId('recipes-dest')).toBeInTheDocument()
+    })
   })
 
   it('ARC-02: remount resets template selection to API defaults (partial draft not persisted — prod gap)', async () => {
@@ -210,7 +344,8 @@ describe('StaplesTemplate cold-start E2E', () => {
     expectNotBlocked(done)
 
     fireEvent.click(done)
-    await screen.findByTestId('home-dest')
+    await screen.findByText(/You're all set/i)
+    expect(mockUpdateUser).not.toHaveBeenCalled()
   })
 
   it('ARC-04 / 1.3: two receipt matches, badges, single batch, toast', async () => {
@@ -243,11 +378,15 @@ describe('StaplesTemplate cold-start E2E', () => {
     }
   })
 
-  it('1.2 / S1-05 Skip: six defaults only, skip flag', async () => {
+  it('1.2 / S1-05 Skip: six defaults only, skip flag, payoff not auto-home', async () => {
     renderStaples()
     await screen.findByText('Olive oil')
 
     fireEvent.click(screen.getByRole('button', { name: /Skip for now/i }))
+
+    await screen.findByText(/You're all set/i)
+    expect(mockUpdateUser).not.toHaveBeenCalled()
+    expect(screen.queryByTestId('recipes-dest')).not.toBeInTheDocument()
 
     expect(mockApi.confirmStaples).toHaveBeenCalledTimes(1)
     const [, selected, skipFlag] = mockApi.confirmStaples.mock.calls[0]
@@ -265,7 +404,7 @@ describe('StaplesTemplate cold-start E2E', () => {
     expect(skipFlag).toBe(true)
   })
 
-  it('1.5 / S1-04: Back with changes opens save dialog; Save confirms and goes home', async () => {
+  it('1.5 / S1-04: Back with changes opens save dialog; Save confirms and ejects to recipes', async () => {
     renderStaples()
     await screen.findByText('Olive oil')
 
@@ -278,7 +417,19 @@ describe('StaplesTemplate cold-start E2E', () => {
     expect(mockApi.confirmStaples).toHaveBeenCalled()
     const call = mockApi.confirmStaples.mock.calls.find((c) => Array.isArray(c[1]) && c[1].includes('soy sauce'))
     expect(call).toBeTruthy()
-    await screen.findByTestId('home-dest')
+    await waitFor(() => {
+      expect(mockUpdateUser).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            onboarding_completed_at: expect.any(String),
+          }),
+        })
+      )
+    })
+    expect(screen.queryByText(/You're all set/i)).not.toBeInTheDocument()
+    await waitFor(() => {
+      expect(screen.getByTestId('recipes-dest')).toBeInTheDocument()
+    })
   })
 
   it('1.6: Back with no changes goes to bridge without save prompt', async () => {

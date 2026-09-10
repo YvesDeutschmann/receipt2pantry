@@ -181,7 +181,34 @@ describe('OnboardingContext', () => {
     )
   })
 
-  it('test_complete_invoked_only_once_even_when_action_fired_twice', async () => {
+  it('COMPLETE_UPDATEUSER_FAILURE_ALLOWS_RETRY', async () => {
+    mockUpdateUser
+      .mockResolvedValueOnce({ data: {}, error: new Error('network') })
+      .mockResolvedValueOnce({ data: {}, error: null })
+
+    const { result } = await renderOnboardingHook({
+      wrapper: createWrapper(),
+    })
+
+    let firstError = null
+    await act(async () => {
+      try {
+        await result.current.complete()
+      } catch (e) {
+        firstError = e
+      }
+    })
+    expect(firstError).toBeTruthy()
+    expect(mockUpdateUser).toHaveBeenCalledTimes(1)
+
+    await act(async () => {
+      await result.current.complete()
+    })
+
+    expect(mockUpdateUser).toHaveBeenCalledTimes(2)
+  })
+
+  it('PAYOFF_DOUBLE_TAP_COMPLETES_ONCE', async () => {
     const { result } = await renderOnboardingHook({
       wrapper: createWrapper(),
     })
@@ -353,7 +380,7 @@ describe('OnboardingContext', () => {
     })
 
     await act(async () => {
-      await result.current.completeJoinDietary()
+      await result.current.mergeJoinDietary()
     })
 
     expect(mockMergeDietaryRestrictions).toHaveBeenCalledWith(
@@ -361,7 +388,7 @@ describe('OnboardingContext', () => {
       ['shellfish']
     )
     expect(mockUpdateHouseholdProfile).not.toHaveBeenCalled()
-    expect(mockUpdateUser).toHaveBeenCalledTimes(1)
+    expect(mockUpdateUser).not.toHaveBeenCalled()
   })
 
   it('test_joinHouseholdByCode_does_not_call_createHousehold', async () => {

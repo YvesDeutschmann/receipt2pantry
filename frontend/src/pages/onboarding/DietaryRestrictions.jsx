@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useOnboarding } from '../../contexts/OnboardingContext'
+import OnboardingPayoffPanel from '../../components/onboarding/OnboardingPayoffPanel'
 
 const RESTRICTION_CHIPS = [
   { code: 'tree_nuts', label: 'Tree nuts' },
@@ -28,9 +29,12 @@ function DietaryRestrictions() {
     householdResolved,
     householdLoading,
     isJoiner,
-    completeJoinDietary,
+    mergeJoinDietary,
+    completeJoin,
   } = useOnboarding()
 
+  const [showPayoff, setShowPayoff] = useState(false)
+  const [payoffError, setPayoffError] = useState(null)
   const [hasInteracted, setHasInteracted] = useState(false)
   const [showOtherInput, setShowOtherInput] = useState(false)
   const [inlineError, setInlineError] = useState(false)
@@ -79,8 +83,8 @@ function DietaryRestrictions() {
       setSubmitting(true)
       setSubmitError(null)
       try {
-        await completeJoinDietary()
-        navigate('/')
+        await mergeJoinDietary()
+        setShowPayoff(true)
       } catch (err) {
         setSubmitError(err.message || 'Failed to save dietary restrictions')
       } finally {
@@ -107,6 +111,31 @@ function DietaryRestrictions() {
 
   if (!householdId) {
     return null
+  }
+
+  const handlePayoffTap = async () => {
+    setSubmitting(true)
+    setPayoffError(null)
+    try {
+      await completeJoin()
+    } catch (err) {
+      setPayoffError(err.message || 'Could not finish setup. Try again.')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  if (isJoiner && showPayoff) {
+    return (
+      <div className="min-h-screen bg-forest flex flex-col">
+        <OnboardingPayoffPanel
+          variant="joiner"
+          onComplete={handlePayoffTap}
+          submitting={submitting}
+          error={payoffError}
+        />
+      </div>
+    )
   }
 
   return (

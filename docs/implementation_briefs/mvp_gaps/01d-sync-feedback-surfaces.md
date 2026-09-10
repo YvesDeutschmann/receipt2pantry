@@ -1,5 +1,7 @@
 # MVP Gap 01d — Sync Feedback Surfaces (Toast + Dashboard Attention)
 
+> **Superseded (07.3):** `NeedsAttentionSection` render host moved from Dashboard to [`Recipes.jsx`](../../../frontend/src/pages/Recipes.jsx) (`variant="slim"`). Store contract unchanged; only the mount point moved.
+>
 > **Prerequisite:** Brief `01b-foreground-auto-sync.md` is complete and merged. `useAppSyncScheduler` dispatches `<provider>-sync-completed|needs-reconnect|error` events at the app root.
 >
 > **Scope:** Frontend only. Split into two sub-phases: **01d.1** (attention store + toast host) and **01d.2** (Dashboard section). No backend changes.
@@ -111,7 +113,8 @@ Reuse `UndoToast` without `onAction`. Latest message only (replace, don't stack)
 
 - Reads `providerAttentionStore` via `subscribe` + `getAttention` and `PROVIDER_LABELS`.
 - Renders **only when** ≥1 item.
-- Place in `Dashboard.jsx` immediately after `PageHeader`, before the "You're all set" block.
+- **Original (01d):** Place in `Dashboard.jsx` immediately after `PageHeader`, before the "You're all set" block.
+- **Current (07.3):** Mount in `Recipes.jsx` immediately after `PageHeader` (`variant="slim"`).
 - One row per provider: "{Store} needs reconnect" + CTA `Link` to `/providers`.
 - Dismiss (X per row) hides for current component-session only. Does **not** call `clearProvider` or touch Preferences. Row reappears on next Dashboard mount / app relaunch until `*-sync-completed` clears the store.
 

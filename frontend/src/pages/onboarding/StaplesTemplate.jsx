@@ -20,6 +20,7 @@ import { useOnboarding } from '../../contexts/OnboardingContext'
 import { api } from '../../services/apiClient'
 import { emit, FunnelEvent } from '../../services/funnelTelemetry'
 import ColdStartProgressBar from '../../components/ColdStartProgressBar'
+import OnboardingPayoffPanel from '../../components/onboarding/OnboardingPayoffPanel'
 import PantrySearchOverlay from '../../components/PantrySearchOverlay'
 import VoiceInputSheet from '../../components/voice/VoiceInputSheet'
 
@@ -153,7 +154,8 @@ export default function StaplesTemplate() {
   const [receiptMatches, setReceiptMatches] = useState(() => new Set())
   const [toast, setToast] = useState(null)
   const [leaveOpen, setLeaveOpen] = useState(false)
-  const [justUnlocked, setJustUnlocked] = useState(false)
+  const [showPayoff, setShowPayoff] = useState(false)
+  const [payoffError, setPayoffError] = useState(null)
   const [searchOpen, setSearchOpen] = useState(false)
   const [voiceOpen, setVoiceOpen] = useState(false)
   const [pantryBases, setPantryBases] = useState([])
@@ -277,16 +279,13 @@ export default function StaplesTemplate() {
         : Array.from(selected)
       const result = await api.confirmStaples(userId, list, opts.skip)
       void emit(FunnelEvent.STAPLES_CONFIRMED, userId, { staplesCount: list.length })
-      await complete()
-      setJustUnlocked(true)
+      fireSuggestionPoolWarmup()
       const n = result.receipt_matched ?? 0
       if (n > 0) {
         setToast(`We matched ${n} of your staples to your recent receipts ✓`)
         setTimeout(() => setToast(null), 4500)
       }
-      setTimeout(() => {
-        navigate('/', { replace: true })
-      }, n > 0 ? 600 : 0)
+      setShowPayoff(true)
     } catch (e) {
       console.error(e)
       setError(
@@ -294,6 +293,18 @@ export default function StaplesTemplate() {
           e.message ||
           'Could not save your pantry.'
       )
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handlePayoffTap = async () => {
+    setSubmitting(true)
+    setPayoffError(null)
+    try {
+      await complete()
+    } catch (e) {
+      setPayoffError(e.message || 'Could not finish setup. Try again.')
     } finally {
       setSubmitting(false)
     }
@@ -313,9 +324,8 @@ export default function StaplesTemplate() {
       const list = Array.from(selected)
       await api.confirmStaples(userId, list, false)
       void emit(FunnelEvent.STAPLES_CONFIRMED, userId, { staplesCount: list.length })
-      await complete()
       fireSuggestionPoolWarmup()
-      navigate('/', { replace: true })
+      await complete()
     } catch (e) {
       setError(e.response?.data?.error || e.message || 'Save failed.')
     } finally {
@@ -327,6 +337,33 @@ export default function StaplesTemplate() {
   const discardAndLeave = () => {
     setLeaveOpen(false)
     navigate('/onboarding/bridge', { replace: true })
+  }
+
+  if (showPayoff) {
+    return (
+      <div className="min-h-screen bg-forest flex flex-col">
+        <OnboardingPayoffPanel
+          variant="owner"
+          onComplete={handlePayoffTap}
+          submitting={submitting}
+          error={payoffError}
+        />
+        <AnimatePresence>
+          {toast && (
+            <motion.div
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              className="fixed bottom-24 left-4 right-4 max-w-lg mx-auto z-50"
+            >
+              <div className="rounded-meald-md bg-forest-light border border-sage/30 text-cream text-sm px-4 py-3 text-center shadow-lg">
+                {toast}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+    )
   }
 
   return (
@@ -356,7 +393,7 @@ export default function StaplesTemplate() {
       </div>
 
       <div className="max-w-lg mx-auto w-full px-4 flex-1 flex flex-col pb-28">
-        <ColdStartProgressBar highlightStep={2} step3Unlocked={justUnlocked} />
+        <ColdStartProgressBar highlightStep={2} step3Unlocked={false} />
 
         <h1 className="text-heading text-cream text-center mb-2">
           What&apos;s already in your kitchen?
@@ -526,20 +563,13 @@ export default function StaplesTemplate() {
           const list = Array.from(selected)
           const result = await api.confirmStaples(userId, list, false)
           void emit(FunnelEvent.STAPLES_CONFIRMED, userId, { staplesCount: list.length })
-          await complete()
           fireSuggestionPoolWarmup()
-          setJustUnlocked(true)
           const n = result.receipt_matched ?? 0
           if (n > 0) {
             setToast(`We matched ${n} of your staples to your recent receipts ✓`)
             setTimeout(() => setToast(null), 4500)
           }
-          setTimeout(
-            () => {
-              navigate('/', { replace: true })
-            },
-            n > 0 ? 600 : 0
-          )
+          setShowPayoff(true)
         }}
       />
     </div>

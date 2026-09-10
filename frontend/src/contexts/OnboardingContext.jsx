@@ -272,9 +272,8 @@ export function OnboardingProvider({ children, renderProbeRef }) {
     async (extra = {}) => {
       if (authLoading) return
       if (completionSentRef.current) return
-      completionSentRef.current = true
       const now = new Date().toISOString()
-      await supabase.auth.updateUser({
+      const { error } = await supabase.auth.updateUser({
         data: {
           onboarding_completed_at: now,
           cold_start_pantry_template_completed_at: now,
@@ -284,6 +283,8 @@ export function OnboardingProvider({ children, renderProbeRef }) {
           ...extra,
         },
       })
+      if (error) throw error
+      completionSentRef.current = true
     },
     [authLoading, getSignupMethod]
   )
@@ -292,9 +293,8 @@ export function OnboardingProvider({ children, renderProbeRef }) {
     async (extra = {}) => {
       if (authLoading) return
       if (completionSentRef.current) return
-      completionSentRef.current = true
       const now = new Date().toISOString()
-      await supabase.auth.updateUser({
+      const { error } = await supabase.auth.updateUser({
         data: {
           onboarding_completed_at: now,
           cold_start_step: 2,
@@ -303,6 +303,8 @@ export function OnboardingProvider({ children, renderProbeRef }) {
           ...extra,
         },
       })
+      if (error) throw error
+      completionSentRef.current = true
     },
     [authLoading, getSignupMethod]
   )
@@ -335,13 +337,16 @@ export function OnboardingProvider({ children, renderProbeRef }) {
     ]
   )
 
-  const completeJoinDietary = useCallback(async () => {
+  /** Joiner dietary merge only — does not complete onboarding. */
+  const mergeJoinDietary = useCallback(async () => {
     if (!user?.id) throw new Error('Not signed in')
     if (joinerDietaryAdditions.length > 0) {
       await api.mergeDietaryRestrictions(user.id, joinerDietaryAdditions)
     }
-    await completeJoin()
-  }, [user?.id, joinerDietaryAdditions, completeJoin])
+  }, [user?.id, joinerDietaryAdditions])
+
+  /** @deprecated use mergeJoinDietary + payoff completeJoin */
+  const completeJoinDietary = mergeJoinDietary
 
   const value = useMemo(
     () => ({
@@ -370,6 +375,7 @@ export function OnboardingProvider({ children, renderProbeRef }) {
       resetOnboarding,
       complete,
       completeJoin,
+      mergeJoinDietary,
       completeJoinDietary,
       completeBridge,
       createHouseholdExplicit,
@@ -401,6 +407,7 @@ export function OnboardingProvider({ children, renderProbeRef }) {
       resetOnboarding,
       complete,
       completeJoin,
+      mergeJoinDietary,
       completeJoinDietary,
       completeBridge,
       createHouseholdExplicit,

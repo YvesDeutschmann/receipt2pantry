@@ -17,6 +17,8 @@ export const FunnelEvent = {
   STAPLES_CONFIRMED: 'funnel_staples_confirmed',
   FIRST_SUGGESTION_VIEWED: 'funnel_first_suggestion_viewed',
   FIRST_COOK_LOGGED: 'funnel_first_cook_logged',
+  RECIPE_DETAIL_OPENED: 'recipe_detail_opened',
+  COOK_LOGGED: 'cook_logged',
 };
 
 const sessionId = crypto.randomUUID();
@@ -139,12 +141,21 @@ export async function flush() {
       return { sent: 0, skipped: 0 };
     }
 
-    const pendingKeys = new Set(pending.map((e) => `${e.event}:${e.userId}`));
-    let sent = 0;
+    const pendingKeys = new Set(
+      pending.map((entry) =>
+        entry.repeatable
+          ? `${entry.event}:${entry.userId}:${entry.entryId}`
+          : `${entry.event}:${entry.userId}`
+      )
+    )
+    let sent = 0
     for (const entry of stored) {
-      if (pendingKeys.has(`${entry.event}:${entry.userId}`)) {
-        entry.sent = true;
-        sent += 1;
+      const key = entry.repeatable
+        ? `${entry.event}:${entry.userId}:${entry.entryId}`
+        : `${entry.event}:${entry.userId}`
+      if (pendingKeys.has(key)) {
+        entry.sent = true
+        sent += 1
       }
     }
     await saveEvents(stored);
@@ -180,8 +191,45 @@ export async function emit(event, userId, metadata = {}, options = {}) {
       sessionId,
       metadata: sanitizeMetadata(metadata),
       sent: false,
+      repeatable: false,
     };
 
+    stored.push(entry);
+    while (stored.length > MAX_EVENTS) {
+      stored.shift();
+    }
+
+    await saveEvents(stored);
+    void flush();
+  } catch (e) {
+    console.warn('[FunnelTelemetry] storage error:', e);
+  }
+}
+
+/**
+ * Record a repeatable funnel event (no per-user dedupe). Used for capture-rate metrics.
+ * @param {FunnelEvent} event
+ * @param {string} userId
+ * @param {object} [metadata]
+ * @param {{ now?: number }} [options]
+ * @returns {Promise<void>}
+ */
+export async function emitRepeatable(event, userId, metadata = {}, options = {}) {
+  try {
+    if (!userId) return;
+
+    const entry = {
+      event,
+      userId,
+      entryId: crypto.randomUUID(),
+      timestamp: options.now ?? Date.now(),
+      sessionId,
+      metadata: sanitizeMetadata(metadata),
+      sent: false,
+      repeatable: true,
+    };
+
+    const stored = await loadEvents();
     stored.push(entry);
     while (stored.length > MAX_EVENTS) {
       stored.shift();

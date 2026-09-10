@@ -45,21 +45,18 @@ function TopNavBar() {
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center space-x-8">
               <Link
-                to="/"
+                to="/recipes"
                 className="flex items-center gap-2 text-2xl font-display font-bold text-cream"
               >
                 <Home className="w-7 h-7 text-terra" />
                 Meald
               </Link>
               <nav className="flex space-x-6">
-                <NavLink to="/" className={navLinkClass}>
-                  Dashboard
+                <NavLink to="/recipes" className={navLinkClass}>
+                  What&apos;s for Dinner
                 </NavLink>
                 <NavLink to="/pantry" className={navLinkClass}>
                   Pantry
-                </NavLink>
-                <NavLink to="/recipes" className={navLinkClass}>
-                  What&apos;s for Dinner
                 </NavLink>
                 {FEATURES.mealPlanner && (
                   <NavLink to="/meal-plan" className={navLinkClass}>

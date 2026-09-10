@@ -15,7 +15,11 @@ function IngredientCorrection({
   }
 
   return (
-    <div className="mt-2 pl-2 border-l-2 border-forest-light space-y-2">
+    <div
+      className="mt-2 pl-2 border-l-2 border-forest-light space-y-2"
+      onClick={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+    >
       {ingredientName ? (
         <p className="text-sm text-cream font-medium">{ingredientName}</p>
       ) : null}

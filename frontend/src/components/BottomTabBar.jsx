@@ -1,7 +1,6 @@
 import { NavLink } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import {
-  LayoutDashboard,
   Package,
   UtensilsCrossed,
   CalendarDays,
@@ -12,8 +11,6 @@ import { FEATURES } from '../config/features'
 
 function getTabs() {
   return [
-    { path: '/', icon: LayoutDashboard, label: 'Dashboard', enabled: true },
-    { path: '/pantry', icon: Package, label: 'Pantry', enabled: true },
     {
       path: '/recipes',
       icon: UtensilsCrossed,
@@ -21,6 +18,7 @@ function getTabs() {
       ariaLabel: "What's for Dinner",
       enabled: true,
     },
+    { path: '/pantry', icon: Package, label: 'Pantry', enabled: true },
     {
       path: '/meal-plan',
       icon: CalendarDays,

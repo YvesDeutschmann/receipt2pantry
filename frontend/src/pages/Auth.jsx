@@ -11,7 +11,7 @@ function Auth() {
   const { user, signIn, signUp, signInWithApple, signInWithGoogle } = useAuth()
 
   if (user) {
-    return <Navigate to="/" replace />
+    return <Navigate to="/recipes" replace />
   }
 
   const [showEmailForm, setShowEmailForm] = useState(false)

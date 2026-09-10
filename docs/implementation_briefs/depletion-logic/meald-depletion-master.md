@@ -17,7 +17,7 @@ Implications that bind engineering here:
 - Ambient consumption (breakfast, snacks, cooking outside the app) is unobservable. Do not design features whose success depends on users reporting it.
 - Re-purchase cadence is the ground-truth signal for household burn rate. Cook events are an optional accelerant for meals cooked *in* the app.
 - `UNIT_ITEM` with no cook event must still degrade over time (consumable-style fallback). Missing events must not leave a row at high confidence forever.
-- Recipe dismissals / "I don't have this" are high-value belief updates about the pantry, not only ranking downweights.
+- Recipe swipes ("Not tonight") are taste/ranking signals only — they must not update pantry belief. Explicit per-ingredient corrections and cook events logged in the app are the unambiguous belief updates.
 
 ---
 
@@ -187,8 +187,8 @@ These user behaviors update pantry accuracy without prompting:
 
 | Signal | What it tells us |
 |---|---|
-| Recipe marked as cooked | Decrement all ingredients by recipe quantity |
-| Recipe dismissed ("I don't have this") | High-confidence item is actually gone — recalibrate |
+| Recipe marked as cooked | Decrement matched pantry ingredients by recipe quantity |
+| Recipe dismissed ("Not tonight") | Ranking/taste signal only — does not change pantry confidence |
 | Grocery import containing existing item | Previous instance was consumed — use days-between-purchases to calibrate consumption rate |
 | App open frequency | Proxy for cooking frequency — apply engagement multiplier |
 | Repeat purchase of item never used in a recipe | Aspirational buyer pattern — deprioritize that ingredient in suggestions, do not remove from pantry |

@@ -198,6 +198,32 @@ describe('funnelTelemetry', () => {
     expect(mod.getSessionId()).toBe(window.__funnelTelemetry.getSessionId())
   })
 
+  it('EMIT_REPEATABLE_RECORDS_EACH_CALL', async () => {
+    vi.resetModules()
+    telemStore.clear()
+    const { emitRepeatable, dump, FunnelEvent } = await loadModule()
+    await emitRepeatable(FunnelEvent.COOK_LOGGED, 'user-uuid-1', { recipeId: '1' }, { now: 1000 })
+    await emitRepeatable(FunnelEvent.COOK_LOGGED, 'user-uuid-1', { recipeId: '2' }, { now: 2000 })
+    const events = await dump()
+    const cooks = events.filter((e) => e.event === 'cook_logged')
+    expect(cooks).toHaveLength(2)
+    expect(cooks[0].repeatable).toBe(true)
+    expect(cooks[1].repeatable).toBe(true)
+    expect(cooks[0].entryId).toBeTypeOf('string')
+    expect(cooks[0].entryId).not.toBe(cooks[1].entryId)
+    expect(cooks[0].metadata).toEqual({ recipeId: '1' })
+  })
+
+  it('EMIT_REPEATABLE_NOOP_WHEN_USER_ID_EMPTY', async () => {
+    vi.resetModules()
+    telemStore.clear()
+    const { emitRepeatable, dump, FunnelEvent } = await loadModule()
+    await emitRepeatable(FunnelEvent.RECIPE_DETAIL_OPENED, '')
+    await emitRepeatable(FunnelEvent.RECIPE_DETAIL_OPENED, null)
+    const events = await dump()
+    expect(events).toEqual([])
+  })
+
   it('FLUSH_SKIPS_WITHOUT_SESSION', async () => {
     vi.doMock('../supabaseClient.js', () => ({
       supabase: {
