@@ -6,8 +6,8 @@ from unittest.mock import AsyncMock, Mock, patch
 import pytest
 
 from backend.services.confidence_engine import compute_confidence, process_cook_event
-from backend.services.pantry_service import PantryService
-from backend.utils.exceptions import ValidationException
+from backend.services.pantry_service import PantryService, pantry_item_has_display_name
+from backend.utils.exceptions import DatabaseException, ValidationException
 from tests.services.conftest import TEST_DATE
 
 
@@ -1009,4 +1009,174 @@ class TestPantryTrustStep1:
         assert result["inserted"] == 0
         mock_supabase.upsert_pantry_item.assert_not_called()
         mock_supabase.update_pantry_item_fields.assert_not_called()
+
+    # --- Gap 09.1: nameless ghost rows ---
+
+    def test_pantry_item_has_display_name_predicate(self):
+        assert pantry_item_has_display_name({"base_ingredient": "salt"}) is True
+        assert pantry_item_has_display_name({"normalized_name": "Salt"}) is True
+        assert pantry_item_has_display_name({"base_ingredient": "", "normalized_name": ""}) is False
+        assert pantry_item_has_display_name({"base_ingredient": "   ", "normalized_name": "  "}) is False
+        assert pantry_item_has_display_name(None) is False
+
+    @pytest.mark.asyncio
+    async def test_add_to_pantry_rejects_blank_base_and_name(
+        self, mock_supabase, test_user_id, test_receipt_id
+    ):
+        service = PantryService(mock_supabase)
+        with pytest.raises(ValidationException, match="Ingredient name is required"):
+            await service.add_to_pantry(
+                user_id=test_user_id,
+                normalized_item={"base_ingredient": "", "normalized_name": ""},
+                quantity=1.0,
+                unit="count",
+                receipt_id=test_receipt_id,
+            )
+        mock_supabase.upsert_pantry_item.assert_not_called()
+        mock_supabase.get_household_pantry.assert_not_called()
+        mock_supabase.get_user_pantry.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_add_to_pantry_rejects_whitespace_only_name(
+        self, mock_supabase, test_user_id, test_receipt_id
+    ):
+        service = PantryService(mock_supabase)
+        with pytest.raises(ValidationException, match="Ingredient name is required"):
+            await service.add_to_pantry(
+                user_id=test_user_id,
+                normalized_item={"base_ingredient": "   ", "normalized_name": "   "},
+                quantity=1.0,
+                unit="count",
+                receipt_id=test_receipt_id,
+            )
+        mock_supabase.upsert_pantry_item.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_add_to_pantry_blank_raises_validation_not_database(
+        self, mock_supabase, test_user_id, test_receipt_id
+    ):
+        service = PantryService(mock_supabase)
+        try:
+            await service.add_to_pantry(
+                user_id=test_user_id,
+                normalized_item={"base_ingredient": "", "normalized_name": ""},
+                quantity=1.0,
+                unit="count",
+                receipt_id=test_receipt_id,
+            )
+        except ValidationException:
+            pass
+        except DatabaseException:
+            pytest.fail("ValidationException was wrapped as DatabaseException")
+        else:
+            pytest.fail("Expected ValidationException")
+
+    @pytest.mark.asyncio
+    async def test_add_to_pantry_does_not_resurrect_soft_deleted_blank(
+        self, mock_supabase, sample_household, test_user_id, test_receipt_id
+    ):
+        dead_blank = {
+            "id": "ghost-1",
+            "base_ingredient": "",
+            "normalized_name": "",
+            "variant": None,
+            "unit": "count",
+            "quantity": 1.0,
+            "deleted_at": "2026-01-01T00:00:00",
+        }
+        mock_supabase.get_user_household.return_value = sample_household
+        mock_supabase.get_household_pantry.return_value = [dead_blank]
+        service = PantryService(mock_supabase)
+        with pytest.raises(ValidationException, match="Ingredient name is required"):
+            await service.add_to_pantry(
+                user_id=test_user_id,
+                normalized_item={"base_ingredient": "", "normalized_name": ""},
+                quantity=1.0,
+                unit="count",
+                receipt_id=test_receipt_id,
+            )
+        mock_supabase.update_pantry_item_fields.assert_not_called()
+        mock_supabase.update_pantry_quantity.assert_not_called()
+        mock_supabase.upsert_pantry_item.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_get_pantry_summary_omits_nameless_rows(
+        self, mock_supabase, sample_household, test_user_id
+    ):
+        named = {
+            "id": "named-1",
+            "base_ingredient": "salt",
+            "normalized_name": "Salt",
+            "quantity": 1,
+            "deleted_at": None,
+        }
+        nameless = {
+            "id": "ghost-1",
+            "base_ingredient": "",
+            "normalized_name": "",
+            "quantity": 1,
+            "unit": "count",
+            "deleted_at": None,
+        }
+        mock_supabase.get_user_household.return_value = sample_household
+        mock_supabase.get_household_pantry.return_value = [named, nameless]
+        service = PantryService(mock_supabase)
+        result = await service.get_pantry_summary(test_user_id)
+        assert result["total_items"] == 1
+        assert result["unique_ingredients"] == 1
+        assert len(result["items"]) == 1
+        assert result["items"][0]["id"] == "named-1"
+        assert len(result["grouped"]) == 1
+        assert result["grouped"][0]["base_ingredient"] == "salt"
+
+    @pytest.mark.asyncio
+    async def test_batch_add_skips_blank_canonical_item(
+        self, mock_supabase, sample_household, test_user_id
+    ):
+        mock_supabase.get_user_household.return_value = sample_household
+        mock_supabase.get_household_pantry.return_value = []
+        mock_supabase.upsert_pantry_item.return_value = "new-salt"
+        service = PantryService(mock_supabase)
+        result = await service.batch_add_or_merge_items(
+            test_user_id,
+            sample_household["id"],
+            [
+                {"base_ingredient": "", "normalized_name": ""},
+                {"base_ingredient": "salt", "normalized_name": "Salt"},
+            ],
+            "quick_add",
+            today=TEST_DATE,
+        )
+        assert result["inserted"] == 1
+        assert result["merged"] == 0
+        mock_supabase.upsert_pantry_item.assert_called_once()
+        assert mock_supabase.upsert_pantry_item.call_args[0][0]["base_ingredient"] == "salt"
+
+    @pytest.mark.asyncio
+    async def test_batch_add_does_not_merge_into_existing_blank_base(
+        self, mock_supabase, sample_household, test_user_id
+    ):
+        live_blank = {
+            "id": "ghost-live",
+            "base_ingredient": "",
+            "normalized_name": "",
+            "variant": None,
+            "unit": "",
+            "quantity": 1.0,
+            "deleted_at": None,
+        }
+        mock_supabase.get_user_household.return_value = sample_household
+        mock_supabase.get_household_pantry.return_value = [live_blank]
+        service = PantryService(mock_supabase)
+        result = await service.batch_add_or_merge_items(
+            test_user_id,
+            sample_household["id"],
+            [{"base_ingredient": "", "normalized_name": ""}],
+            "quick_add",
+            today=TEST_DATE,
+        )
+        assert result["inserted"] == 0
+        assert result["merged"] == 0
+        mock_supabase.update_pantry_item_fields.assert_not_called()
+        mock_supabase.upsert_pantry_item.assert_not_called()
 

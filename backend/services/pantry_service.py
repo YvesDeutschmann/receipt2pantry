@@ -18,6 +18,14 @@ _VALID_DEPLETION_CLASSES = frozenset(
 )
 
 
+def pantry_item_has_display_name(item: Optional[Dict[str, Any]]) -> bool:
+    if not item:
+        return False
+    name = (item.get("normalized_name") or "").strip()
+    base = (item.get("base_ingredient") or "").strip()
+    return bool(name or base)
+
+
 class PantryService:
     """Service for managing household pantry inventory"""
     
@@ -165,6 +173,9 @@ class PantryService:
         Returns:
             Pantry item ID
         """
+        if not pantry_item_has_display_name(normalized_item):
+            raise ValidationException("Ingredient name is required")
+
         try:
             # Get household ID if not provided
             if not household_id:
@@ -260,7 +271,9 @@ class PantryService:
                     f"({quantity} {unit})"
                 )
                 return item_id
-                
+
+        except ValidationException:
+            raise
         except Exception as e:
             logger.error(f"Failed to add item to pantry: {e}")
             raise DatabaseException(f"Failed to add to pantry: {e}")
@@ -287,8 +300,9 @@ class PantryService:
                 item
                 for item in self._get_pantry_items(user_id, household_id)
                 if not item.get("deleted_at")
+                and pantry_item_has_display_name(item)
             ]
-            
+
             # Group by base_ingredient
             grouped = {}
             for item in items:
@@ -613,9 +627,11 @@ class PantryService:
 
         for ci in canonical_items:
             bi = ci.get("base_ingredient")
-            if not bi:
-                continue
             nn = ci.get("normalized_name") or bi
+            if not pantry_item_has_display_name(
+                {"base_ingredient": bi, "normalized_name": nn}
+            ):
+                continue
             cat = ci.get("category")
             ex = self._find_pantry_by_base(working, bi)
             if ex:

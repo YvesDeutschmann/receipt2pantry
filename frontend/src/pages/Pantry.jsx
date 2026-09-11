@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
+import { createPortal } from 'react-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Plus, Search, Package, Mic } from 'lucide-react'
 import { api } from '../services/apiClient'
@@ -62,7 +63,12 @@ function Pantry() {
 
   const activeItems = useMemo(() => {
     const rows = pantryData?.items || []
-    return rows.filter((i) => !i.deleted_at)
+    return rows.filter((i) => {
+      if (i.deleted_at) return false
+      const name = (i.normalized_name || '').trim()
+      const base = (i.base_ingredient || '').trim()
+      return Boolean(name || base)
+    })
   }, [pantryData])
 
   const excludeBases = useMemo(() => {
@@ -106,20 +112,10 @@ function Pantry() {
 
   return (
     <PullToRefresh onRefresh={fetchPantry}>
-      <div>
+      <div className="pb-24">
         <PageHeader
           title="Pantry"
           subtitle="Track your ingredients and see what you have on hand."
-          actions={
-            <button
-              type="button"
-              onClick={() => setSearchOverlayOpen(true)}
-              className="btn btn-primary flex items-center gap-2"
-            >
-              <Plus className="w-5 h-5" />
-              Add item
-            </button>
-          }
         />
 
         {pantryData && activeItems.length > 0 ? (
@@ -208,6 +204,20 @@ function Pantry() {
           excludeBases={excludeBases}
           onPantryRefresh={fetchPantry}
         />
+
+        {userId && !searchOverlayOpen && !voiceOpen && !addMenuOpen
+          ? createPortal(
+              <button
+                type="button"
+                aria-label="Add item"
+                onClick={() => setAddMenuOpen(true)}
+                className="btn btn-primary fixed right-4 z-40 min-h-touch min-w-touch rounded-full flex items-center justify-center bottom-[calc(4rem+env(safe-area-inset-bottom,0px)+1rem)] lg:bottom-6"
+              >
+                <Plus className="w-5 h-5" />
+              </button>,
+              document.body
+            )
+          : null}
 
         <AnimatePresence>
           {addMenuOpen ? (

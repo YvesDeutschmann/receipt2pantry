@@ -3,7 +3,7 @@
 from typing import Dict, List
 from backend.services.supabase_service import SupabaseService
 from backend.services.normalization_service import NormalizationService
-from backend.services.pantry_service import PantryService
+from backend.services.pantry_service import PantryService, pantry_item_has_display_name
 from backend.utils.exceptions import DatabaseException
 from backend.utils.logger import get_logger
 
@@ -122,6 +122,10 @@ class ReceiptProcessor:
                     raw_name = item.get('raw_name') or item.get('name')
                     if normalized is None:
                         logger.info(f"Skipping non-normalizable item '{raw_name}'")
+                        items_processed += 1
+                        continue
+                    if not pantry_item_has_display_name(normalized):
+                        logger.info(f"Skipping nameless normalized item '{raw_name}'")
                         items_processed += 1
                         continue
                     normalized_items.append({
