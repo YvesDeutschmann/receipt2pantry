@@ -4,6 +4,7 @@ from typing import Optional
 
 from flask import Blueprint, current_app, jsonify, request
 
+from backend.routes.recipes import RECIPE_QUOTA_MESSAGE
 from backend.services.pool_generator import meal_types_from_slots
 from backend.utils.auth import get_user_id_from_request
 from backend.utils.exceptions import DatabaseException, RecipeQuotaException, ValidationException
@@ -12,6 +13,18 @@ from backend.utils.logger import get_logger
 logger = get_logger(__name__)
 
 pool_bp = Blueprint("pool", __name__)
+
+_QUOTA_BUDGET_ERROR_MARKERS = (
+    "Spoonacular call budget exceeded for this period",
+    "Spoonacular API daily quota exceeded",
+    "Spoonacular API rate limit exceeded",
+)
+
+
+def _is_quota_or_budget_error(error: Optional[str]) -> bool:
+    if not error:
+        return False
+    return any(marker in error for marker in _QUOTA_BUDGET_ERROR_MARKERS)
 
 
 def _get_pool_store():
@@ -159,16 +172,26 @@ def generate_pool():
             trigger_reason,
             meal_types,
         )
+        status = result.get("status")
+        suggestions_generated = result.get("suggestions_generated")
+        if suggestions_generated is None:
+            suggestions_generated = 0
+        error = result.get("error")
+        if (
+            status in ("partial", "failed")
+            and suggestions_generated == 0
+            and _is_quota_or_budget_error(error)
+        ):
+            return jsonify(
+                {"error": RECIPE_QUOTA_MESSAGE, "code": "recipe_quota"}
+            ), 429
         return jsonify(result)
     except ValidationException as e:
         return jsonify({"error": str(e)}), 400
     except RecipeQuotaException as e:
         logger.error(f"generate_pool quota: {e}")
         return jsonify(
-            {
-                "error": "Daily recipe quota reached, try again later.",
-                "code": "recipe_quota",
-            }
+            {"error": RECIPE_QUOTA_MESSAGE, "code": "recipe_quota"}
         ), 429
     except DatabaseException as e:
         return jsonify({"error": str(e)}), 400

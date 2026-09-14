@@ -1,7 +1,7 @@
 # T1-05 — `backend/services/pool_generator.py`
 
 > **Tier:** 1 — Critical
-> **Why risky:** New Phase 4 code. Nested 7-day × 3-meal loop, manual mutex, threshold-walk logic (0.9 → 0.7), staple fallback, ban/swipe filters, and a sync-in-async event-loop hack. High complexity, thin existing coverage.
+> **Why risky:** New Phase 4 code. One-day × requested-meal-type loop (up to 3 `complexSearch` calls), manual mutex, threshold-walk logic (0.9 → 0.7), staple fallback, ban/swipe filters, and a sync-in-async event-loop hack. High complexity, thin existing coverage.
 
 ---
 
