@@ -389,4 +389,105 @@ describe('PantryView', () => {
     )
     expect(screen.getByText('Boneless Chicken Breast')).toBeInTheDocument()
   })
+
+  it('ADD_FAB_OPENS_ADD_MENU', async () => {
+    api.getPantry.mockResolvedValue({
+      total_items: 1,
+      unique_ingredients: 1,
+      items: [item({ id: 'fab-1', normalized_name: 'Salt', base_ingredient: 'salt' })],
+      grouped: [],
+      household_id: 'hh-1',
+    })
+    renderPantry()
+    await screen.findByText('Salt')
+    const fabButtons = screen.getAllByRole('button', { name: 'Add item' })
+    expect(fabButtons).toHaveLength(1)
+    fireEvent.click(fabButtons[0])
+    expect(screen.getByRole('dialog', { name: 'Add to pantry' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /search/i })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /tell me/i })).toBeInTheDocument()
+  })
+
+  it('EMPTY_STATE_AND_FAB_SHARE_MENU', async () => {
+    api.getPantry.mockResolvedValue({
+      total_items: 0,
+      unique_ingredients: 0,
+      items: [],
+      grouped: [],
+      household_id: 'hh-1',
+    })
+    renderPantry()
+    await screen.findByText('Your pantry is empty')
+    fireEvent.click(screen.getByRole('button', { name: /add your first item/i }))
+    expect(screen.getByRole('dialog', { name: 'Add to pantry' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('dialog', { name: 'Add to pantry' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Add item' }))
+    expect(screen.getByRole('dialog', { name: 'Add to pantry' })).toBeInTheDocument()
+  })
+
+  it('NAMELESS_ROW_NOT_RENDERED', async () => {
+    api.getPantry.mockResolvedValue({
+      total_items: 2,
+      unique_ingredients: 2,
+      items: [
+        item({
+          id: 'ghost',
+          base_ingredient: '',
+          normalized_name: '',
+          quantity: 1,
+          unit: 'count',
+        }),
+        item({
+          id: 'named',
+          base_ingredient: 'olive oil',
+          normalized_name: 'Olive Oil',
+          quantity: 2,
+          unit: 'bottle',
+          confidence: 0.9,
+        }),
+      ],
+      grouped: [],
+      household_id: 'hh-1',
+    })
+    renderPantry()
+    await screen.findByText('Olive Oil')
+    expect(screen.queryByText(/^1 count$/)).not.toBeInTheDocument()
+    const stubs = screen.getAllByTestId('pantry-item-stub')
+    expect(stubs).toHaveLength(1)
+  })
+
+  it('FAB_HIDDEN_WHEN_ADD_MENU_OPEN', async () => {
+    api.getPantry.mockResolvedValue({
+      total_items: 1,
+      unique_ingredients: 1,
+      items: [item({ id: 'hide-fab', normalized_name: 'Pepper', base_ingredient: 'pepper' })],
+      grouped: [],
+      household_id: 'hh-1',
+    })
+    renderPantry()
+    await screen.findByText('Pepper')
+    fireEvent.click(screen.getByRole('button', { name: 'Add item' }))
+    expect(screen.queryByRole('button', { name: 'Add item' })).toBeNull()
+  })
+
+  it('FAB_VISIBLE_WHILE_LOADING', async () => {
+    let resolvePantry
+    api.getPantry.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolvePantry = resolve
+        })
+    )
+    renderPantry()
+    expect(screen.getByRole('button', { name: 'Add item' })).toBeInTheDocument()
+    await vi.waitFor(() => expect(api.getPantry).toHaveBeenCalled())
+    resolvePantry({
+      total_items: 0,
+      unique_ingredients: 0,
+      items: [],
+      grouped: [],
+      household_id: 'hh-1',
+    })
+    await screen.findByText('Your pantry is empty')
+  })
 })

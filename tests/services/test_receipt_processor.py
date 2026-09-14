@@ -729,3 +729,48 @@ class TestGroupG_ParityRegression:
         for call in mock_pantry_service.add_to_pantry.await_args_list:
             assert call.kwargs.get("reference_date") == date(2025, 1, 15)
 
+    @pytest.mark.asyncio
+    async def test_blank_normalized_name_skipped_not_errored(
+        self,
+        mock_supabase,
+        mock_normalization_service,
+        mock_pantry_service,
+        sample_household,
+        test_receipt_id,
+        test_user_id,
+    ):
+        blank_item = {
+            "id": "1",
+            "receipt_id": test_receipt_id,
+            "raw_name": "Mystery Item",
+            "name": "Mystery Item",
+            "category": "Other",
+            "quantity": 1,
+        }
+        named_normalized = {
+            "base_ingredient": "butter",
+            "variant": "salted",
+            "normalized_name": "butter (salted)",
+        }
+        blank_normalized = {"base_ingredient": "", "normalized_name": ""}
+        mock_supabase.get_user_household.return_value = sample_household
+        mock_supabase.get_receipt.return_value = {}
+        mock_supabase.get_receipt_items.return_value = [blank_item, blank_item]
+        mock_normalization_service.normalize_products_batch.return_value = [
+            blank_normalized,
+            named_normalized,
+        ]
+        mock_pantry_service.add_to_pantry = AsyncMock(return_value="pantry-1")
+
+        processor = ReceiptProcessor(
+            mock_supabase, mock_normalization_service, mock_pantry_service
+        )
+        result = await processor.process_receipt(test_receipt_id, test_user_id)
+
+        assert result["errors"] == []
+        assert result["status"] == "processed"
+        assert result["items_added_to_pantry"] == 1
+        assert mock_pantry_service.add_to_pantry.call_count == 1
+        assert len(result["normalized_items"]) == 1
+        assert result["normalized_items"][0]["normalized"] == named_normalized
+
