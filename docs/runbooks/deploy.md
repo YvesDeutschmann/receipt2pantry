@@ -20,7 +20,7 @@ Deploy the Meald Flask backend to Fly.io at **`https://api.meald.app`**.
 | `CORS_ORIGINS` | `capacitor://localhost` | Capacitor WebView origin |
 | `SENTRY_ENVIRONMENT` | `production` | |
 | `FEATURE_MEAL_PLANNER` | `0` | Meal planner deferred from MVP |
-| `SPOONACULAR_CALL_BUDGET` | `250` | Per-worker; 2 workers ≈ 500/hour effective |
+| `SPOONACULAR_CALL_BUDGET` | `30` | Per-worker; 2 workers ≈ 60/hour effective (tester-sized) |
 
 ### Set via `fly secrets set` (secret)
 
@@ -165,3 +165,12 @@ curl http://localhost:8080/api/health
 ```
 
 Use `FLASK_ENV=development` for local container smoke; production validation requires all prod secrets.
+
+## Spoonacular spend cap
+
+Before or immediately after pointing testers at production, set a vendor-side hard cap on the production Spoonacular API key (launch-readiness finding 3.7 — five-minute must-do):
+
+1. Log into the [Spoonacular API console](https://spoonacular.com/food-api/console) for the production key.
+2. Confirm the plan’s daily point allotment and set the tightest available hard cap or billing alert.
+3. Record the chosen daily point cap and the key’s last-four in this runbook (not the key itself): **(operator: fill last-four and daily point cap)**.
+4. The in-app `SPOONACULAR_CALL_BUDGET` is per Flask worker and does not replace the vendor cap; HTTP 402 from Spoonacular remains the hard stop.

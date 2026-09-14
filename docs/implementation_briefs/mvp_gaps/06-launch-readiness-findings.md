@@ -281,7 +281,7 @@ Code readiness notes:
 8. ~~Finish brief 05~~ **DONE** (`78b0aa2`).
 9. **Commit + merge** the launch-readiness working tree (still largely uncommitted as of 2026-07-28 EOD).
 10. ~~**Apple agreements + signed iOS/Android against `api.meald.app`**~~ **DONE** (2026-07-28).
-11. **Third-pass remaining:** privacy/terms pages; delete-account wire-or-hide; OpenAI/Spoonacular spend caps; Supabase tier/backup check.
+11. **Third-pass remaining:** privacy/terms pages; delete-account wire-or-hide; OpenAI/Spoonacular spend caps ([Spoonacular: deploy runbook](../../runbooks/deploy.md#spoonacular-spend-cap)); Supabase tier/backup check.
 
 ## Soft / doc / follow-up items
 
@@ -538,7 +538,7 @@ stores; fix or remove the dead links.
 
 Once the backend is public, `/api/receipts/ingest` (OpenAI-backed parsing) and voice transcription are
 reachable by anyone with a token; only Spoonacular has cost guardrails (pool/cache). Never discussed:
-**hard spend caps in the OpenAI and Spoonacular dashboards** (5-minute task, do it first), and
+**hard spend caps in the OpenAI and Spoonacular dashboards** (5-minute task, do it first — see [Spoonacular spend cap](../../runbooks/deploy.md#spoonacular-spend-cap) in the deploy runbook), and
 optionally `flask-limiter` on the expensive routes. The `ai_cost_monthly` view exists — check it weekly
 during the beta.
 
@@ -574,7 +574,7 @@ deliberate simplifications will cut the firefighting surface the most:
 
 1. Commit + merge the launch-readiness branch; tag it. *(step 0 — still uncommitted)*
 2. ~~Accept Apple agreements; signed iOS + Android against `https://api.meald.app`.~~ **DONE**
-3. Spend caps at OpenAI + Spoonacular; verify Supabase tier + backups. *(15 minutes)*
+3. Spend caps at OpenAI + Spoonacular ([Spoonacular steps](../../runbooks/deploy.md#spoonacular-spend-cap)); verify Supabase tier + backups. *(15 minutes)*
 4. ~~Deploy backend to a PaaS with gunicorn; set prod env; confirm `/api/dev/*` 403.~~ **DONE**
 5. ~~Monitoring test events + uptime monitor.~~ **DONE**
 6. ~~OAuth-only / email flag.~~ **DONE** — still open: fix/remove dead Delete-Account button and `/terms` / `/privacy`; publish a one-page privacy policy.

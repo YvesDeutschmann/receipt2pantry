@@ -21,7 +21,7 @@ Bound and measure Spoonacular usage so suggestions stay cheap and fast at launch
 Add two new attributes with environment-variable backing and safe MVP defaults:
 
 ```python
-SPOONACULAR_CALL_BUDGET: int          # env SPOONACULAR_CALL_BUDGET, default 500
+SPOONACULAR_CALL_BUDGET: int          # env SPOONACULAR_CALL_BUDGET, default 30
 SPOONACULAR_CALL_BUDGET_PERIOD_SECONDS: int  # env SPOONACULAR_CALL_BUDGET_PERIOD_SECONDS, default 3600
 ```
 
@@ -310,7 +310,7 @@ All tests live in `backend/tests/test_suggestion_cost_caching.py` and run with `
 
 ## Definition of Done
 
-- [ ] `backend/config.py` exposes `SPOONACULAR_CALL_BUDGET` (default 500) and `SPOONACULAR_CALL_BUDGET_PERIOD_SECONDS` (default 3600), both env-backed.
+- [ ] `backend/config.py` exposes `SPOONACULAR_CALL_BUDGET` (default 30) and `SPOONACULAR_CALL_BUDGET_PERIOD_SECONDS` (default 3600), both env-backed.
 - [ ] `RecipeService` has `_record_external_call`, `_reset_period_if_elapsed`, `is_budget_exceeded`, `get_call_stats` methods matching the contracts above.
 - [ ] `get_recipes_by_pantry` checks budget and records the call on every cache miss, before `requests.get`.
 - [ ] `get_recipe_details` checks budget and records the call on every cache miss, before `requests.get`.

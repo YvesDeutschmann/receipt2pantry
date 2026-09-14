@@ -13,7 +13,7 @@ primary_region = 'sjc'
   FLASK_ENV = 'production'
   LOG_LEVEL = 'INFO'
   SENTRY_ENVIRONMENT = 'production'
-  SPOONACULAR_CALL_BUDGET = '250'
+  SPOONACULAR_CALL_BUDGET = '30'
 
 [http_service]
   internal_port = 8080
