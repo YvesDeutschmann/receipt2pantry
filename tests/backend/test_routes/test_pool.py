@@ -138,3 +138,60 @@ def test_post_generate_returns_already_running_status(client_pool, pool_generato
     )
     assert res.status_code == 200
     assert res.get_json()["status"] == "already_running"
+
+
+def test_post_generate_returns_429_on_zero_insert_quota_budget(client_pool, pool_generator):
+    pool_generator.generate_pool.return_value = {
+        "generation_id": "g1",
+        "status": "partial",
+        "suggestions_generated": 0,
+        "error": "Spoonacular call budget exceeded for this period",
+    }
+
+    res = client_pool.post(
+        "/api/suggestions/pool/generate",
+        json={"trigger_reason": "manual_refresh", "household_id": "hh-1"},
+        headers={"X-User-Id": "user-1"},
+    )
+    assert res.status_code == 429
+    data = res.get_json()
+    assert data["code"] == "recipe_quota"
+    assert data["error"] == "Daily recipe quota reached, try again later."
+
+
+def test_post_generate_returns_429_on_zero_insert_recipe_quota(client_pool, pool_generator):
+    pool_generator.generate_pool.return_value = {
+        "generation_id": "g1",
+        "status": "failed",
+        "suggestions_generated": 0,
+        "error": "Spoonacular API daily quota exceeded",
+    }
+
+    res = client_pool.post(
+        "/api/suggestions/pool/generate",
+        json={"trigger_reason": "manual_refresh", "household_id": "hh-1"},
+        headers={"X-User-Id": "user-1"},
+    )
+    assert res.status_code == 429
+    assert res.get_json()["code"] == "recipe_quota"
+
+
+def test_post_generate_completed_returns_200(client_pool, pool_generator):
+    pool_generator.generate_pool.return_value = {
+        "generation_id": "g1",
+        "status": "completed",
+        "suggestions_generated": 3,
+        "error": None,
+    }
+
+    res = client_pool.post(
+        "/api/suggestions/pool/generate",
+        json={
+            "trigger_reason": "manual_refresh",
+            "household_id": "hh-1",
+            "meal_types": ["dinner"],
+        },
+        headers={"X-User-Id": "user-1"},
+    )
+    assert res.status_code == 200
+    assert res.get_json()["status"] == "completed"

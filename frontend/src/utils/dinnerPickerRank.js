@@ -13,10 +13,20 @@ const MEAL_TITLE = {
 
 export const SKIP_LABEL = 'Not now'
 
+/** Meal types for the device's current hour (single slot). */
+export function currentSlotMealTypes(now = new Date()) {
+  return [preferredMealTypeForHour(now.getHours())]
+}
+
 /** Time-of-day page title for cook picker and nav. */
 export function whatsForMealTitle(hour = new Date().getHours()) {
   const meal = preferredMealTypeForHour(hour)
   return MEAL_TITLE[meal] || MEAL_TITLE.dinner
+}
+
+/** Title for an explicit meal slot (Recipes picker). */
+export function whatsForMealSlotTitle(mealType) {
+  return MEAL_TITLE[mealType] || MEAL_TITLE.dinner
 }
 
 function mealRank(mealType, preferred) {
@@ -25,13 +35,25 @@ function mealRank(mealType, preferred) {
   return 1
 }
 
+function resolvePreferredMeal(preferredMealOrHour) {
+  if (typeof preferredMealOrHour === 'number') {
+    return preferredMealTypeForHour(preferredMealOrHour)
+  }
+  return preferredMealOrHour
+}
+
+function matchesMealSlot(mealType, slot) {
+  if (mealType == null) return true
+  return mealType === slot
+}
+
 /**
  * Rank cook-tonight cards: preferred meal_type first, then score desc.
  * @param {object[]} cards
- * @param {number} hour - 0–23 local hour for tests
+ * @param {number|string} preferredMealOrHour - hour (0–23) or meal slot string
  */
-export function rankCookTonight(cards, hour = new Date().getHours()) {
-  const preferred = preferredMealTypeForHour(hour)
+export function rankCookTonight(cards, preferredMealOrHour = new Date().getHours()) {
+  const preferred = resolvePreferredMeal(preferredMealOrHour)
   return [...(cards || [])].sort((a, b) => {
     const mealDiff =
       mealRank(a.meal_type, preferred) - mealRank(b.meal_type, preferred)
@@ -67,9 +89,12 @@ const SHELF_BANDS = [
 /**
  * Flatten four shelves into one ranked list. use_soon copy wins on key collision.
  * @param {object} payload - normalized suggestions payload
- * @param {number} hour
+ * @param {string} mealType - breakfast|lunch|dinner slot to show
  */
-export function flattenCookDeck(payload, hour = new Date().getHours()) {
+export function flattenCookDeck(
+  payload,
+  mealType = preferredMealTypeForHour(new Date().getHours())
+) {
   const src = payload || {}
   const seen = new Set()
   const merged = []
@@ -81,8 +106,11 @@ export function flattenCookDeck(payload, hour = new Date().getHours()) {
       items = rows.filter((r) => {
         const key = suggestionCardKey(r)
         if (!key || seen.has(key)) return false
+        if (!matchesMealSlot(r.meal_type, mealType)) return false
         return true
       })
+    } else {
+      items = rows.filter((r) => matchesMealSlot(r.meal_type, mealType))
     }
 
     const withTier = items.map((r) => ({
@@ -90,7 +118,7 @@ export function flattenCookDeck(payload, hour = new Date().getHours()) {
       tier: r.tier || tier,
     }))
 
-    const ranked = rankCookTonight(withTier, hour)
+    const ranked = rankCookTonight(withTier, mealType)
     for (const card of ranked) {
       const key = suggestionCardKey(card)
       if (key) seen.add(key)

@@ -284,6 +284,7 @@ describe('useCostcoSync', () => {
 
       expect(mockTriggerGeneration).toHaveBeenCalledWith(userId, {
         triggerReason: 'receipt_scan',
+        mealTypes: [expect.stringMatching(/^(breakfast|lunch|dinner)$/)],
       })
     })
 

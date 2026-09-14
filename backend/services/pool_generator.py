@@ -1,4 +1,4 @@
-"""Generate suggestion pool with simulated pantry depletion across the planning window."""
+"""Generate suggestion pool with intra-day simulated pantry depletion."""
 
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional, Set
@@ -183,85 +183,85 @@ class PoolGenerator:
 
             run_ids: Set[str] = set()
 
-            stop_steps = False
-            for _day in range(7):
-                if stop_steps:
+            stop_meal_types = False
+            for meal_type in meal_types:
+                if stop_meal_types:
                     break
-                for meal_type in meal_types:
-                    try:
-                        candidates = self._recipes_for_step(
-                            simulated,
-                            meal_type,
-                            household_id,
-                            user_id,
-                            banned,
-                            swiped,
-                            run_ids,
-                        )
-                    except (AIServiceException, RecipeQuotaException) as e:
-                        err_msg = str(e)
-                        final_status = "partial"
-                        stop_steps = True
-                        break
-                    if not candidates:
+                try:
+                    candidates = self._recipes_for_step(
+                        simulated,
+                        meal_type,
+                        household_id,
+                        user_id,
+                        banned,
+                        swiped,
+                        run_ids,
+                    )
+                except (AIServiceException, RecipeQuotaException) as e:
+                    err_msg = str(e)
+                    final_status = "partial"
+                    stop_meal_types = True
+                    break
+                if not candidates:
+                    continue
+
+                rows: List[Dict[str, Any]] = []
+                for c in candidates:
+                    rid = str(c.get("id", ""))
+                    if not rid or rid in run_ids:
                         continue
+                    recipe_data = dict(c)
+                    recipe_data.setdefault("title", c.get("title"))
+                    rows.append(
+                        {
+                            "meal_type": meal_type,
+                            "recipe_id": rid,
+                            "recipe_name": c.get("title", ""),
+                            "recipe_image": c.get("image"),
+                            "recipe_data": recipe_data,
+                            "match_score": c.get("match_percentage"),
+                        }
+                    )
 
-                    rows: List[Dict[str, Any]] = []
-                    for c in candidates:
-                        rid = str(c.get("id", ""))
-                        if not rid or rid in run_ids:
-                            continue
-                        recipe_data = dict(c)
-                        recipe_data.setdefault("title", c.get("title"))
-                        rows.append(
-                            {
-                                "meal_type": meal_type,
-                                "recipe_id": rid,
-                                "recipe_name": c.get("title", ""),
-                                "recipe_image": c.get("image"),
-                                "recipe_data": recipe_data,
-                                "match_score": c.get("match_percentage"),
-                            }
+                for r in rows:
+                    run_ids.add(str(r["recipe_id"]))
+
+                accumulated_rows.extend(rows)
+
+                top = candidates[0]
+                top_id = str(top.get("id", ""))
+                if top_id.startswith("staple_"):
+                    continue
+                try:
+                    inline_ex = top.get("extendedIngredients")
+                    if inline_ex:
+                        ex = inline_ex
+                    else:
+                        details = self.recipe_service.get_recipe_details(
+                            int(top["id"])
                         )
-
-                    for r in rows:
-                        run_ids.add(str(r["recipe_id"]))
-
-                    accumulated_rows.extend(rows)
-
-                    top = candidates[0]
-                    top_id = str(top.get("id", ""))
-                    if top_id.startswith("staple_"):
-                        continue
-                    try:
-                        inline_ex = top.get("extendedIngredients")
-                        if inline_ex:
-                            ex = inline_ex
-                        else:
-                            details = self.recipe_service.get_recipe_details(
-                                int(top["id"])
+                        members = self.supabase.get_household_members(household_id)
+                        member_count = len(members) if members else 1
+                        orig = details.get("servings", member_count) or 1
+                        if orig != member_count:
+                            details = self.recipe_service.scale_recipe(
+                                details, member_count
                             )
-                            members = self.supabase.get_household_members(household_id)
-                            member_count = len(members) if members else 1
-                            orig = details.get("servings", member_count) or 1
-                            if orig != member_count:
-                                details = self.recipe_service.scale_recipe(
-                                    details, member_count
-                                )
-                            ex = details.get("extendedIngredients") or []
-                        simulated = self.depletion.deplete_from_extended_ingredients(
-                            simulated, ex
-                        )
-                    except RecipeQuotaException:
-                        raise
-                    except Exception as e:
-                        logger.warning(f"Depletion step skipped for recipe {top_id}: {e}")
-
-                if stop_steps:
+                        ex = details.get("extendedIngredients") or []
+                    simulated = self.depletion.deplete_from_extended_ingredients(
+                        simulated, ex
+                    )
+                except RecipeQuotaException as e:
+                    err_msg = str(e)
+                    final_status = "partial"
+                    stop_meal_types = True
                     break
+                except Exception as e:
+                    logger.warning(f"Depletion step skipped for recipe {top_id}: {e}")
 
             if final_status == "completed":
-                self.pool_store.clear_unused(household_id)
+                for meal_type in meal_types:
+                    self.pool_store.clear_unused(household_id, meal_type=meal_type)
                 total_inserted = self.pool_store.add_suggestions(
                     household_id, user_id, gen_id, accumulated_rows
                 )

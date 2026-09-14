@@ -18,6 +18,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { useColdStart } from '../../contexts/ColdStartContext'
 import { useOnboarding } from '../../contexts/OnboardingContext'
 import { api } from '../../services/apiClient'
+import { currentSlotMealTypes } from '../../utils/dinnerPickerRank'
 import { emit, FunnelEvent } from '../../services/funnelTelemetry'
 import ColdStartProgressBar from '../../components/ColdStartProgressBar'
 import OnboardingPayoffPanel from '../../components/onboarding/OnboardingPayoffPanel'
@@ -265,7 +266,10 @@ export default function StaplesTemplate() {
   const fireSuggestionPoolWarmup = () => {
     if (!userId) return
     void api.suggestions
-      .triggerGeneration(userId, { triggerReason: 'onboarding' })
+      .triggerGeneration(userId, {
+        triggerReason: 'onboarding',
+        mealTypes: currentSlotMealTypes(),
+      })
       .catch(() => {})
   }
 

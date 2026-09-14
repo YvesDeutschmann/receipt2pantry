@@ -15,6 +15,7 @@ import {
 } from '../services/safewayWebViewBridge';
 import { parseSafewayReceipt } from '../services/safewayReceiptParser';
 import { api } from '../services/apiClient';
+import { currentSlotMealTypes } from '../utils/dinnerPickerRank';
 import {
   dispatchProviderSyncCompleted,
   dispatchProviderSyncFailed,
@@ -238,7 +239,10 @@ export function useSafewaySync(userId) {
       const itemsAdded = finalBackend.items_added_to_pantry ?? 0;
       if (itemsAdded > 3) {
         void api.suggestions
-          .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
+          .triggerGeneration(userId, {
+            triggerReason: 'receipt_scan',
+            mealTypes: currentSlotMealTypes(),
+          })
           .catch(() => {});
       }
       setResult({
@@ -451,7 +455,10 @@ export function useSafewaySync(userId) {
       const itemsAddedSilent = finalBackend.items_added_to_pantry ?? 0;
       if (itemsAddedSilent > 3) {
         void api.suggestions
-          .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
+          .triggerGeneration(userId, {
+            triggerReason: 'receipt_scan',
+            mealTypes: currentSlotMealTypes(),
+          })
           .catch(() => {});
       }
       setResult({

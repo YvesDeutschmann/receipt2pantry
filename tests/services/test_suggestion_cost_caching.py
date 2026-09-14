@@ -27,7 +27,7 @@ from tests.services.conftest import TEST_DATE, make_pantry_item
 
 
 def test_config_budget_defaults():
-    assert Config.SPOONACULAR_CALL_BUDGET == 500
+    assert Config.SPOONACULAR_CALL_BUDGET == 30
     assert Config.SPOONACULAR_CALL_BUDGET_PERIOD_SECONDS == 3600
 
 
@@ -250,12 +250,46 @@ def test_recipe_get_call_stats_resets_stale_period():
     assert stats["period_calls"] == 0
 
 
+@patch("backend.services.recipe_service.logger")
 @patch("backend.services.recipe_service.requests.get")
-def test_recipe_complex_search_not_counted(mock_get):
+def test_recipe_complex_search_cache_miss_records_call(mock_get, mock_logger):
     mock_get.return_value = _ok_response({"results": []})
     svc = RecipeService(Mock(), _recipe_config())
     svc.search_recipes_complex("hh", "u1", ["egg"], "dinner", number=5)
-    assert svc._call_count == 0
+    mock_get.assert_called_once()
+    assert svc._call_count == 1
+    logged = [
+        json.loads(call[0][0])
+        for call in mock_logger.info.call_args_list
+        if call[0] and call[0][0].startswith("{")
+    ]
+    assert any(
+        p.get("event") == "spoonacular_external_call" and p.get("endpoint") == "complexSearch"
+        for p in logged
+    )
+
+
+@patch("backend.services.recipe_service.requests.get")
+def test_recipe_complex_search_cache_hit_no_external_call(mock_get):
+    mock_get.return_value = _ok_response({"results": []})
+    svc = RecipeService(Mock(), _recipe_config())
+    svc.search_recipes_complex("hh", "u1", ["egg"], "dinner", number=5)
+    svc.search_recipes_complex("hh", "u1", ["egg"], "dinner", number=5)
+    assert mock_get.call_count == 1
+    assert svc._call_count == 1
+
+
+@patch("backend.services.recipe_service.requests.get")
+def test_recipe_complex_search_budget_exceeded_raises(mock_get):
+    svc = RecipeService(Mock(), _recipe_config(budget=500))
+    svc._period_call_count = 500
+    svc._period_start = time.time()
+    with pytest.raises(
+        AIServiceException,
+        match="Spoonacular call budget exceeded for this period",
+    ):
+        svc.search_recipes_complex("hh", "u1", ["egg"], "dinner", number=5)
+    mock_get.assert_not_called()
 
 
 @patch("backend.services.recipe_service.requests.get")
@@ -799,7 +833,11 @@ def test_app_wires_pool_store_onto_suggestion_service():
 def test_static_budget_before_every_instrumented_get():
     source = Path("backend/services/recipe_service.py").read_text()
     tree = ast.parse(source)
-    instrumented_funcs = {"get_recipes_by_pantry", "get_recipe_details"}
+    instrumented_funcs = {
+        "get_recipes_by_pantry",
+        "get_recipe_details",
+        "search_recipes_complex",
+    }
     for node in ast.walk(tree):
         if not isinstance(node, ast.FunctionDef) or node.name not in instrumented_funcs:
             continue
@@ -820,16 +858,6 @@ def test_static_budget_before_every_instrumented_get():
                         names_before_get.append(child.func.attr)
         assert "is_budget_exceeded" in names_before_get
         assert "_record_external_call" in names_before_get
-
-
-def test_static_complex_search_has_no_budget_hook():
-    source = Path("backend/services/recipe_service.py").read_text()
-    tree = ast.parse(source)
-    for node in ast.walk(tree):
-        if isinstance(node, ast.FunctionDef) and node.name == "search_recipes_complex":
-            body_src = ast.get_source_segment(source, node) or ""
-            assert "_record_external_call" not in body_src
-            assert "is_budget_exceeded" not in body_src
 
 
 # --- 08.1 dinner picker card DTO ---

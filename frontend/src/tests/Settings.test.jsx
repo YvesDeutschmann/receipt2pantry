@@ -100,6 +100,7 @@ describe('Settings suggestion refresh', () => {
       expect(triggerGeneration).toHaveBeenCalledWith('user-1', {
         triggerReason: 'manual_refresh',
         householdId: 'hh-1',
+        mealTypes: [expect.stringMatching(/^(breakfast|lunch|dinner)$/)],
       })
     })
   })

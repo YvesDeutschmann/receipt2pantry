@@ -249,6 +249,9 @@ function stubIntersectingObserver() {
 
 describe('SuggestionScreen', () => {
   beforeEach(() => {
+    vi.useRealTimers()
+    sessionStorage.clear()
+    sessionStorage.setItem('meald.selectedMealSlot', 'dinner')
     mockAuthUser.current = { id: 'user-1', email: 't@example.com' }
     getSuggestions.mockClear()
     markCooked.mockClear()
@@ -269,7 +272,12 @@ describe('SuggestionScreen', () => {
     triggerGeneration.mockImplementation(() =>
       Promise.resolve({ status: 'completed', suggestions_generated: 1 })
     )
-    getHousehold.mockResolvedValue({ household: { id: 'h1' } })
+    getHousehold.mockResolvedValue({
+      household: {
+        id: 'h1',
+        suggestion_meal_slots: { breakfast: true, lunch: true, dinner: true },
+      },
+    })
     getPantry.mockResolvedValue({ grouped: [] })
     getHealthCard.mockResolvedValue({ show: false, items: [] })
     getSuggestions.mockImplementation(() => Promise.resolve(EMPTY_SUGGESTIONS))
@@ -582,7 +590,10 @@ describe('SuggestionScreen', () => {
     await waitFor(() => {
       expect(triggerGeneration).toHaveBeenCalledWith(
         'user-1',
-        expect.objectContaining({ triggerReason: 'low_watermark' })
+        expect.objectContaining({
+          triggerReason: 'low_watermark',
+          mealTypes: ['dinner'],
+        })
       )
     })
     expect(getSuggestions.mock.calls.length).toBeGreaterThan(1)
@@ -1222,7 +1233,13 @@ describe('SuggestionScreen', () => {
     })
     getDepth.mockImplementation(async () => {
       callOrder.push('getDepth')
-      return { depth: { breakfast: 1, lunch: 5, dinner: 5 }, household_id: 'h1' }
+      const afterCook = callOrder.includes('markCooked')
+      return {
+        depth: afterCook
+          ? { breakfast: 5, lunch: 5, dinner: 1 }
+          : { breakfast: 5, lunch: 5, dinner: 5 },
+        household_id: 'h1',
+      }
     })
     getSuggestions.mockImplementation(async () => {
       callOrder.push('getSuggestions')
@@ -1247,7 +1264,9 @@ describe('SuggestionScreen', () => {
 
     await waitFor(() => {
       expect(callOrder.indexOf('markCooked')).toBeGreaterThanOrEqual(0)
-      expect(callOrder.indexOf('getDepth')).toBeGreaterThan(callOrder.indexOf('markCooked'))
+      expect(callOrder.lastIndexOf('getDepth')).toBeGreaterThan(
+        callOrder.indexOf('markCooked')
+      )
       const reloads = callOrder.filter((c) => c === 'getSuggestions').length
       expect(reloads).toBeGreaterThan(1)
     })
@@ -1328,7 +1347,10 @@ describe('SuggestionScreen', () => {
     await waitFor(() => {
       expect(triggerGeneration).toHaveBeenCalledWith(
         'user-1',
-        expect.objectContaining({ triggerReason: 'manual_refresh' })
+        expect.objectContaining({
+          triggerReason: 'manual_refresh',
+          mealTypes: ['dinner'],
+        })
       )
     })
     getSuggestions.mockResolvedValue({
@@ -1413,6 +1435,131 @@ describe('SuggestionScreen', () => {
         expect.stringContaining('mode=observe')
       )
     )
+  })
+
+  it('DEFAULT_SLOT_FOLLOWS_HOUR_WHEN_SESSION_STORAGE_EMPTY', async () => {
+    sessionStorage.clear()
+    const hourSpy = vi.spyOn(Date.prototype, 'getHours').mockReturnValue(8)
+    render(<Recipes />)
+    expect(await screen.findByRole('heading', { name: /What's for Breakfast/i })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: /Breakfast/i, selected: true })).toBeInTheDocument()
+    hourSpy.mockRestore()
+  })
+
+  it('CLICKING_LUNCH_SENDS_MEAL_TYPES_LUNCH', async () => {
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        poolCookCard({ id: '500', title: 'Dinner Pasta', pool_suggestion_id: 'sug-d' }),
+        poolCookCard({
+          id: '501',
+          title: 'Lunch Salad',
+          pool_suggestion_id: 'sug-l',
+          meal_type: 'lunch',
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
+    render(<Recipes />)
+    await screen.findByText('Dinner Pasta')
+    fireEvent.click(screen.getByRole('tab', { name: /^Lunch$/i }))
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: /What's for Lunch/i })).toBeInTheDocument()
+    })
+    await screen.findByText('Lunch Salad')
+    triggerGeneration.mockClear()
+    getDepth.mockResolvedValue({
+      depth: { breakfast: 5, lunch: 0, dinner: 5 },
+      household_id: 'h1',
+    })
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [],
+      probably_have: [],
+      check_first: [],
+    })
+    fireEvent.click(screen.getByRole('tab', { name: /^Dinner$/i }))
+    fireEvent.click(screen.getByRole('tab', { name: /^Lunch$/i }))
+    await waitFor(() => {
+      expect(triggerGeneration).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({ mealTypes: ['lunch'] })
+      )
+    })
+  })
+
+  it('WATERMARK_USES_ONLY_SELECTED_SLOT_DEPTH', async () => {
+    getDepth.mockResolvedValue({
+      depth: { breakfast: 0, lunch: 5, dinner: 5 },
+      household_id: 'h1',
+    })
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        poolCookCard({ id: '500', title: 'Dinner Only', pool_suggestion_id: 'sug-d' }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
+    render(<Recipes />)
+    await screen.findByText('Dinner Only')
+    await waitFor(() => {
+      expect(triggerGeneration).not.toHaveBeenCalled()
+    })
+    triggerGeneration.mockClear()
+    getDepth.mockResolvedValue({
+      depth: { breakfast: 5, lunch: 5, dinner: 0 },
+      household_id: 'h1',
+    })
+    getSuggestions.mockResolvedValue({
+      use_soon_shelf: [],
+      cook_tonight: [
+        poolCookCard({
+          id: '501',
+          title: 'Lunch Only',
+          pool_suggestion_id: 'sug-l',
+          meal_type: 'lunch',
+        }),
+      ],
+      probably_have: [],
+      check_first: [],
+    })
+    fireEvent.click(screen.getByRole('tab', { name: /^Lunch$/i }))
+    await waitFor(() => {
+      expect(triggerGeneration).toHaveBeenCalledWith(
+        'user-1',
+        expect.objectContaining({ mealTypes: ['lunch'] })
+      )
+    })
+  })
+
+  it('GENERATE_429_DOES_NOT_LOOP', async () => {
+    getSuggestions.mockResolvedValue(EMPTY_SUGGESTIONS)
+    triggerGeneration.mockRejectedValue({
+      response: { status: 429, data: { code: 'recipe_quota', error: 'Quota hit' } },
+    })
+    render(<Recipes />)
+    await waitFor(() => {
+      expect(triggerGeneration).toHaveBeenCalledTimes(1)
+    })
+    await screen.findByText('Quota hit')
+    await new Promise((r) => setTimeout(r, 100))
+    expect(triggerGeneration).toHaveBeenCalledTimes(1)
+  })
+
+  it('PTR_AFTER_429_ALLOWS_GENERATE_AGAIN', async () => {
+    getSuggestions.mockResolvedValue(EMPTY_SUGGESTIONS)
+    triggerGeneration
+      .mockRejectedValueOnce({
+        response: { status: 429, data: { code: 'recipe_quota', error: 'Quota hit' } },
+      })
+      .mockResolvedValue({ status: 'completed', suggestions_generated: 1 })
+    render(<Recipes />)
+    await waitFor(() => expect(triggerGeneration).toHaveBeenCalledTimes(1))
+    await screen.findByText('Quota hit')
+    fireEvent.click(screen.getByRole('button', { name: /Pull refresh/i }))
+    await waitFor(() => expect(triggerGeneration).toHaveBeenCalledTimes(2))
   })
 
   it('WINDOW_TAIL_FILLS_AFTER_SKIP_AND_RESETS_ON_USER_CHANGE', async () => {

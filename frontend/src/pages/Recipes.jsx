@@ -10,6 +10,7 @@ import SuggestionDetailModal, {
   EXIT_CONFIRM_VIEW_THRESHOLD_MS,
 } from '../components/SuggestionDetailModal'
 import CookPickerDeck from '../components/CookPickerDeck'
+import MealSlotControl from '../components/MealSlotControl'
 import PageHeader from '../components/PageHeader'
 import NeedsAttentionSection from '../components/NeedsAttentionSection'
 import PullToRefresh from '../components/PullToRefresh'
@@ -19,8 +20,9 @@ import {
   computeIndexAfterSkip,
   flattenCookDeck,
   hasAnySuggestions,
+  preferredMealTypeForHour,
   suggestionCardKey,
-  whatsForMealTitle,
+  whatsForMealSlotTitle,
   windowCookDeck,
 } from '../utils/dinnerPickerRank'
 import {
@@ -42,6 +44,50 @@ const COOK_PARTIAL_ERROR =
 const OPEN_RECIPE_MESSAGE = 'Open the recipe to log what you used.'
 
 const POLL_BACKOFF_MS = [500, 1000, 2000, 3000, 4000]
+const MEAL_SLOT_ORDER = ['breakfast', 'lunch', 'dinner']
+const MEAL_SLOT_STORAGE_KEY = 'meald.selectedMealSlot'
+const QUOTA_ERROR_MESSAGE =
+  'Daily recipe lookup limit reached. Suggestions will refresh tomorrow.'
+
+function defaultEnabledSlots() {
+  return { breakfast: true, lunch: true, dinner: true }
+}
+
+function readStoredMealSlot() {
+  try {
+    const stored = sessionStorage.getItem(MEAL_SLOT_STORAGE_KEY)
+    if (stored === 'breakfast' || stored === 'lunch' || stored === 'dinner') {
+      return stored
+    }
+  } catch {
+    /* sessionStorage unavailable */
+  }
+  return null
+}
+
+function writeStoredMealSlot(slot) {
+  try {
+    sessionStorage.setItem(MEAL_SLOT_STORAGE_KEY, slot)
+  } catch {
+    /* sessionStorage unavailable */
+  }
+}
+
+function normalizeEnabledSlots(raw) {
+  if (!raw) return defaultEnabledSlots()
+  return {
+    breakfast: raw.breakfast !== false,
+    lunch: raw.lunch !== false,
+    dinner: raw.dinner !== false,
+  }
+}
+
+function snapSlotToEnabled(enabledSlots, selected) {
+  if (enabledSlots[selected]) return selected
+  const hourPreferred = preferredMealTypeForHour(new Date().getHours())
+  if (enabledSlots[hourPreferred]) return hourPreferred
+  return MEAL_SLOT_ORDER.find((slot) => enabledSlots[slot]) || 'dinner'
+}
 
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms))
@@ -124,6 +170,10 @@ function Recipes() {
   const [dismissingCardKeys, setDismissingCardKeys] = useState(() => new Set())
   const [ptrDisabled, setPtrDisabled] = useState(false)
   const [refreshingEmpty, setRefreshingEmpty] = useState(false)
+  const [selectedSlot, setSelectedSlot] = useState(
+    () => readStoredMealSlot() ?? preferredMealTypeForHour(new Date().getHours())
+  )
+  const [enabledSlots, setEnabledSlots] = useState(defaultEnabledSlots)
 
   const { user } = useAuth()
   const userId = user?.id
@@ -135,17 +185,20 @@ function Recipes() {
   const skipInFlightRef = useRef(new Set())
   const cookedPoolIdsRef = useRef(new Set())
   const exitConfirmSuppressedRef = useRef(new Set())
-  const frozenHourRef = useRef(new Date().getHours())
+  const selectedSlotRef = useRef(selectedSlot)
+  const quotaBlockedRef = useRef(false)
   const loadEpochRef = useRef(0)
   const generatePromiseRef = useRef(null)
+
+  selectedSlotRef.current = selectedSlot
 
   const syncCookingUi = useCallback(() => {
     setCookingRecipeIds(new Set(cookInFlightRef.current))
   }, [])
 
   const flattened = useMemo(
-    () => flattenCookDeck(suggestions, frozenHourRef.current),
-    [suggestions]
+    () => flattenCookDeck(suggestions, selectedSlot),
+    [suggestions, selectedSlot]
   )
 
   const visibleDeck = useMemo(() => windowCookDeck(flattened, 8), [flattened])
@@ -181,6 +234,13 @@ function Recipes() {
       const response = await api.getHousehold(userId)
       if (response.household) {
         setHouseholdId(response.household.id)
+        const slots = normalizeEnabledSlots(response.household.suggestion_meal_slots)
+        setEnabledSlots(slots)
+        setSelectedSlot((prev) => {
+          const next = snapSlotToEnabled(slots, prev)
+          if (next !== prev) writeStoredMealSlot(next)
+          return next
+        })
       }
     } catch (err) {
       console.error('Failed to fetch household:', err)
@@ -198,15 +258,16 @@ function Recipes() {
   )
 
   const loadSuggestions = useCallback(
-    async ({ resetIndex = false, epoch } = {}) => {
+    async ({ resetIndex = false, epoch, preserveQuotaError = false } = {}) => {
       if (!userId) return null
       const myEpoch = epoch ?? loadEpochRef.current
       if (!initialLoadDoneRef.current) {
         setLoading(true)
       }
-      setError(null)
+      if (!preserveQuotaError && !quotaBlockedRef.current) {
+        setError(null)
+      }
       try {
-        frozenHourRef.current = new Date().getHours()
         const { suggestions: next } = await fetchSuggestionsPayload(userId, householdId)
         if (myEpoch !== loadEpochRef.current) return null
         initialLoadDoneRef.current = true
@@ -222,10 +283,8 @@ function Recipes() {
         const status = err.response?.status
         const apiError = err.response?.data?.error
         if (status === 429 || err.response?.data?.code === 'recipe_quota') {
-          setError(
-            apiError ||
-              'Daily recipe lookup limit reached. Suggestions will refresh tomorrow.'
-          )
+          quotaBlockedRef.current = true
+          setError(apiError || QUOTA_ERROR_MESSAGE)
         } else {
           setError(apiError || 'Failed to load recipe suggestions.')
         }
@@ -246,7 +305,7 @@ function Recipes() {
         await sleep(delay)
         if (epoch !== loadEpochRef.current) return null
         const next = await loadSuggestions({ epoch })
-        if (next && flattenCookDeck(next, frozenHourRef.current).length > 0) {
+        if (next && flattenCookDeck(next, selectedSlotRef.current).length > 0) {
           return next
         }
       }
@@ -258,11 +317,15 @@ function Recipes() {
   const generateThenReload = useCallback(
     async ({ triggerReason = 'manual_refresh' }) => {
       if (!userId) return null
+      if (quotaBlockedRef.current) {
+        return null
+      }
       if (generatePromiseRef.current) {
         return generatePromiseRef.current
       }
 
       const epoch = loadEpochRef.current
+      const slot = selectedSlotRef.current
       const promise = (async () => {
         try {
           let genResult = null
@@ -270,16 +333,19 @@ function Recipes() {
             genResult = await api.suggestions.triggerGeneration(userId, {
               triggerReason,
               householdId,
+              mealTypes: [slot],
             })
           } catch (err) {
             const status = err.response?.status
             if (status === 429 || err.response?.data?.code === 'recipe_quota') {
-              setError(
-                err.response?.data?.error ||
-                  'Daily recipe lookup limit reached. Suggestions will refresh tomorrow.'
-              )
+              quotaBlockedRef.current = true
+              setError(err.response?.data?.error || QUOTA_ERROR_MESSAGE)
             }
-            await loadSuggestions({ resetIndex: true, epoch })
+            await loadSuggestions({
+              resetIndex: true,
+              epoch,
+              preserveQuotaError: quotaBlockedRef.current,
+            })
             return null
           }
 
@@ -303,13 +369,12 @@ function Recipes() {
   )
 
   const maybeTriggerLowWatermarkRefill = useCallback(async () => {
-    if (!userId) return
+    if (!userId || quotaBlockedRef.current) return
+    const slot = selectedSlotRef.current
     try {
       const res = await api.suggestions.getDepth(userId, householdId)
       const depth = res.depth || {}
-      const slots = ['breakfast', 'lunch', 'dinner']
-      const anyLow = slots.some((k) => (depth[k] ?? 0) < 2)
-      if (anyLow) {
+      if ((depth[slot] ?? 0) < 2) {
         void generateThenReload({ triggerReason: 'low_watermark' })
       }
     } catch (e) {
@@ -317,23 +382,65 @@ function Recipes() {
     }
   }, [userId, householdId, generateThenReload])
 
+  const maybeRefillSelectedSlot = useCallback(
+    async (payload) => {
+      if (!userId || quotaBlockedRef.current || !payload) return
+      const slot = selectedSlotRef.current
+      const filtered = flattenCookDeck(payload, slot)
+      if (filtered.length === 0) {
+        void generateThenReload({ triggerReason: 'low_watermark' })
+        return
+      }
+      try {
+        const res = await api.suggestions.getDepth(userId, householdId)
+        const depth = res.depth || {}
+        if ((depth[slot] ?? 0) < 2) {
+          void generateThenReload({ triggerReason: 'low_watermark' })
+        }
+      } catch (e) {
+        console.warn('Low-watermark check failed:', e)
+      }
+    },
+    [userId, householdId, generateThenReload]
+  )
+
+  const handleSlotChange = useCallback((slot) => {
+    writeStoredMealSlot(slot)
+    setSelectedSlot(slot)
+    setDeckIndex(0)
+  }, [])
+
   useEffect(() => {
     void fetchHousehold()
   }, [fetchHousehold])
 
   useEffect(() => {
     if (!userId) return
-    void loadSuggestions({ resetIndex: true })
+    void (async () => {
+      const next = await loadSuggestions({ resetIndex: true })
+      if (next) {
+        await maybeRefillSelectedSlot(next)
+      }
+    })()
     void fetchPantry()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refill only on user/household load
   }, [userId, householdId, loadSuggestions, fetchPantry])
 
+  useEffect(() => {
+    if (!userId || !initialLoadDoneRef.current) return
+    void maybeRefillSelectedSlot(suggestions)
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- slot change only, not each suggestion patch
+  }, [selectedSlot, userId])
+
   const handleRefreshPull = async () => {
+    quotaBlockedRef.current = false
     await generateThenReload({ triggerReason: 'manual_refresh' })
   }
 
   const handleEmptyRefresh = async () => {
     setRefreshingEmpty(true)
     try {
+      quotaBlockedRef.current = false
       await generateThenReload({ triggerReason: 'manual_refresh' })
     } finally {
       setRefreshingEmpty(false)
@@ -438,7 +545,6 @@ function Recipes() {
       }
 
       const { suggestions: updated } = await fetchSuggestionsPayload(userId, hh)
-      frozenHourRef.current = new Date().getHours()
       applySuggestions(updated, { resetIndex: false })
       void fetchPantry()
 
@@ -489,8 +595,7 @@ function Recipes() {
     const cardKey = suggestionCardKey(recipe)
     if (!cardKey || skipInFlightRef.current.has(cardKey)) return
 
-    const hour = frozenHourRef.current
-    const flatBefore = flattenCookDeck(suggestions, hour)
+    const flatBefore = flattenCookDeck(suggestions, selectedSlotRef.current)
     const windowBefore = windowCookDeck(flatBefore, 8)
     const nextKey =
       deckIndex + 1 < windowBefore.length
@@ -602,12 +707,22 @@ function Recipes() {
     ? cookingRecipeIds.has(suggestionCardKey(selectedRecipe))
     : false
 
-  const pageTitle = whatsForMealTitle(frozenHourRef.current)
+  const pageTitle = whatsForMealSlotTitle(selectedSlot)
 
   return (
     <PullToRefresh onRefresh={handleRefreshPull} disabled={ptrDisabled}>
       <div className="flex flex-col min-h-[calc(100dvh-8rem)] lg:min-h-0">
-        <PageHeader title={pageTitle} sticky={false} />
+        <PageHeader
+          title={pageTitle}
+          sticky={false}
+          actions={
+            <MealSlotControl
+              selectedSlot={selectedSlot}
+              enabledSlots={enabledSlots}
+              onChange={handleSlotChange}
+            />
+          }
+        />
 
         <NeedsAttentionSection variant="slim" />
 
@@ -766,7 +881,6 @@ function Recipes() {
                 userId,
                 householdId
               )
-              frozenHourRef.current = new Date().getHours()
               applySuggestions(updated)
               await fetchPantry()
             }}

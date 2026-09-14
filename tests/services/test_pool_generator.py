@@ -6,7 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 
 from backend.services.pool_generator import create_pool_generator
-from backend.utils.exceptions import AIServiceException
+from backend.utils.exceptions import AIServiceException, RecipeQuotaException
 
 
 # --- Shared fixtures ---------------------------------------------------------
@@ -245,7 +245,7 @@ def test_generate_pool_calls_complete_generation_with_completed_on_happy_path(
     complete.assert_called()
     final_call = complete.call_args
     assert final_call[0][1] == "completed"
-    pool_store.clear_unused.assert_called_once()
+    pool_store.clear_unused.assert_called_once_with("hh", meal_type="dinner")
 
 
 def test_generate_pool_marks_partial_on_ai_service_exception_mid_run(
@@ -301,9 +301,7 @@ def test_clear_unused_not_called_when_status_failed(
 # --- Group C — threshold walk & staples ----------------------------------------
 
 
-@patch("backend.services.pool_generator.range", return_value=[0])
 def test_threshold_walks_from_point_nine_to_point_seven(
-    _mock_range,
     pool_store,
     depletion,
     recipe_service,
@@ -345,9 +343,7 @@ def test_threshold_walks_from_point_nine_to_point_seven(
     assert thresholds_seen[2] == pytest.approx(0.7)
 
 
-@patch("backend.services.pool_generator.range", return_value=[0])
 def test_threshold_walk_stops_at_first_non_empty_set(
-    _mock_range,
     pool_store,
     depletion,
     recipe_service,
@@ -413,7 +409,7 @@ def test_sparse_pantry_triggers_staple_fallback_for_breakfast_and_lunch_only(
 
     gen.generate_pool("hh", "user", "onboarding", ["breakfast", "lunch"])
 
-    assert meal_plan_service.suggest_staple_meals.call_count == 14
+    assert meal_plan_service.suggest_staple_meals.call_count == 2
     recipe_service.search_recipes_complex.assert_not_called()
 
 
@@ -544,12 +540,14 @@ def test_top_candidate_depletes_simulated_pantry_before_next_step(
     gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
     pool_store.add_suggestions.return_value = 5
 
-    gen.generate_pool("hh", "user", "onboarding", ["dinner"])
+    gen.generate_pool("hh", "user", "onboarding", ["lunch", "dinner"])
 
-    assert len(av_seen) >= 2
+    assert len(av_seen) == 2
     assert "chicken breast" in av_seen[0]
     assert "chicken breast" not in av_seen[1]
-    pool_store.clear_unused.assert_called_once()
+    assert pool_store.clear_unused.call_count == 2
+    pool_store.clear_unused.assert_any_call("hh", meal_type="lunch")
+    pool_store.clear_unused.assert_any_call("hh", meal_type="dinner")
 
 
 def test_depletion_failure_is_warned_and_run_continues(
@@ -698,7 +696,7 @@ def test_partial_after_first_success_does_not_clear_pool(
 
     gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
 
-    out = gen.generate_pool("hh", "user", "receipt_scan", ["dinner"])
+    out = gen.generate_pool("hh", "user", "receipt_scan", ["lunch", "dinner"])
     assert out["status"] == "partial"
     pool_store.clear_unused.assert_not_called()
     pool_store.add_suggestions.assert_not_called()
@@ -746,3 +744,110 @@ def test_recipes_for_step_uses_inline_extended_ingredients_for_depletion(
 
     recipe_service.get_recipe_details.assert_not_called()
     depletion.deplete_from_extended_ingredients.assert_called()
+
+
+# --- Group G — one-day generation (Phase 2) ------------------------------------
+
+
+def test_search_recipes_complex_called_once_per_requested_meal_type(
+    pool_store, depletion, recipe_service, meal_plan_service
+):
+    _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
+    gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
+    recipe_service.search_recipes_complex.return_value = [
+        {
+            "id": 901,
+            "title": "Ok",
+            "usedIngredientCount": 2,
+            "missedIngredientCount": 0,
+            "extendedIngredients": [{"name": "pasta", "amount": 0.1, "unit": "lb"}],
+        }
+    ]
+
+    gen.generate_pool("hh", "user", "manual_refresh", ["dinner"])
+    assert recipe_service.search_recipes_complex.call_count == 1
+
+    recipe_service.search_recipes_complex.reset_mock()
+    gen.generate_pool("hh", "user", "manual_refresh", ["breakfast", "lunch", "dinner"])
+    assert recipe_service.search_recipes_complex.call_count == 3
+
+
+def test_clear_unused_scoped_per_requested_meal_type_never_unfiltered(
+    pool_store, depletion, recipe_service, meal_plan_service
+):
+    _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
+    gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
+    recipe_service.search_recipes_complex.return_value = [
+        {
+            "id": 902,
+            "title": "Ok",
+            "usedIngredientCount": 2,
+            "missedIngredientCount": 0,
+            "extendedIngredients": [{"name": "pasta", "amount": 0.1, "unit": "lb"}],
+        }
+    ]
+    pool_store.add_suggestions.return_value = 2
+
+    gen.generate_pool("hh", "user", "manual_refresh", ["breakfast", "dinner"])
+
+    assert pool_store.clear_unused.call_count == 2
+    pool_store.clear_unused.assert_any_call("hh", meal_type="breakfast")
+    pool_store.clear_unused.assert_any_call("hh", meal_type="dinner")
+    for call in pool_store.clear_unused.call_args_list:
+        assert call.kwargs.get("meal_type") is not None
+
+
+def test_quota_on_first_slot_partial_without_clear_or_insert(
+    pool_store, depletion, recipe_service, meal_plan_service
+):
+    _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
+    recipe_service.search_recipes_complex.side_effect = AIServiceException(
+        "Spoonacular call budget exceeded for this period"
+    )
+    gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
+
+    out = gen.generate_pool("hh", "user", "manual_refresh", ["dinner", "lunch"])
+    assert out["status"] == "partial"
+    assert out["suggestions_generated"] == 0
+    pool_store.clear_unused.assert_not_called()
+    pool_store.add_suggestions.assert_not_called()
+    assert recipe_service.search_recipes_complex.call_count == 1
+
+
+def test_recipe_quota_on_first_slot_partial_without_clear_or_insert(
+    pool_store, depletion, recipe_service, meal_plan_service
+):
+    _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
+    recipe_service.search_recipes_complex.side_effect = RecipeQuotaException(
+        "Spoonacular API daily quota exceeded"
+    )
+    gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
+
+    out = gen.generate_pool("hh", "user", "manual_refresh", ["dinner"])
+    assert out["status"] == "partial"
+    pool_store.clear_unused.assert_not_called()
+    pool_store.add_suggestions.assert_not_called()
+
+
+def test_recipe_quota_during_depletion_marks_partial_not_failed(
+    pool_store, depletion, recipe_service, meal_plan_service
+):
+    _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
+    recipe_service.search_recipes_complex.return_value = [
+        {
+            "id": 903,
+            "title": "Ok",
+            "usedIngredientCount": 2,
+            "missedIngredientCount": 0,
+        }
+    ]
+    recipe_service.get_recipe_details.side_effect = RecipeQuotaException(
+        "Spoonacular API rate limit exceeded"
+    )
+    gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
+
+    out = gen.generate_pool("hh", "user", "manual_refresh", ["dinner", "lunch"])
+    assert out["status"] == "partial"
+    assert "rate limit" in (out.get("error") or "").lower()
+    pool_store.clear_unused.assert_not_called()
+    pool_store.add_suggestions.assert_not_called()

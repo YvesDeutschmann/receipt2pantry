@@ -364,6 +364,10 @@ class RecipeService:
         if cached and self._is_cache_valid(cached, ttl_seconds=ttl):
             return cached[0]
 
+        if self.is_budget_exceeded():
+            raise AIServiceException("Spoonacular call budget exceeded for this period")
+        self._record_external_call("complexSearch")
+
         try:
             url = f"{self.base_url}/recipes/complexSearch"
             params = {

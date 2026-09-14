@@ -3,11 +3,13 @@ import {
   capCookTonight,
   clampDeckIndex,
   computeIndexAfterSkip,
+  currentSlotMealTypes,
   flattenCookDeck,
   preferredMealTypeForHour,
   rankCookTonight,
   SKIP_LABEL,
   suggestionCardKey,
+  whatsForMealSlotTitle,
   whatsForMealTitle,
   windowCookDeck,
 } from '../dinnerPickerRank'
@@ -75,10 +77,39 @@ describe('dinnerPickerRank', () => {
       probably_have: [],
       check_first: [],
     }
-    const flat = flattenCookDeck(payload, 18)
+    const flat = flattenCookDeck(payload, 'dinner')
     expect(flat).toHaveLength(1)
     expect(flat[0].title).toBe('Use Soon Soup')
     expect(flat[0].tier).toBe('use_soon')
+  })
+
+  it('FLATTEN_DINNER_SLOT_OMITS_OTHER_MEALS_KEEPS_NULL', () => {
+    const payload = {
+      use_soon_shelf: [],
+      cook_tonight: [
+        { id: 'b1', meal_type: 'breakfast', title: 'Eggs', score: 0.9 },
+        { id: 'l1', meal_type: 'lunch', title: 'Sandwich', score: 0.85 },
+        { id: 'd1', meal_type: 'dinner', title: 'Pasta', score: 0.8 },
+        { id: 'n1', meal_type: null, title: 'Live fallback', score: 0.7 },
+      ],
+      probably_have: [],
+      check_first: [],
+    }
+    const flat = flattenCookDeck(payload, 'dinner')
+    expect(flat.map((c) => c.title)).toEqual(['Pasta', 'Live fallback'])
+  })
+
+  it('whatsForMealSlotTitle uses explicit slot', () => {
+    expect(whatsForMealSlotTitle('breakfast')).toBe("What's for Breakfast?")
+    expect(whatsForMealSlotTitle('lunch')).toBe("What's for Lunch?")
+    expect(whatsForMealSlotTitle('dinner')).toBe("What's for Dinner?")
+  })
+
+  it('currentSlotMealTypes returns single preferred slot', () => {
+    const lunch = new Date('2026-01-15T12:00:00')
+    expect(currentSlotMealTypes(lunch)).toEqual(['lunch'])
+    const dinner = new Date('2026-01-15T18:00:00')
+    expect(currentSlotMealTypes(dinner)).toEqual(['dinner'])
   })
 
   it('WINDOW_PROTECTS_USE_SOON_SLOTS', () => {

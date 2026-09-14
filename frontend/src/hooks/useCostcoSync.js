@@ -9,6 +9,7 @@ import { hasStoredTokens, startLogin, startSilentSync, clearStoredTokens, clearC
 import { submitToBackend } from '../services/costcoNativeSync';
 import { submitSilentReceipts } from '../services/costcoSilentIngest';
 import { api } from '../services/apiClient';
+import { currentSlotMealTypes } from '../utils/dinnerPickerRank';
 import { dispatchProviderSyncCompleted, dispatchProviderSyncFailed } from '../services/providerSyncEvents';
 import { classifySyncFailure } from '../services/syncOutcomeClassifier';
 import {
@@ -172,7 +173,10 @@ export function useCostcoSync(userId) {
       const itemsAddedCostco = finalBackend.items_added_to_pantry ?? 0;
       if (itemsAddedCostco > 3) {
         void api.suggestions
-          .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
+          .triggerGeneration(userId, {
+            triggerReason: 'receipt_scan',
+            mealTypes: currentSlotMealTypes(),
+          })
           .catch(() => {});
       }
       if (userId && tokens) {
@@ -338,7 +342,10 @@ export function useCostcoSync(userId) {
         const itemsAddedSilent = finalBackend.items_added_to_pantry ?? 0;
         if (itemsAddedSilent > 3) {
           void api.suggestions
-            .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
+            .triggerGeneration(userId, {
+              triggerReason: 'receipt_scan',
+              mealTypes: currentSlotMealTypes(),
+            })
             .catch(() => {});
         }
         if (result.idToken || result.accessToken) {
