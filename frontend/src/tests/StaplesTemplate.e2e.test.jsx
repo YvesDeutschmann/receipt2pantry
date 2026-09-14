@@ -251,6 +251,7 @@ describe('StaplesTemplate cold-start E2E', () => {
     expect(mockUpdateUser).not.toHaveBeenCalled()
     expect(mockApi.suggestions.triggerGeneration).toHaveBeenCalledWith('user-1', {
       triggerReason: 'onboarding',
+      mealTypes: [expect.stringMatching(/^(breakfast|lunch|dinner)$/)],
     })
 
     expect(mockApi.confirmStaples).toHaveBeenCalledTimes(1)
@@ -294,6 +295,7 @@ describe('StaplesTemplate cold-start E2E', () => {
     await confirmToPayoff()
     expect(mockApi.suggestions.triggerGeneration).toHaveBeenCalledWith('user-1', {
       triggerReason: 'onboarding',
+      mealTypes: [expect.stringMatching(/^(breakfast|lunch|dinner)$/)],
     })
   })
 

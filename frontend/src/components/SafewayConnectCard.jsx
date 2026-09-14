@@ -7,6 +7,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useSafewaySync, STATUS } from '../hooks/useSafewaySync';
 import { api } from '../services/apiClient';
+import { currentSlotMealTypes } from '../utils/dinnerPickerRank';
 import SyncSuccessAlert from './SyncSuccessAlert';
 import ReconnectBanner from './ReconnectBanner';
 import SyncHealthRow from './SyncHealthRow';
@@ -33,7 +34,10 @@ function DevMockSafewayBlock({ userId, className = '' }) {
       const itemsAdded = finalBackend.items_added_to_pantry ?? 0;
       if (itemsAdded > 3) {
         void api.suggestions
-          .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
+          .triggerGeneration(userId, {
+            triggerReason: 'receipt_scan',
+            mealTypes: currentSlotMealTypes(),
+          })
           .catch(() => {});
       }
       setMockResult({

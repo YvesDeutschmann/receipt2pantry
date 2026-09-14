@@ -9,6 +9,7 @@ import { fetchSafewayReceipts } from '../services/safewayWebViewBridge';
 import { parseSafewayReceipt } from '../services/safewayReceiptParser';
 import { submitSilentReceipts } from '../services/costcoSilentIngest';
 import { api } from '../services/apiClient';
+import { currentSlotMealTypes } from '../utils/dinnerPickerRank';
 import { logPhase, reportAnomaly, SyncPhase } from '../services/syncEventLog';
 import { isTerminalSilentReconnectResult } from '../services/costcoSilentSyncOutcome';
 import { classifySafewaySilentResult } from '../services/safewaySilentSyncOutcome';
@@ -126,7 +127,10 @@ async function adaptSafewaySilentSync(userId) {
     const itemsAdded = finalBackend.items_added_to_pantry ?? 0;
     if (itemsAdded > 3) {
       void api.suggestions
-        .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
+        .triggerGeneration(userId, {
+          triggerReason: 'receipt_scan',
+          mealTypes: currentSlotMealTypes(),
+        })
         .catch(() => {});
     }
     return {
@@ -191,7 +195,10 @@ async function adaptCostcoSilentSync(userId) {
     const itemsAdded = finalBackend.items_added_to_pantry ?? 0;
     if (itemsAdded > 3) {
       void api.suggestions
-        .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
+        .triggerGeneration(userId, {
+          triggerReason: 'receipt_scan',
+          mealTypes: currentSlotMealTypes(),
+        })
         .catch(() => {});
     }
     if (result.idToken || result.accessToken) {

@@ -6,6 +6,7 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useCostcoSync, STATUS } from '../hooks/useCostcoSync';
 import { api } from '../services/apiClient';
+import { currentSlotMealTypes } from '../utils/dinnerPickerRank';
 import SyncSuccessAlert from './SyncSuccessAlert';
 import ReconnectBanner from './ReconnectBanner';
 import SyncHealthRow from './SyncHealthRow';
@@ -33,7 +34,10 @@ function DevMockCostcoBlock({ userId, onSyncSuccess, className = '' }) {
       const itemsAdded = finalBackend.items_added_to_pantry ?? 0;
       if (itemsAdded > 3) {
         void api.suggestions
-          .triggerGeneration(userId, { triggerReason: 'receipt_scan' })
+          .triggerGeneration(userId, {
+            triggerReason: 'receipt_scan',
+            mealTypes: currentSlotMealTypes(),
+          })
           .catch(() => {});
       }
       const payload = {

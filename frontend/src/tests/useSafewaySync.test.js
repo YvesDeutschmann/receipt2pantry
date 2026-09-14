@@ -516,6 +516,7 @@ describe('useSafewaySync — Test-First Suite', () => {
 
       expect(mockTriggerGeneration).toHaveBeenCalledWith(userId, {
         triggerReason: 'receipt_scan',
+        mealTypes: [expect.stringMatching(/^(breakfast|lunch|dinner)$/)],
       })
 
       mockTriggerGeneration.mockClear()
@@ -755,6 +756,7 @@ describe('useSafewaySync receipt_scan pool trigger', () => {
 
     expect(mockTriggerGeneration).toHaveBeenCalledWith(userId, {
       triggerReason: 'receipt_scan',
+      mealTypes: [expect.stringMatching(/^(breakfast|lunch|dinner)$/)],
     })
   })
 

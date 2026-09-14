@@ -13,6 +13,7 @@ import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 import HouseholdModal from '../components/HouseholdModal'
 import PageHeader from '../components/PageHeader'
+import { currentSlotMealTypes } from '../utils/dinnerPickerRank'
 import ReceiptSummarySection from '../components/ReceiptSummarySection'
 import {
   isCostcoDiagnosticPurgeEnabled,
@@ -86,6 +87,7 @@ function Settings() {
       await api.suggestions.triggerGeneration(userId, {
         triggerReason: 'manual_refresh',
         householdId: household?.id ?? null,
+        mealTypes: currentSlotMealTypes(),
       })
       setRefreshSuggestionsMessage('Suggestions updated.')
       setTimeout(() => setRefreshSuggestionsMessage(null), 4000)

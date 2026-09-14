@@ -271,6 +271,22 @@ describe('apiClient', () => {
       expect(opts.timeout).not.toBe(120000)
     })
 
+    it('test_triggerGeneration_sends_meal_types_when_provided', async () => {
+      const inst = axiosHoisted.getLastInstance()
+      await api.suggestions.triggerGeneration('u1', {
+        triggerReason: 'manual',
+        mealTypes: ['lunch'],
+      })
+      expect(inst.post).toHaveBeenCalledWith(
+        '/suggestions/pool/generate',
+        expect.objectContaining({
+          trigger_reason: 'manual',
+          meal_types: ['lunch'],
+        }),
+        expect.any(Object)
+      )
+    })
+
     it('test_voiceTranscribe_deletes_content_type_for_FormData', async () => {
       const inst = axiosHoisted.getLastInstance()
       const blob = new Blob([], { type: 'audio/webm' })
