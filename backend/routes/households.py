@@ -268,6 +268,8 @@ def update_profile():
         return jsonify({"household": household})
     except ValidationException as e:
         return jsonify({"error": str(e)}), 400
+    except AuthorizationException as e:
+        return jsonify({"error": str(e)}), 403
     except Exception as e:
         logger.error(f"Error updating household profile: {e}")
         return jsonify({"error": str(e)}), 500

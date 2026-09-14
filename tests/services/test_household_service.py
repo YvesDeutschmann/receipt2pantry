@@ -675,10 +675,9 @@ class TestHouseholdService:
         assert result["dietary_restrictions"] == ["peanuts"]
         mock_supabase.merge_household_dietary_restrictions.assert_not_called()
 
-    def test_member_put_profile_replaces_dietary_array(
+    def test_member_put_profile_rejects_dietary_without_write(
         self, household_service, mock_supabase
     ):
-        """Documents open hole: any member can overwrite the full allergy list via PUT."""
         mock_supabase.get_user_household.return_value = {
             "id": "household-123",
             "name": "Test Family",
@@ -688,10 +687,107 @@ class TestHouseholdService:
             "dietary_restrictions": ["peanuts", "dairy"],
         }
 
-        household_service.update_household_profile(
-            "user-789", dietary_restrictions=["gluten"]
+        with pytest.raises(AuthorizationException) as exc_info:
+            household_service.update_household_profile(
+                "user-789", dietary_restrictions=["gluten"]
+            )
+
+        assert "owner" in str(exc_info.value).lower()
+        mock_supabase.update_household.assert_not_called()
+
+    def test_member_put_profile_mixed_size_and_diet_writes_nothing(
+        self, household_service, mock_supabase
+    ):
+        mock_supabase.get_user_household.return_value = {
+            "id": "household-123",
+            "name": "Test Family",
+            "join_code": "ABC123",
+            "role": "member",
+            "size": 2,
+            "dietary_restrictions": ["peanuts"],
+        }
+
+        with pytest.raises(AuthorizationException):
+            household_service.update_household_profile(
+                "user-789", size=4, dietary_restrictions=["gluten"]
+            )
+
+        mock_supabase.update_household.assert_not_called()
+
+    def test_member_put_profile_size_only_still_ok(
+        self, household_service, mock_supabase
+    ):
+        mock_supabase.get_user_household.return_value = {
+            "id": "household-123",
+            "name": "Test Family",
+            "join_code": "ABC123",
+            "role": "member",
+            "size": 2,
+            "dietary_restrictions": ["peanuts"],
+        }
+
+        result = household_service.update_household_profile("user-789", size=4)
+
+        mock_supabase.update_household.assert_called_once_with(
+            "household-123", {"size": 4}
+        )
+        assert result["size"] == 4
+
+    def test_owner_put_profile_replaces_dietary_including_empty(
+        self, household_service, mock_supabase
+    ):
+        mock_supabase.get_user_household.return_value = {
+            "id": "household-123",
+            "name": "Test Family",
+            "join_code": "ABC123",
+            "role": "owner",
+            "size": 2,
+            "dietary_restrictions": ["peanuts"],
+        }
+
+        result = household_service.update_household_profile(
+            "user-456", dietary_restrictions=[]
         )
 
         mock_supabase.update_household.assert_called_once_with(
-            "household-123", {"dietary_restrictions": ["gluten"]}
+            "household-123", {"dietary_restrictions": []}
         )
+        assert result["dietary_restrictions"] == []
+
+    def test_update_profile_missing_role_cannot_replace_diet(
+        self, household_service, mock_supabase
+    ):
+        mock_supabase.get_user_household.return_value = {
+            "id": "household-123",
+            "name": "Test Family",
+            "join_code": "ABC123",
+            "size": 2,
+            "dietary_restrictions": ["peanuts"],
+        }
+
+        with pytest.raises(AuthorizationException):
+            household_service.update_household_profile(
+                "user-789", dietary_restrictions=["gluten"]
+            )
+
+        mock_supabase.update_household.assert_not_called()
+
+    def test_update_profile_rejects_non_list_dietary(
+        self, household_service, mock_supabase
+    ):
+        mock_supabase.get_user_household.return_value = {
+            "id": "household-123",
+            "name": "Test Family",
+            "join_code": "ABC123",
+            "role": "owner",
+            "size": 2,
+            "dietary_restrictions": [],
+        }
+
+        with pytest.raises(ValidationException) as exc_info:
+            household_service.update_household_profile(
+                "user-456", dietary_restrictions="peanuts"
+            )
+
+        assert "list" in str(exc_info.value).lower()
+        mock_supabase.update_household.assert_not_called()
