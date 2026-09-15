@@ -175,11 +175,19 @@ export function AuthProvider({ children }) {
     return data
   }
 
-  const signOut = async () => {
+  const signOut = async (options = {}) => {
     const uid = user?.id
     localStorage.removeItem('user_id')
-    const { error } = await supabase.auth.signOut()
-    if (error) throw error
+    try {
+      const { error } = await supabase.auth.signOut(options)
+      if (error) throw error
+    } catch (err) {
+      if (options.scope === 'local') {
+        console.warn('[Auth] local signOut after account delete:', err?.message || err)
+      } else {
+        throw err
+      }
+    }
     await clearUserSyncState(uid)
     setSyncUserId(null)
   }

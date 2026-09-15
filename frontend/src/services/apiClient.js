@@ -417,6 +417,11 @@ export const api = {
     return response.data
   },
 
+  deleteAccount: async () => {
+    const response = await apiClient.delete('/account')
+    return response.data
+  },
+
   /** Dev only: backend must run with DEBUG=true */
   devResetOnboarding: async () => {
     const response = await apiClient.delete('/dev/reset-onboarding')
