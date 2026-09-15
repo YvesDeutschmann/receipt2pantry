@@ -140,7 +140,7 @@ def test_post_generate_returns_already_running_status(client_pool, pool_generato
     assert res.get_json()["status"] == "already_running"
 
 
-def test_post_generate_returns_429_on_zero_insert_quota_budget(client_pool, pool_generator):
+def test_post_generate_returns_429_on_zero_insert_recipe_budget(client_pool, pool_generator):
     pool_generator.generate_pool.return_value = {
         "generation_id": "g1",
         "status": "partial",
@@ -155,8 +155,8 @@ def test_post_generate_returns_429_on_zero_insert_quota_budget(client_pool, pool
     )
     assert res.status_code == 429
     data = res.get_json()
-    assert data["code"] == "recipe_quota"
-    assert data["error"] == "Daily recipe quota reached, try again later."
+    assert data["code"] == "recipe_budget"
+    assert data["error"] == "Recipe lookup limit reached for now. Try again in a bit."
 
 
 def test_post_generate_returns_429_on_zero_insert_recipe_quota(client_pool, pool_generator):
@@ -174,6 +174,20 @@ def test_post_generate_returns_429_on_zero_insert_recipe_quota(client_pool, pool
     )
     assert res.status_code == 429
     assert res.get_json()["code"] == "recipe_quota"
+
+
+def test_post_generate_rejects_disabled_meal_type(client_pool, pool_generator):
+    res = client_pool.post(
+        "/api/suggestions/pool/generate",
+        json={
+            "trigger_reason": "manual_refresh",
+            "household_id": "hh-1",
+            "meal_types": ["lunch"],
+        },
+        headers={"X-User-Id": "user-1"},
+    )
+    assert res.status_code == 400
+    pool_generator.generate_pool.assert_not_called()
 
 
 def test_post_generate_completed_returns_200(client_pool, pool_generator):

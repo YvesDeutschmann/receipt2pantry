@@ -251,7 +251,7 @@ describe('SuggestionScreen', () => {
   beforeEach(() => {
     vi.useRealTimers()
     sessionStorage.clear()
-    sessionStorage.setItem('meald.selectedMealSlot', 'dinner')
+    sessionStorage.setItem('meald.selectedMealSlot:user-1', 'dinner')
     mockAuthUser.current = { id: 'user-1', email: 't@example.com' }
     getSuggestions.mockClear()
     markCooked.mockClear()
@@ -1446,47 +1446,25 @@ describe('SuggestionScreen', () => {
     hourSpy.mockRestore()
   })
 
-  it('CLICKING_LUNCH_SENDS_MEAL_TYPES_LUNCH', async () => {
+  it('CLICKING_LUNCH_DOES_NOT_CALL_TRIGGER_GENERATION', async () => {
     getSuggestions.mockResolvedValue({
       use_soon_shelf: [],
       cook_tonight: [
         poolCookCard({ id: '500', title: 'Dinner Pasta', pool_suggestion_id: 'sug-d' }),
-        poolCookCard({
-          id: '501',
-          title: 'Lunch Salad',
-          pool_suggestion_id: 'sug-l',
-          meal_type: 'lunch',
-        }),
       ],
       probably_have: [],
       check_first: [],
     })
     render(<Recipes />)
     await screen.findByText('Dinner Pasta')
+    await waitFor(() => expect(triggerGeneration).not.toHaveBeenCalled())
+    triggerGeneration.mockClear()
     fireEvent.click(screen.getByRole('tab', { name: /^Lunch$/i }))
     await waitFor(() => {
       expect(screen.getByRole('heading', { name: /What's for Lunch/i })).toBeInTheDocument()
     })
-    await screen.findByText('Lunch Salad')
-    triggerGeneration.mockClear()
-    getDepth.mockResolvedValue({
-      depth: { breakfast: 5, lunch: 0, dinner: 5 },
-      household_id: 'h1',
-    })
-    getSuggestions.mockResolvedValue({
-      use_soon_shelf: [],
-      cook_tonight: [],
-      probably_have: [],
-      check_first: [],
-    })
-    fireEvent.click(screen.getByRole('tab', { name: /^Dinner$/i }))
-    fireEvent.click(screen.getByRole('tab', { name: /^Lunch$/i }))
-    await waitFor(() => {
-      expect(triggerGeneration).toHaveBeenCalledWith(
-        'user-1',
-        expect.objectContaining({ mealTypes: ['lunch'] })
-      )
-    })
+    expect(screen.getByRole('button', { name: /Refresh suggestions/i })).toBeInTheDocument()
+    expect(triggerGeneration).not.toHaveBeenCalled()
   })
 
   it('WATERMARK_USES_ONLY_SELECTED_SLOT_DEPTH', async () => {
@@ -1498,6 +1476,12 @@ describe('SuggestionScreen', () => {
       use_soon_shelf: [],
       cook_tonight: [
         poolCookCard({ id: '500', title: 'Dinner Only', pool_suggestion_id: 'sug-d' }),
+        poolCookCard({
+          id: '501',
+          title: 'Lunch Only',
+          pool_suggestion_id: 'sug-l',
+          meal_type: 'lunch',
+        }),
       ],
       probably_have: [],
       check_first: [],
@@ -1509,23 +1493,13 @@ describe('SuggestionScreen', () => {
     })
     triggerGeneration.mockClear()
     getDepth.mockResolvedValue({
-      depth: { breakfast: 5, lunch: 5, dinner: 0 },
+      depth: { breakfast: 5, lunch: 0, dinner: 5 },
       household_id: 'h1',
     })
-    getSuggestions.mockResolvedValue({
-      use_soon_shelf: [],
-      cook_tonight: [
-        poolCookCard({
-          id: '501',
-          title: 'Lunch Only',
-          pool_suggestion_id: 'sug-l',
-          meal_type: 'lunch',
-        }),
-      ],
-      probably_have: [],
-      check_first: [],
-    })
     fireEvent.click(screen.getByRole('tab', { name: /^Lunch$/i }))
+    await screen.findByText('Lunch Only')
+    triggerGeneration.mockClear()
+    await clickNotNow()
     await waitFor(() => {
       expect(triggerGeneration).toHaveBeenCalledWith(
         'user-1',

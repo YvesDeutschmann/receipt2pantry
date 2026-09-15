@@ -45,17 +45,23 @@ const OPEN_RECIPE_MESSAGE = 'Open the recipe to log what you used.'
 
 const POLL_BACKOFF_MS = [500, 1000, 2000, 3000, 4000]
 const MEAL_SLOT_ORDER = ['breakfast', 'lunch', 'dinner']
-const MEAL_SLOT_STORAGE_KEY = 'meald.selectedMealSlot'
-const QUOTA_ERROR_MESSAGE =
-  'Daily recipe lookup limit reached. Suggestions will refresh tomorrow.'
+const MEAL_SLOT_STORAGE_PREFIX = 'meald.selectedMealSlot'
+const QUOTA_ERROR_MESSAGE = 'Daily recipe quota reached, try again later.'
+const BUDGET_ERROR_MESSAGE = 'Recipe lookup limit reached for now. Try again in a bit.'
 
 function defaultEnabledSlots() {
   return { breakfast: true, lunch: true, dinner: true }
 }
 
-function readStoredMealSlot() {
+function mealSlotStorageKey(userId) {
+  return userId ? `${MEAL_SLOT_STORAGE_PREFIX}:${userId}` : null
+}
+
+function readStoredMealSlot(userId) {
+  const key = mealSlotStorageKey(userId)
+  if (!key) return null
   try {
-    const stored = sessionStorage.getItem(MEAL_SLOT_STORAGE_KEY)
+    const stored = sessionStorage.getItem(key)
     if (stored === 'breakfast' || stored === 'lunch' || stored === 'dinner') {
       return stored
     }
@@ -65,12 +71,29 @@ function readStoredMealSlot() {
   return null
 }
 
-function writeStoredMealSlot(slot) {
+function writeStoredMealSlot(slot, userId) {
+  const key = mealSlotStorageKey(userId)
+  if (!key) return
   try {
-    sessionStorage.setItem(MEAL_SLOT_STORAGE_KEY, slot)
+    sessionStorage.setItem(key, slot)
   } catch {
     /* sessionStorage unavailable */
   }
+}
+
+function applyGenerateError(err, { setError, quotaBlockedRef }) {
+  const code = err.response?.data?.code
+  const apiError = err.response?.data?.error
+  if (code === 'recipe_quota') {
+    quotaBlockedRef.current = true
+    setError(apiError || QUOTA_ERROR_MESSAGE)
+    return
+  }
+  if (code === 'recipe_budget') {
+    setError(apiError || BUDGET_ERROR_MESSAGE)
+    return
+  }
+  setError(apiError || 'Failed to refresh recipe suggestions.')
 }
 
 function normalizeEnabledSlots(raw) {
@@ -170,8 +193,8 @@ function Recipes() {
   const [dismissingCardKeys, setDismissingCardKeys] = useState(() => new Set())
   const [ptrDisabled, setPtrDisabled] = useState(false)
   const [refreshingEmpty, setRefreshingEmpty] = useState(false)
-  const [selectedSlot, setSelectedSlot] = useState(
-    () => readStoredMealSlot() ?? preferredMealTypeForHour(new Date().getHours())
+  const [selectedSlot, setSelectedSlot] = useState(() =>
+    preferredMealTypeForHour(new Date().getHours())
   )
   const [enabledSlots, setEnabledSlots] = useState(defaultEnabledSlots)
 
@@ -187,6 +210,8 @@ function Recipes() {
   const exitConfirmSuppressedRef = useRef(new Set())
   const selectedSlotRef = useRef(selectedSlot)
   const quotaBlockedRef = useRef(false)
+  const householdSlotsSnappedRef = useRef(false)
+  const autoRefillAttemptedRef = useRef(new Set())
   const loadEpochRef = useRef(0)
   const generatePromiseRef = useRef(null)
 
@@ -213,9 +238,17 @@ function Recipes() {
     firstSuggestionEmitted.current = false
     cookInFlightRef.current = new Set()
     skipInFlightRef.current = new Set()
+    householdSlotsSnappedRef.current = false
+    autoRefillAttemptedRef.current = new Set()
     loadEpochRef.current += 1
     setDeckIndex(0)
     syncCookingUi()
+    if (userId) {
+      const stored = readStoredMealSlot(userId)
+      if (stored) {
+        setSelectedSlot(stored)
+      }
+    }
   }, [userId, syncCookingUi])
 
   const fetchPantry = useCallback(async () => {
@@ -238,12 +271,14 @@ function Recipes() {
         setEnabledSlots(slots)
         setSelectedSlot((prev) => {
           const next = snapSlotToEnabled(slots, prev)
-          if (next !== prev) writeStoredMealSlot(next)
+          if (next !== prev) writeStoredMealSlot(next, userId)
           return next
         })
       }
     } catch (err) {
       console.error('Failed to fetch household:', err)
+    } finally {
+      householdSlotsSnappedRef.current = true
     }
   }, [userId])
 
@@ -280,11 +315,13 @@ function Recipes() {
       } catch (err) {
         if (myEpoch !== loadEpochRef.current) return null
         console.error('Failed to load suggestions:', err)
-        const status = err.response?.status
+        const code = err.response?.data?.code
         const apiError = err.response?.data?.error
-        if (status === 429 || err.response?.data?.code === 'recipe_quota') {
+        if (code === 'recipe_quota') {
           quotaBlockedRef.current = true
           setError(apiError || QUOTA_ERROR_MESSAGE)
+        } else if (code === 'recipe_budget') {
+          setError(apiError || BUDGET_ERROR_MESSAGE)
         } else {
           setError(apiError || 'Failed to load recipe suggestions.')
         }
@@ -336,11 +373,7 @@ function Recipes() {
               mealTypes: [slot],
             })
           } catch (err) {
-            const status = err.response?.status
-            if (status === 429 || err.response?.data?.code === 'recipe_quota') {
-              quotaBlockedRef.current = true
-              setError(err.response?.data?.error || QUOTA_ERROR_MESSAGE)
-            }
+            applyGenerateError(err, { setError, quotaBlockedRef })
             await loadSuggestions({
               resetIndex: true,
               epoch,
@@ -382,33 +415,36 @@ function Recipes() {
     }
   }, [userId, householdId, generateThenReload])
 
-  const maybeRefillSelectedSlot = useCallback(
+  const maybeAutoFillSnappedSlotOnce = useCallback(
     async (payload) => {
-      if (!userId || quotaBlockedRef.current || !payload) return
-      const slot = selectedSlotRef.current
-      const filtered = flattenCookDeck(payload, slot)
-      if (filtered.length === 0) {
-        void generateThenReload({ triggerReason: 'low_watermark' })
+      if (
+        !userId ||
+        quotaBlockedRef.current ||
+        !payload ||
+        !householdSlotsSnappedRef.current
+      ) {
         return
       }
-      try {
-        const res = await api.suggestions.getDepth(userId, householdId)
-        const depth = res.depth || {}
-        if ((depth[slot] ?? 0) < 2) {
-          void generateThenReload({ triggerReason: 'low_watermark' })
-        }
-      } catch (e) {
-        console.warn('Low-watermark check failed:', e)
-      }
+      const slot = selectedSlotRef.current
+      if (autoRefillAttemptedRef.current.has(slot)) return
+      if (flattenCookDeck(payload, slot).length > 0) return
+      autoRefillAttemptedRef.current.add(slot)
+      void generateThenReload({ triggerReason: 'low_watermark' })
     },
-    [userId, householdId, generateThenReload]
+    [userId, generateThenReload]
   )
 
-  const handleSlotChange = useCallback((slot) => {
-    writeStoredMealSlot(slot)
-    setSelectedSlot(slot)
-    setDeckIndex(0)
-  }, [])
+  const handleSlotChange = useCallback(
+    (slot) => {
+      if (userId) writeStoredMealSlot(slot, userId)
+      setSelectedSlot(slot)
+      setDeckIndex(0)
+      if (!quotaBlockedRef.current) {
+        setError(null)
+      }
+    },
+    [userId]
+  )
 
   useEffect(() => {
     void fetchHousehold()
@@ -419,21 +455,16 @@ function Recipes() {
     void (async () => {
       const next = await loadSuggestions({ resetIndex: true })
       if (next) {
-        await maybeRefillSelectedSlot(next)
+        await maybeAutoFillSnappedSlotOnce(next)
       }
     })()
     void fetchPantry()
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- refill only on user/household load
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- auto-fill only on user/household load
   }, [userId, householdId, loadSuggestions, fetchPantry])
-
-  useEffect(() => {
-    if (!userId || !initialLoadDoneRef.current) return
-    void maybeRefillSelectedSlot(suggestions)
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- slot change only, not each suggestion patch
-  }, [selectedSlot, userId])
 
   const handleRefreshPull = async () => {
     quotaBlockedRef.current = false
+    autoRefillAttemptedRef.current.delete(selectedSlotRef.current)
     await generateThenReload({ triggerReason: 'manual_refresh' })
   }
 
@@ -441,6 +472,7 @@ function Recipes() {
     setRefreshingEmpty(true)
     try {
       quotaBlockedRef.current = false
+      autoRefillAttemptedRef.current.delete(selectedSlotRef.current)
       await generateThenReload({ triggerReason: 'manual_refresh' })
     } finally {
       setRefreshingEmpty(false)
