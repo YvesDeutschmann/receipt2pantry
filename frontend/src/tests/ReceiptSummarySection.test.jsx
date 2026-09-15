@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { render, screen, fireEvent, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 
 const { getReceiptSummary } = vi.hoisted(() => ({
   getReceiptSummary: vi.fn(),
@@ -7,17 +7,6 @@ const { getReceiptSummary } = vi.hoisted(() => ({
 
 vi.mock('../services/apiClient', () => ({
   api: { getReceiptSummary },
-}))
-
-vi.mock('../components/PullToRefresh', () => ({
-  default: ({ onRefresh, children }) => (
-    <div>
-      <button type="button" onClick={() => void onRefresh()}>
-        Pull refresh
-      </button>
-      {children}
-    </div>
-  ),
 }))
 
 import ReceiptSummarySection from '../components/ReceiptSummarySection'
@@ -64,11 +53,10 @@ describe('ReceiptSummarySection', () => {
     expect(await screen.findByText('costco')).toBeInTheDocument()
   })
 
-  it('HEADING_INCLUDES_YOUR_RECEIPTS', async () => {
+  it('SECTION_TITLE_IS_RECEIPTS', async () => {
     renderSection()
-    expect(
-      await screen.findByRole('heading', { name: /your receipts/i })
-    ).toBeInTheDocument()
+    expect(await screen.findByText('Receipts')).toBeInTheDocument()
+    expect(screen.queryByRole('heading', { name: /your receipts/i })).not.toBeInTheDocument()
   })
 
   it('EMPTY_SUMMARY_SHOWS_ZEROS_FROM_API', async () => {
@@ -83,18 +71,11 @@ describe('ReceiptSummarySection', () => {
     expect(await screen.findByText(/no receipts yet/i)).toBeInTheDocument()
   })
 
-  it('REFRESH_CALLS_SUMMARY_AGAIN', async () => {
+  it('NO_PULL_TO_REFRESH_CONTROL', async () => {
     renderSection()
-
     await waitFor(() => {
-      expect(getReceiptSummary).toHaveBeenCalledTimes(1)
+      expect(getReceiptSummary).toHaveBeenCalled()
     })
-
-    fireEvent.click(screen.getByRole('button', { name: /pull refresh/i }))
-
-    await waitFor(() => {
-      expect(getReceiptSummary).toHaveBeenCalledTimes(2)
-    })
-    expect(getReceiptSummary).toHaveBeenNthCalledWith(2, 'user-1')
+    expect(screen.queryByRole('button', { name: /pull refresh/i })).not.toBeInTheDocument()
   })
 })
