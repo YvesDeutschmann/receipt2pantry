@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Link } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { Store, Users } from 'lucide-react'
 import {
   api,
@@ -12,6 +12,7 @@ import {
 import { supabase } from '../services/supabaseClient'
 import { useAuth } from '../contexts/AuthContext'
 import HouseholdModal from '../components/HouseholdModal'
+import AdaptiveModal from '../components/AdaptiveModal'
 import PageHeader from '../components/PageHeader'
 import { currentSlotMealTypes } from '../utils/dinnerPickerRank'
 import ReceiptSummarySection from '../components/ReceiptSummarySection'
@@ -19,7 +20,11 @@ import {
   isCostcoDiagnosticPurgeEnabled,
   setCostcoDiagnosticPurgeEnabled,
 } from '../services/costcoDiagnosticSettings'
-import { clearCostcoInAppBrowserSession } from '../services/costcoWebViewBridge'
+import {
+  clearCostcoInAppBrowserSession,
+  clearStoredTokens as clearCostcoStoredTokens,
+} from '../services/costcoWebViewBridge'
+import { clearStoredTokens as clearSafewayStoredTokens } from '../services/safewayWebViewBridge'
 import { PRIVACY_URL, TERMS_URL } from '../config/legal'
 import LegalLink from '../components/LegalLink'
 import {
@@ -52,7 +57,12 @@ function Settings() {
   const showDevTools =
     import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_SETTINGS === '1'
 
-  const { user } = useAuth()
+  const navigate = useNavigate()
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [deleteLoading, setDeleteLoading] = useState(false)
+  const [deleteError, setDeleteError] = useState(null)
+
+  const { user, signOut } = useAuth()
   const userId = user?.id
 
   useEffect(() => {
@@ -79,6 +89,30 @@ function Settings() {
 
   const handleHouseholdChange = (newHousehold) => {
     setHousehold(newHousehold)
+  }
+
+  const handleDeleteAccount = async () => {
+    setDeleteLoading(true)
+    setDeleteError(null)
+    try {
+      await api.deleteAccount()
+      try {
+        await clearCostcoStoredTokens()
+        await clearSafewayStoredTokens()
+        await clearCostcoInAppBrowserSession()
+      } catch (localErr) {
+        console.warn('Local credential cleanup after account delete:', localErr)
+      }
+      await signOut({ scope: 'local' })
+      navigate('/auth', { replace: true })
+    } catch (err) {
+      console.error('Delete account failed:', err)
+      setDeleteError(
+        err.response?.data?.error || 'Could not delete your account. Please try again.'
+      )
+    } finally {
+      setDeleteLoading(false)
+    }
   }
 
   const handleRefreshSuggestions = async () => {
@@ -294,12 +328,63 @@ function Settings() {
                   Permanently delete your account and all data
                 </p>
               </div>
-              <button className="btn bg-[var(--color-error)] text-cream hover:opacity-90">
+              <button
+                type="button"
+                className="btn bg-[var(--color-error)] text-cream hover:opacity-90 disabled:opacity-50"
+                disabled={deleteLoading || !userId}
+                onClick={() => {
+                  setDeleteError(null)
+                  setDeleteModalOpen(true)
+                }}
+              >
                 Delete
               </button>
             </div>
           </div>
         </div>
+
+        <AdaptiveModal
+          isOpen={deleteModalOpen}
+          onClose={() => {
+            if (!deleteLoading) setDeleteModalOpen(false)
+          }}
+          title="Delete account permanently?"
+          footer={
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 p-4 sm:p-6 border-t border-forest-light">
+              <button
+                type="button"
+                className="btn btn-ghost"
+                disabled={deleteLoading}
+                onClick={() => setDeleteModalOpen(false)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn bg-[var(--color-error)] text-cream hover:opacity-90 disabled:opacity-50"
+                disabled={deleteLoading}
+                onClick={() => void handleDeleteAccount()}
+              >
+                {deleteLoading ? 'Deleting…' : 'Delete permanently'}
+              </button>
+            </div>
+          }
+        >
+          <div className="p-4 sm:p-6 space-y-3">
+            <p className="text-sm text-sage-light">
+              This removes your Meald account, grocery login secrets, pantry, and receipts.
+              This cannot be undone.
+            </p>
+            <p className="text-sm text-sage-light">
+              If you share a household, other members keep the household and shared data.
+            </p>
+            {deleteError ? (
+              <p className="text-sm text-[var(--color-error)]" role="alert">
+                {deleteError}
+              </p>
+            ) : null}
+          </div>
+        </AdaptiveModal>
 
         {showDevTools && (
           <div className="card border-dashed border-[var(--color-error)]/50">

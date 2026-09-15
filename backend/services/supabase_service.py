@@ -302,6 +302,31 @@ class SupabaseService:
             logger.error(f"Failed to store receipt items: {e}")
             raise DatabaseException(f"Failed to store receipt items: {e}")
     
+    def list_grocery_account_providers(self, user_id: str) -> List[str]:
+        """
+        List all grocery account providers for a user (active or not).
+
+        Args:
+            user_id: User ID
+
+        Returns:
+            List of provider name strings
+        """
+        try:
+            client = self.admin_client if self.admin_client else self.client
+            response = (
+                client.table("grocery_accounts")
+                .select("provider")
+                .eq("user_id", user_id)
+                .execute()
+            )
+            if not response.data:
+                return []
+            return [row["provider"] for row in response.data if row.get("provider")]
+        except Exception as e:
+            logger.error(f"Failed to list grocery accounts for {user_id}: {e}")
+            raise DatabaseException(f"Failed to list grocery accounts: {e}")
+
     def get_grocery_account(self, user_id: str, provider: str) -> Optional[Dict]:
         """
         Get grocery account for a user and provider

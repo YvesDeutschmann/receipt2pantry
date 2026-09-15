@@ -27,6 +27,7 @@ from backend.routes.meal_plan import meal_plan_bp
 from backend.routes.pool import pool_bp
 from backend.routes.telemetry import telemetry_bp
 from backend.routes.legal import legal_bp
+from backend.routes.account import account_bp
 
 
 def wire_suggestion_pool_store(app: Flask) -> None:
@@ -223,6 +224,15 @@ def create_app(config=None):
         secrets_service = SupabaseVaultService(supabase_service.admin_client)
         app.config["SECRETS_SERVICE"] = secrets_service
         logger.info("Using Supabase Vault Service")
+
+        from backend.services.account_deletion_service import (
+            create_account_deletion_service,
+        )
+
+        app.config["ACCOUNT_DELETION_SERVICE"] = create_account_deletion_service(
+            supabase_service, secrets_service
+        )
+        logger.info("Account deletion service initialized")
     elif isinstance(config, ProductionConfig):
         raise ConfigurationException(
             "Supabase Vault is required in production (SUPABASE_SERVICE_ROLE_KEY "
@@ -253,6 +263,7 @@ def create_app(config=None):
     app.register_blueprint(meal_plan_bp, url_prefix="/api")
     app.register_blueprint(pool_bp, url_prefix="/api")
     app.register_blueprint(telemetry_bp, url_prefix="/api")
+    app.register_blueprint(account_bp, url_prefix="/api")
     app.register_blueprint(legal_bp)
     
     logger.info("Routes registered")
