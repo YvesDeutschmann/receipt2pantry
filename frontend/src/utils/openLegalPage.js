@@ -2,6 +2,12 @@ import { App } from '@capacitor/app'
 import { Capacitor } from '@capacitor/core'
 import { PRIVACY_URL, TERMS_URL } from '../config/legal'
 
+const COPY_LINK_PROMPT = 'Copy this link:'
+
+function promptCopyLink(url) {
+  window.prompt(COPY_LINK_PROMPT, url)
+}
+
 /**
  * Open a legal page in the system browser on native; web uses default link behavior.
  * Only PRIVACY_URL and TERMS_URL are supported — no arbitrary URL helper.
@@ -11,11 +17,18 @@ export async function openLegalPage(url) {
     return
   }
   if (!Capacitor.isNativePlatform()) {
-    window.open(url, '_blank', 'noopener,noreferrer')
+    const opened = window.open(url, '_blank', 'noopener,noreferrer')
+    if (opened == null) {
+      promptCopyLink(url)
+    }
     return
   }
-  const result = await App.openUrl({ url })
-  if (result?.completed === false) {
-    window.prompt('Copy this link:', url)
+  try {
+    const result = await App.openUrl({ url })
+    if (result?.completed === false) {
+      promptCopyLink(url)
+    }
+  } catch {
+    promptCopyLink(url)
   }
 }
