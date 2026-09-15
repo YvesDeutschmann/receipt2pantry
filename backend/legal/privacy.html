@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Privacy Policy — Meald</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; max-width: 42rem; margin: 2rem auto; padding: 0 1.25rem; color: #1a1a2e; background: #f5f0e8; }
+    h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.125rem; margin-top: 1.75rem; }
+    p, li { font-size: 1rem; }
+    a { color: #c45c3e; }
+    .meta { color: #5a6b5c; font-size: 0.875rem; margin-bottom: 1.5rem; }
+    nav { margin-bottom: 1.5rem; font-size: 0.875rem; }
+  </style>
+</head>
+<body>
+  <nav><a href="https://api.meald.app/terms">Terms of Service</a></nav>
+  <h1>Privacy Policy</h1>
+  <p class="meta">Last updated: September 13, 2026</p>
+
+  <p>Meald (&quot;we,&quot; &quot;us&quot;) helps households turn grocery receipts into pantry-aware dinner suggestions. This policy describes what we collect, why, and your choices. This is operator-drafted beta copy, not legal advice.</p>
+
+  <h2>Information we collect</h2>
+  <ul>
+    <li><strong>Account data.</strong> When you sign in with Apple or Google, we receive identifiers and profile information those providers share with us (such as email and name). If email sign-in is enabled, we store your email and an authentication credential managed by our auth provider.</li>
+    <li><strong>Household data.</strong> If you join or create a household, members of that household can see shared pantry items, receipts, and cooking history associated with the household.</li>
+    <li><strong>Grocery account connection.</strong> When you connect Safeway or Costco, session tokens needed to fetch your digital receipts are stored encrypted in Supabase Vault. We do not store your grocery password in our database tables.</li>
+    <li><strong>Receipts and purchases.</strong> We fetch and store digital receipt data (items, prices, dates, store) to build your pantry and suggestions.</li>
+    <li><strong>Pantry and preferences.</strong> We store pantry belief state, dietary restrictions, household size, recipe interactions, and corrections you make in the app.</li>
+    <li><strong>Voice input.</strong> If you use voice to add pantry or staples items, audio is sent for transcription to process your spoken item names. Microphone access requires your device permission.</li>
+    <li><strong>Diagnostics.</strong> We collect crash reports and error events (via GlitchTip/Sentry-compatible monitoring) and limited product telemetry to keep the service running. These events are not intended to include grocery passwords or full receipt contents.</li>
+  </ul>
+
+  <h2>How we use information</h2>
+  <p>We use your data to authenticate you, sync receipts, maintain your household pantry, rank recipe suggestions, improve reliability, and respond to support requests. We do not sell your personal information.</p>
+
+  <h2>Service providers</h2>
+  <p>We use third-party processors, including:</p>
+  <ul>
+    <li>Supabase (database, authentication, encrypted credential storage)</li>
+    <li>Fly.io (application hosting)</li>
+    <li>OpenAI (receipt parsing and voice transcription)</li>
+    <li>Spoonacular (recipe metadata and matching)</li>
+    <li>GlitchTip (error monitoring)</li>
+    <li>Apple and Google (sign-in)</li>
+  </ul>
+  <p>They process data on our behalf under their own terms and privacy policies.</p>
+
+  <h2>Retention</h2>
+  <p>We retain account and household data while your account exists. Grocery connection tokens remain until you disconnect the store or delete your account. You can disconnect stores in the app at any time.</p>
+
+  <h2>Your choices and deletion</h2>
+  <p>You can disconnect grocery accounts in Settings. To request access, correction, or deletion of your account and associated data, email <a href="mailto:privacy@meald.app">privacy@meald.app</a>. If Settings includes a working Delete Account control, you may also use that in-app path when available.</p>
+
+  <h2>Children</h2>
+  <p>Meald is not directed at children under 13, and we do not knowingly collect personal information from children under 13.</p>
+
+  <h2>Changes</h2>
+  <p>We may update this policy. The &quot;Last updated&quot; date at the top will change when we do. Continued use after changes means you accept the updated policy.</p>
+
+  <h2>Contact</h2>
+  <p>Questions: <a href="mailto:privacy@meald.app">privacy@meald.app</a></p>
+</body>
+</html>

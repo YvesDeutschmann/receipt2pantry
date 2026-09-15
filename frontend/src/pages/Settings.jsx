@@ -20,6 +20,8 @@ import {
   setCostcoDiagnosticPurgeEnabled,
 } from '../services/costcoDiagnosticSettings'
 import { clearCostcoInAppBrowserSession } from '../services/costcoWebViewBridge'
+import { PRIVACY_URL, TERMS_URL } from '../config/legal'
+import LegalLink from '../components/LegalLink'
 import {
   compactCookLoopQaLog,
   loadStashedCookLoopReport,
@@ -237,6 +239,17 @@ function Settings() {
                 className="input"
                 disabled
               />
+            </div>
+            <div className="border-t border-forest-light pt-4 space-y-3">
+              <p className="text-sm font-medium text-sage-light">Legal</p>
+              <div className="flex flex-col gap-2 sm:flex-row sm:gap-6">
+                <LegalLink url={PRIVACY_URL} className="text-sm text-cream">
+                  Privacy Policy
+                </LegalLink>
+                <LegalLink url={TERMS_URL} className="text-sm text-cream">
+                  Terms of Service
+                </LegalLink>
+              </div>
             </div>
           </div>
         </div>
