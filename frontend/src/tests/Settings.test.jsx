@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { PRIVACY_URL, TERMS_URL } from '../config/legal'
 import Settings from '../pages/Settings'
 
 function renderSettings() {
@@ -120,6 +121,8 @@ vi.mock('../utils/openLegalPage', () => ({
   openLegalPage: vi.fn(() => Promise.resolve()),
 }))
 
+import { openLegalPage } from '../utils/openLegalPage'
+
 vi.mock('../services/supabaseClient', () => ({
   supabase: { auth: { updateUser: vi.fn() } },
 }))
@@ -199,8 +202,20 @@ describe('Settings grouped IA', () => {
 
   it('LEGAL_ROWS_RENDER', async () => {
     renderSettings()
-    expect(await screen.findByRole('button', { name: /privacy policy/i })).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /terms of service/i })).toBeInTheDocument()
+    expect(await screen.findByRole('heading', { name: /^legal$/i })).toBeInTheDocument()
+    expect(screen.getAllByRole('button', { name: /privacy policy/i })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /terms of service/i })).toHaveLength(1)
+  })
+
+  it('LEGAL_ROWS_OPEN_HOSTED_PAGES', async () => {
+    renderSettings()
+    fireEvent.click(await screen.findByRole('button', { name: /privacy policy/i }))
+    expect(openLegalPage).toHaveBeenCalledTimes(1)
+    expect(openLegalPage).toHaveBeenCalledWith(PRIVACY_URL)
+
+    fireEvent.click(screen.getByRole('button', { name: /terms of service/i }))
+    expect(openLegalPage).toHaveBeenCalledTimes(2)
+    expect(openLegalPage).toHaveBeenLastCalledWith(TERMS_URL)
   })
 })
 

@@ -147,14 +147,6 @@ function Settings() {
         />
         <SettingsRow title="Sign out" onClick={() => void signOut()} />
         <SettingsRow
-          title="Privacy Policy"
-          onClick={() => void openLegalPage(PRIVACY_URL)}
-        />
-        <SettingsRow
-          title="Terms of Service"
-          onClick={() => void openLegalPage(TERMS_URL)}
-        />
-        <SettingsRow
           title="Delete account"
           subtitle="Permanently remove your account and data"
           destructive
@@ -163,6 +155,17 @@ function Settings() {
             setDeleteError(null)
             setDeleteModalOpen(true)
           }}
+        />
+      </SettingsGroup>
+
+      <SettingsGroup title="Legal">
+        <SettingsRow
+          title="Privacy Policy"
+          onClick={() => void openLegalPage(PRIVACY_URL)}
+        />
+        <SettingsRow
+          title="Terms of Service"
+          onClick={() => void openLegalPage(TERMS_URL)}
         />
       </SettingsGroup>
 
