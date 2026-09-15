@@ -13,7 +13,7 @@
 
 **NO-GO for TestFlight external beta / Google Play open testing.**
 
-Hard blockers are now **Area 5 device QA checklist** (cold-start / auto-sync / forced-reconnect sign-off) plus remaining third-pass ops (privacy/terms, delete-account, spend caps/backups, commit/merge of the launch-readiness tree). ~~Apple agreements + signed release builds against prod~~ **DONE**. **Areas 1–4 are effectively closed for code + live verify:**
+Hard blockers are now **Area 5 device QA checklist** (cold-start / auto-sync / forced-reconnect sign-off) plus remaining third-pass ops (delete-account, spend caps/backups, commit/merge of the launch-readiness tree). ~~Apple agreements + signed release builds against prod~~ **DONE**. ~~Privacy/terms pages~~ **DONE** (2026-09-13). **Areas 1–4 are effectively closed for code + live verify:**
 
 | Area | Status (2026-07-28) |
 |---|---|
@@ -281,7 +281,7 @@ Code readiness notes:
 8. ~~Finish brief 05~~ **DONE** (`78b0aa2`).
 9. **Commit + merge** the launch-readiness working tree (still largely uncommitted as of 2026-07-28 EOD).
 10. ~~**Apple agreements + signed iOS/Android against `api.meald.app`**~~ **DONE** (2026-07-28).
-11. **Third-pass remaining:** privacy/terms pages; delete-account wire-or-hide; OpenAI/Spoonacular spend caps ([Spoonacular: deploy runbook](../../runbooks/deploy.md#spoonacular-spend-cap)); Supabase tier/backup check.
+11. **Third-pass remaining:** ~~privacy/terms pages~~ **DONE**; delete-account wire-or-hide; OpenAI/Spoonacular spend caps ([Spoonacular: deploy runbook](../../runbooks/deploy.md#spoonacular-spend-cap)); Supabase tier/backup check.
 
 ## Soft / doc / follow-up items
 
@@ -522,13 +522,11 @@ rejection; (b) during the beta you cannot cleanly remove a friend's data (real g
 history) on request. Either wire it (Supabase `auth.admin.delete_user` + cascade check) or remove the
 button for the beta build so it doesn't look broken.
 
-#### 3.5 `/terms` and `/privacy` are dead links; no privacy policy exists
+#### 3.5 Privacy and Terms hosted; in-app links wired — **DONE** (2026-09-13)
 
-`Auth.jsx` links "Terms of Service" and "Privacy Policy" to routes that don't exist in the SPA. No
-policy document exists anywhere in the repo. TestFlight **external** testing (Beta App Review) and any
-Play listing require a privacy-policy URL — and the app ingests real purchase history + stores grocery
-credentials, so this is not boilerplate. A one-page hosted policy (GitHub Pages is fine) unblocks both
-stores; fix or remove the dead links.
+Public HTML at **`https://api.meald.app/privacy`** and **`https://api.meald.app/terms`** (Flask blueprint, no auth, security headers). Auth and Settings open these compile-time URLs in the system browser (`App.openUrl` on native). Use the privacy URL in App Store Connect and Play Console.
+
+**Ops follow-up:** Confirm `privacy@meald.app` inbox receives mail before external beta submission.
 
 #### 3.6 There is no CI — **PARTIAL**
 
@@ -577,7 +575,7 @@ deliberate simplifications will cut the firefighting surface the most:
 3. Spend caps at OpenAI + Spoonacular ([Spoonacular steps](../../runbooks/deploy.md#spoonacular-spend-cap)); verify Supabase tier + backups. *(15 minutes)*
 4. ~~Deploy backend to a PaaS with gunicorn; set prod env; confirm `/api/dev/*` 403.~~ **DONE**
 5. ~~Monitoring test events + uptime monitor.~~ **DONE**
-6. ~~OAuth-only / email flag.~~ **DONE** — still open: fix/remove dead Delete-Account button and `/terms` / `/privacy`; publish a one-page privacy policy.
+6. ~~OAuth-only / email flag.~~ **DONE** — still open: fix/remove dead Delete-Account button; ~~publish privacy/terms pages~~ **DONE** (2026-09-13).
 7. Minimal CI: pytest + vitest + `NO_SECRETS_IN_BUNDLE` (Fly deploy workflow alone is not enough).
 8. Run Area 5 device checklist on the signed prod builds.
 9. TestFlight internal + Play internal with 5–10 person cohort; expectations note; watch GlitchTip + `funnel_conversion` + `sync_events` + `ai_cost_monthly`.

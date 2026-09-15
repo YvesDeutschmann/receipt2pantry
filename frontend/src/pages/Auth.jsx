@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom'
 import { Capacitor } from '@capacitor/core'
 import { useAuth } from '../contexts/AuthContext'
 import { FEATURES } from '../config/features'
+import LegalAgreementNotice from '../components/LegalAgreementNotice'
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const MIN_PASSWORD_LENGTH = 8
@@ -144,12 +145,7 @@ function Auth() {
               </button>
             </div>
 
-            <p className="text-center text-sm text-sage-light mb-4">
-              By continuing, you agree to our{' '}
-              <a href="/terms" className="underline hover:text-cream">Terms of Service</a>
-              {' '}and{' '}
-              <a href="/privacy" className="underline hover:text-cream">Privacy Policy</a>.
-            </p>
+            <LegalAgreementNotice />
 
             {FEATURES.emailAuth && (
               <button
@@ -254,6 +250,8 @@ function Auth() {
             >
               Back to sign in options
             </button>
+
+            <LegalAgreementNotice className="text-center text-sm text-sage-light mt-4" />
           </form>
         )}
 

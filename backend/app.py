@@ -26,6 +26,7 @@ from backend.routes.recipes import recipes_bp
 from backend.routes.meal_plan import meal_plan_bp
 from backend.routes.pool import pool_bp
 from backend.routes.telemetry import telemetry_bp
+from backend.routes.legal import legal_bp
 
 
 def wire_suggestion_pool_store(app: Flask) -> None:
@@ -252,6 +253,7 @@ def create_app(config=None):
     app.register_blueprint(meal_plan_bp, url_prefix="/api")
     app.register_blueprint(pool_bp, url_prefix="/api")
     app.register_blueprint(telemetry_bp, url_prefix="/api")
+    app.register_blueprint(legal_bp)
     
     logger.info("Routes registered")
     

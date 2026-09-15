@@ -48,6 +48,7 @@ downloads/
 !frontend/android/app/src/main/res/drawable*/splash.png
 !frontend/assets/*.png
 *.html
+!backend/legal/*.html
 .browser_profiles/
 
 # Session files

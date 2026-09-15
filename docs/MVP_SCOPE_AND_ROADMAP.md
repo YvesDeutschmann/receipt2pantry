@@ -15,7 +15,7 @@ Surfaced during the gap-closure brief authoring (see [`docs/implementation_brief
 2. ~~**`SUPABASE_JWT_SECRET` not validated at startup**~~ **FIXED** — `ProductionConfig.validate()` + set on Fly.
 3. ~~**`MockSecretsService` in production**~~ **FIXED / Area 2 closed (2026-07-25).**
 
-**Still open for friends beta:** Area 5 device QA checklist on signed prod builds; privacy/terms + delete-account; spend caps/backups; commit/merge of launch-readiness work. ~~Apple agreements + signed iOS/Android against `api.meald.app`~~ **DONE**.
+**Still open for friends beta:** Area 5 device QA checklist on signed prod builds; delete-account; spend caps/backups; commit/merge of launch-readiness work. ~~Apple agreements + signed iOS/Android against `api.meald.app`~~ **DONE**. ~~Privacy/terms pages~~ **DONE** (2026-09-13).
 
 ---
 
