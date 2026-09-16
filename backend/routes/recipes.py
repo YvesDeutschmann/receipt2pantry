@@ -10,6 +10,7 @@ from backend.utils.exceptions import (
 )
 
 RECIPE_QUOTA_MESSAGE = "Daily recipe quota reached, try again later."
+RECIPE_BUDGET_MESSAGE = "Recipe lookup limit reached for now. Try again in a bit."
 
 logger = get_logger(__name__)
 

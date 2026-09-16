@@ -4,7 +4,7 @@ from typing import Optional
 
 from flask import Blueprint, current_app, jsonify, request
 
-from backend.routes.recipes import RECIPE_QUOTA_MESSAGE
+from backend.routes.recipes import RECIPE_BUDGET_MESSAGE, RECIPE_QUOTA_MESSAGE
 from backend.services.pool_generator import meal_types_from_slots
 from backend.utils.auth import get_user_id_from_request
 from backend.utils.exceptions import DatabaseException, RecipeQuotaException, ValidationException
@@ -14,17 +14,21 @@ logger = get_logger(__name__)
 
 pool_bp = Blueprint("pool", __name__)
 
-_QUOTA_BUDGET_ERROR_MARKERS = (
-    "Spoonacular call budget exceeded for this period",
+_BUDGET_ERROR_MARKER = "Spoonacular call budget exceeded for this period"
+_VENDOR_QUOTA_ERROR_MARKERS = (
     "Spoonacular API daily quota exceeded",
     "Spoonacular API rate limit exceeded",
 )
 
 
-def _is_quota_or_budget_error(error: Optional[str]) -> bool:
+def _is_budget_error(error: Optional[str]) -> bool:
+    return bool(error and _BUDGET_ERROR_MARKER in error)
+
+
+def _is_vendor_quota_error(error: Optional[str]) -> bool:
     if not error:
         return False
-    return any(marker in error for marker in _QUOTA_BUDGET_ERROR_MARKERS)
+    return any(marker in error for marker in _VENDOR_QUOTA_ERROR_MARKERS)
 
 
 def _get_pool_store():
@@ -37,6 +41,17 @@ def _get_pool_generator():
 
 def _get_household_service():
     return current_app.config.get("HOUSEHOLD_SERVICE")
+
+
+def _default_meal_slots():
+    return {"breakfast": True, "lunch": True, "dinner": True}
+
+
+def _household_meal_slots(hs, user_id: str):
+    if not hs:
+        return _default_meal_slots()
+    h = hs.get_household(user_id)
+    return (h or {}).get("suggestion_meal_slots") or _default_meal_slots()
 
 
 def _resolve_household_id(user_id: str, body_or_query_household_id: Optional[str]) -> str:
@@ -145,21 +160,16 @@ def generate_pool():
         household_id = _resolve_household_id(user_id, data.get("household_id"))
         hs = _get_household_service()
         meal_types = data.get("meal_types")
+        slots = _household_meal_slots(hs, user_id)
         if not meal_types:
             if not hs:
                 return jsonify({"error": "meal_types required when household service unavailable"}), 400
-            h = hs.get_household(user_id)
-            slots = (h or {}).get("suggestion_meal_slots") or {
-                "breakfast": True,
-                "lunch": True,
-                "dinner": True,
-            }
             meal_types = meal_types_from_slots(slots)
         else:
             meal_types = [
                 m
                 for m in meal_types
-                if m in ("breakfast", "lunch", "dinner")
+                if m in ("breakfast", "lunch", "dinner") and slots.get(m, True)
             ]
         if not meal_types:
             return jsonify(
@@ -177,14 +187,15 @@ def generate_pool():
         if suggestions_generated is None:
             suggestions_generated = 0
         error = result.get("error")
-        if (
-            status in ("partial", "failed")
-            and suggestions_generated == 0
-            and _is_quota_or_budget_error(error)
-        ):
-            return jsonify(
-                {"error": RECIPE_QUOTA_MESSAGE, "code": "recipe_quota"}
-            ), 429
+        if status in ("partial", "failed") and suggestions_generated == 0:
+            if _is_budget_error(error):
+                return jsonify(
+                    {"error": RECIPE_BUDGET_MESSAGE, "code": "recipe_budget"}
+                ), 429
+            if _is_vendor_quota_error(error):
+                return jsonify(
+                    {"error": RECIPE_QUOTA_MESSAGE, "code": "recipe_quota"}
+                ), 429
         return jsonify(result)
     except ValidationException as e:
         return jsonify({"error": str(e)}), 400
