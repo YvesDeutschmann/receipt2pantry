@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
+import { Preferences } from '@capacitor/preferences'
 
 const getSession = vi.fn()
 const maybeSingle = vi.fn(() => Promise.resolve({ data: null, error: null }))
@@ -441,6 +442,81 @@ describe('apiClient', () => {
         params: { household_id: 'hh-p' },
         headers: { 'X-User-Id': 'u-p' },
       })
+    })
+  })
+
+  describe('Group F — production ignores leftover ngrok prefs', () => {
+    const prevDev = import.meta.env.DEV
+    const ngrokApi = 'https://abc.ngrok-free.app/api'
+    const prodApi = 'https://api.meald.app/api'
+
+    function stubStoredApiUrls({ manual = null, synced = ngrokApi } = {}) {
+      Preferences.get.mockImplementation(async ({ key }) => {
+        if (key === 'dev_api_base_url') return { value: manual }
+        if (key === 'dev_api_base_url_synced') return { value: synced }
+        return { value: null }
+      })
+    }
+
+    afterEach(() => {
+      import.meta.env.DEV = prevDev
+      import.meta.env.VITE_ENABLE_DEV_SETTINGS = undefined
+      vi.unstubAllEnvs()
+    })
+
+    it('test_production_build_uses_baked_url_when_ngrok_is_cached', async () => {
+      vi.resetModules()
+      import.meta.env.DEV = false
+      import.meta.env.VITE_ENABLE_DEV_SETTINGS = ''
+      vi.stubEnv('VITE_API_BASE_URL', prodApi)
+      vi.stubEnv('VITE_ENABLE_DEV_SETTINGS', '')
+      stubStoredApiUrls()
+
+      const {
+        initApiBaseUrl,
+        getEffectiveApiBaseUrl,
+        refreshSyncedApiBaseUrl,
+      } = await loadApiModule()
+      await initApiBaseUrl()
+
+      expect(getEffectiveApiBaseUrl()).toEqual({ url: prodApi, source: 'build' })
+      expect(Preferences.get).not.toHaveBeenCalled()
+      expect(await refreshSyncedApiBaseUrl()).toEqual({
+        ok: true,
+        skipped: true,
+        value: null,
+      })
+    })
+
+    it('test_dev_settings_build_uses_synced_ngrok_cache', async () => {
+      vi.resetModules()
+      import.meta.env.DEV = false
+      import.meta.env.VITE_ENABLE_DEV_SETTINGS = '1'
+      vi.stubEnv('VITE_API_BASE_URL', prodApi)
+      vi.stubEnv('VITE_ENABLE_DEV_SETTINGS', '1')
+      stubStoredApiUrls()
+
+      const { initApiBaseUrl, getEffectiveApiBaseUrl } = await loadApiModule()
+      await initApiBaseUrl()
+
+      expect(getEffectiveApiBaseUrl()).toEqual({
+        url: ngrokApi,
+        source: 'supabase',
+      })
+    })
+
+    it('test_production_build_ignores_manual_override', async () => {
+      vi.resetModules()
+      import.meta.env.DEV = false
+      import.meta.env.VITE_ENABLE_DEV_SETTINGS = ''
+      vi.stubEnv('VITE_API_BASE_URL', prodApi)
+      vi.stubEnv('VITE_ENABLE_DEV_SETTINGS', '')
+      stubStoredApiUrls({ manual: ngrokApi, synced: null })
+
+      const { initApiBaseUrl, getEffectiveApiBaseUrl } = await loadApiModule()
+      await initApiBaseUrl()
+
+      expect(getEffectiveApiBaseUrl()).toEqual({ url: prodApi, source: 'build' })
     })
   })
 })
