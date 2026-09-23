@@ -308,6 +308,8 @@ Walk the following arc on a physical device (not simulator/emulator) for **both 
 
 **5d. Auto-sync verification (both platforms)**
 
+Device sign-off log: Android partial pass recorded in [`docs/runbooks/area-5-android-sign-off.md`](../../runbooks/area-5-android-sign-off.md) (iOS still required for full Area 5).
+
 - Auto-sync is on by default per owner decision (M1/M5 owner decision, confirmed 2026-06-09).
 - Verify: after a successful cold-start arc, put the app in background for 5 minutes, foreground
   it, and confirm the throttle-aware scheduler from brief 01b triggers a sync attempt without

@@ -122,6 +122,8 @@ async function shouldRun(provider) {
 
 All events via `window.dispatchEvent(new CustomEvent(type, { detail }))`.
 
+**Telemetry parity (follow-up):** The scheduler also calls `reportAnomaly(provider, SyncPhase.NEEDS_RECONNECT, { mode: 'silent', ... })` so `sync_events` gets a terminal `needs_reconnect` phase. The Providers **Silent Sync** button uses `useSafewaySync.startSilent`, which dispatches the same CustomEvent for UI but **does not** log `needs_reconnect` today. Mirror the scheduler's `reportAnomaly` on that path (and on silent fetch-auth `expired` branches) so Area 5 DB checks match device UX. See [`docs/runbooks/area-5-android-sign-off.md`](../../runbooks/area-5-android-sign-off.md).
+
 **`runSafewaySilentSync` / `runCostcoSilentSync` import note:** If these named exports do not yet exist on the bridge modules (they are part of silent_sync Phases 2–3), the hook should import the closest equivalent (`startSilentSync` from the respective bridge) and wrap it in a thin adapter that normalises the outcome to `{ outcome: 'synced' | 'needs_reconnect' | 'skipped' | 'error', ... }`. The adapter lives inside `useAppSyncScheduler.js` only, not in the bridge. Add a `// TODO: replace with runSafewaySilentSync once silent_sync Phase 3 is merged` comment.
 
 ---

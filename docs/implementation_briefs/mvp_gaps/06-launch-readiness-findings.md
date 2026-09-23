@@ -21,7 +21,7 @@ Hard blockers are now **Area 5 device QA checklist** (cold-start / auto-sync / f
 | 2 Secrets | **CLOSED** (2026-07-25) |
 | 3 Monitoring | **PASS** — GlitchTip Cloud + UptimeRobot + sync_events |
 | 4 Reconnect runbook | **PASS** (packaging); device smoke → Area 5 |
-| 5 Dual-platform QA | **PARTIAL** — signed prod builds done; checklist sign-off open |
+| 5 Dual-platform QA | **PARTIAL** — Android 5c/5d device sign-off recorded 2026-09-23 ([`area-5-android-sign-off.md`](../../runbooks/area-5-android-sign-off.md)); iOS + Logcat + E6 open |
 
 **Production backend:** Fly.io `meald-api` at `https://api.meald.app` (2026-07-28, finding 3.1). Prod env: `SUPABASE_JWT_SECRET`, `CORS_ORIGINS=capacitor://localhost`, `SENTRY_DSN` via `fly secrets` / `fly.toml`. Frontend release builds bake `VITE_API_BASE_URL=https://api.meald.app/api` from `frontend/.env.production`.
 
@@ -81,9 +81,9 @@ Legend: **PASS** | **FAIL** | **PARTIAL** | **BLOCKED** (needs prod/device acces
 | DoD item | Status | Evidence |
 |---|---|---|
 | Cold-start on physical iOS | **PARTIAL** | Signed TestFlight build against prod exists; formal checklist not signed off |
-| Cold-start on physical Android | **PARTIAL** | Signed Play/internal build against prod exists; formal checklist not signed off |
-| Auto-sync on-by-default both platforms | **BLOCKED** | Code present (`useAppSyncScheduler.js`); device verification not signed off |
-| Forced-reconnect both platforms | **BLOCKED** | Not signed off |
+| Cold-start on physical Android | **PASS** | QA user `46aa5da5-…`; funnel + cook + initial sync — [`area-5-android-sign-off.md`](../../runbooks/area-5-android-sign-off.md) |
+| Auto-sync on-by-default both platforms | **PARTIAL** | Android silent `sync_succeeded` verified; iOS not signed off |
+| Forced-reconnect both platforms | **PARTIAL** | Android reconnect UX signed off 2026-09-23; iOS open; server `needs_reconnect` row open for manual Silent Sync path |
 | No crashes in Organizer / Logcat | **BLOCKED** | Not signed off |
 
 ### Logic Audit
@@ -240,9 +240,9 @@ Forced-reconnect device smoke remains **Area 5 / BLOCKED**.
 
 **Builds: PASS** — Apple agreements accepted; signed iOS + Android release artifacts rebuilt against **`https://api.meald.app`** (2026-07-28).
 
-**Checklist: BLOCKED** — formal cold-start / auto-sync / forced-reconnect sign-off on those builds not yet recorded.
+**Checklist: PARTIAL** — **Android** cold-start, silent auto-sync, and forced-reconnect **UX** signed off 2026-09-23 on Play build against prod ([`area-5-android-sign-off.md`](../../runbooks/area-5-android-sign-off.md)). **iOS** checklist still open. Remaining Android paperwork: 5c.9 Logcat, funnel E6, `sync_events.needs_reconnect` when using manual Silent Sync (engineering follow-up in reconnect runbook).
 
-Partial device work (not a substitute for the checklist): Play-installed Android client + onboarding forensics; Google OAuth SHA troubleshooting; Costco WebView hang / Safeway post failure observed — now instrumented via `sync_events` + GlitchTip anomalies.
+Earlier partial device work: Play-installed Android client + onboarding forensics; Google OAuth SHA troubleshooting; Costco WebView hang / Safeway post failure — instrumented via `sync_events` + GlitchTip anomalies.
 
 Code readiness notes:
 
