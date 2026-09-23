@@ -111,6 +111,50 @@ function bumpVersions() {
   return { versionCode: nextCode, versionName: nextName };
 }
 
+/** Keep gradle if already > last Play upload; otherwise jump to last+1. */
+function ensureVersionAbove(lastUploaded) {
+  const last = Number(lastUploaded);
+  if (!Number.isFinite(last) || last < 0) {
+    console.error('FAIL: PLAY_LAST_UPLOADED_VERSION_CODE must be a non-negative number');
+    process.exit(1);
+  }
+  const gradle = readFileSync(buildGradlePath, 'utf8');
+  const current = readVersion(gradle);
+  if (current.versionCode > last) {
+    console.log(
+      `Keeping versionCode ${current.versionCode} / "${current.versionName}" (last uploaded ${last})`
+    );
+    return current;
+  }
+  const nextCode = last + 1;
+  let nextName = current.versionName;
+  for (let code = current.versionCode; code < nextCode; code++) {
+    nextName = bumpVersionName(nextName);
+  }
+  const updated = gradle
+    .replace(/versionCode\s+\d+/, `versionCode ${nextCode}`)
+    .replace(/versionName\s+"[^"]+"/, `versionName "${nextName}"`);
+  writeFileSync(buildGradlePath, updated, 'utf8');
+  console.log(
+    `Bumped versionCode ${current.versionCode} → ${nextCode}, versionName "${current.versionName}" → "${nextName}" (Play last uploaded ${last})`
+  );
+  return { versionCode: nextCode, versionName: nextName };
+}
+
+function resolveVersions() {
+  if (process.env.SKIP_VERSION_BUMP === '1') {
+    const current = readVersion();
+    console.log(
+      `SKIP_VERSION_BUMP=1 — using versionCode ${current.versionCode} / "${current.versionName}"`
+    );
+    return current;
+  }
+  if (process.env.PLAY_LAST_UPLOADED_VERSION_CODE) {
+    return ensureVersionAbove(process.env.PLAY_LAST_UPLOADED_VERSION_CODE);
+  }
+  return bumpVersions();
+}
+
 function collectFiles(dir, out = []) {
   if (!existsSync(dir)) return out;
   for (const name of readdirSync(dir)) {
@@ -232,7 +276,7 @@ function checkAabNetworkSecurity() {
 }
 
 // --- main ---
-const { versionCode, versionName } = bumpVersions();
+const { versionCode, versionName } = resolveVersions();
 console.log(
   `Meald Play AAB build (versionCode=${versionCode}, versionName=${versionName})`
 );
@@ -246,10 +290,18 @@ if (stripped) {
 
 run('npm', ['run', 'cap:patch']);
 const productionApiBase = readProductionApiBaseUrl();
-// Force the production API URL so a leftover LAN line in .env.local cannot win.
-run('npx', ['vite', 'build'], {
-  env: { ...process.env, VITE_API_BASE_URL: productionApiBase },
-});
+// Process env wins over .env.local (LAN API + VITE_ENABLE_DEV_SETTINGS=1).
+// Empty Dev Settings so Play Internal cannot live-sync ngrok from app_config.
+const viteEnv = {
+  ...process.env,
+  VITE_API_BASE_URL: productionApiBase,
+  VITE_ENABLE_DEV_SETTINGS: '',
+};
+delete viteEnv.DEV_SERVER_URL;
+console.log(
+  `Forcing VITE_API_BASE_URL=${productionApiBase} and empty VITE_ENABLE_DEV_SETTINGS`
+);
+run('npx', ['vite', 'build'], { env: viteEnv });
 // Intentionally skip apply-android-lan-env.js — Play builds must not inject LAN cleartext.
 run('npx', ['cap', 'sync']);
 
