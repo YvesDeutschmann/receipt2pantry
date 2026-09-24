@@ -306,7 +306,7 @@
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = BQL348J2DW;
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = BQL348J2DW;
 				INFOPLIST_FILE = App/Info.plist;
@@ -335,7 +335,7 @@
 				CODE_SIGN_ENTITLEMENTS = App/App.entitlements;
 				"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
 				CODE_SIGN_STYLE = Manual;
-				CURRENT_PROJECT_VERSION = 1;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = BQL348J2DW;
 				"DEVELOPMENT_TEAM[sdk=iphoneos*]" = BQL348J2DW;
 				INFOPLIST_FILE = App/Info.plist;

@@ -23,6 +23,7 @@ cd frontend && npm run build:play-aab
    - That pre-upload checks passed
 
 4. Do **not** commit, push, or upload to Play Console unless the user explicitly asks.
+   To upload, use the **push-play-internal** skill (`/push-play`). Do **not** browser-upload.
 
 ## If it fails
 

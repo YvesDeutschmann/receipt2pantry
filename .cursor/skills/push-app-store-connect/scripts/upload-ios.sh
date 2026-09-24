@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Archive Meald iOS and upload the IPA to App Store Connect (TestFlight).
 # Does not submit for App Review.
+# See ../notes.md for why signing/Xcode/maps/build-number work this way.
 set -euo pipefail
 
 if [[ "$(uname -s)" != "Darwin" ]]; then
@@ -13,26 +14,85 @@ REPO_ROOT="$(cd "$SCRIPT_DIR" && git rev-parse --show-toplevel)"
 FRONTEND="$REPO_ROOT/frontend"
 IOS_APP="$FRONTEND/ios/App"
 PROJECT="$IOS_APP/App.xcodeproj"
+PBXPROJ="$PROJECT/project.pbxproj"
+INFO_PLIST="$IOS_APP/App/Info.plist"
 BUILD_DIR="$IOS_APP/build"
 ARCHIVE_PATH="$BUILD_DIR/App.xcarchive"
 EXPORT_DIR="$BUILD_DIR/export"
 EXPORT_PLIST="$BUILD_DIR/ExportOptions.plist"
+PBXPROJ_BACKUP="$BUILD_DIR/project.pbxproj.pre-archive.bak"
+LAST_UPLOAD_FILE="$SCRIPT_DIR/../last-upload.md"
 TEAM_ID="BQL348J2DW"
 BUNDLE_ID="com.meald.app"
 SCHEME="App"
 EXPECTED_API="https://api.meald.app/api"
-
-DEVELOPER_DIR="$(xcode-select -p 2>/dev/null || true)"
-if [[ "$DEVELOPER_DIR" != /Applications/Xcode.app/* ]]; then
-  echo "FAIL: full Xcode required. xcode-select -p → ${DEVELOPER_DIR:-empty}" >&2
-  echo "Run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer" >&2
-  exit 1
-fi
+SIGNING_PATCHED=0
+CLEAN_KEY_LINK=""
+AUTH_FLAGS=()
+MARKETING="1.0"
+BUILD_NUM=""
 
 mkdir -p "$BUILD_DIR" "$EXPORT_DIR"
 
 log() { printf '\n==> %s\n' "$*"; }
 die() { echo "FAIL: $*" >&2; exit 1; }
+
+restore_signing() {
+  if [[ "$SIGNING_PATCHED" -eq 1 && -f "$PBXPROJ_BACKUP" ]]; then
+    cp "$PBXPROJ_BACKUP" "$PBXPROJ"
+    SIGNING_PATCHED=0
+    log "Restored pbxproj signing (Manual / Meald Development)"
+  fi
+}
+
+cleanup() {
+  restore_signing
+  if [[ -n "${CLEAN_KEY_LINK:-}" && -L "$CLEAN_KEY_LINK" ]]; then
+    rm -f "$CLEAN_KEY_LINK"
+  fi
+}
+trap cleanup EXIT
+
+select_xcode() {
+  local active newest
+  active="$(xcode-select -p 2>/dev/null || true)"
+  if [[ "$active" == /Applications/Xcode*.app/Contents/Developer ]]; then
+    export DEVELOPER_DIR="$active"
+  else
+    newest="$(python3 - <<'PY'
+from pathlib import Path
+import plistlib
+
+def ver(app: Path):
+    plist = app / "Contents/Info.plist"
+    try:
+        data = plistlib.loads(plist.read_bytes())
+    except Exception:
+        return (0, 0, 0)
+    short = str(data.get("CFBundleShortVersionString") or "0")
+    nums = []
+    for part in short.split("."):
+        try:
+            nums.append(int("".join(c for c in part if c.isdigit()) or "0"))
+        except ValueError:
+            nums.append(0)
+    while len(nums) < 3:
+        nums.append(0)
+    return tuple(nums[:3])
+
+cands = [p for p in Path("/Applications").glob("Xcode*.app") if (p / "Contents/Developer").is_dir()]
+if not cands:
+    raise SystemExit(1)
+best = max(cands, key=ver)
+print(best / "Contents/Developer")
+PY
+    )" || die "full Xcode required under /Applications/Xcode*.app (this Mac has no /Applications/Xcode.app)"
+    export DEVELOPER_DIR="$newest"
+    log "xcode-select is ${active:-empty}; using $DEVELOPER_DIR"
+  fi
+  [[ -x "$DEVELOPER_DIR/usr/bin/xcodebuild" ]] || die "xcodebuild missing in $DEVELOPER_DIR"
+  log "Xcode $($DEVELOPER_DIR/usr/bin/xcodebuild -version | tr '\n' ' ')"
+}
 
 read_prod_api() {
   local url
@@ -47,40 +107,144 @@ require_prod_api() {
 }
 
 # Env already set wins over .env.local in Vite.
+# Unset DEVELOPER_DIR so npm does not warn about config "devdir".
 production_env() {
-  # Intentionally empty VITE_ENABLE_DEV_SETTINGS so a leftover .env.local cannot enable Dev Tools.
-  env -u DEV_SERVER_URL \
+  env -u DEV_SERVER_URL -u DEVELOPER_DIR \
     VITE_API_BASE_URL="$PROD_API" \
     VITE_ENABLE_DEV_SETTINGS= \
     "$@"
 }
 
+strip_js_maps() {
+  find "$FRONTEND/dist" -name '*.map' -delete 2>/dev/null || true
+}
+
 verify_web_bundle() {
-  local cap_json="$IOS_APP/App/capacitor.config.json"
-  local public_dir="$IOS_APP/App/public"
-  local dist="$FRONTEND/dist"
+  python3 - "$FRONTEND/dist" "$IOS_APP/App/public" "$IOS_APP/App/capacitor.config.json" <<'PY' || die "web bundle is not a production App Store build"
+import json, re, sys
+from pathlib import Path
 
-  [[ -d "$dist" ]] || die "frontend/dist missing after npm run build"
-  grep -Rqs "api.meald.app" "$dist" || die "dist does not contain api.meald.app"
-
-  if grep -RqsE 'localhost:5173|127\.0\.0\.1:5173' "$dist" "$public_dir" 2>/dev/null; then
-    die "bundled web still references the Vite dev server"
-  fi
-  if grep -RqsE '192\.168\.[0-9]+\.[0-9]+|10\.[0-9]+\.[0-9]+\.[0-9]+' "$dist/assets" 2>/dev/null; then
-    die "dist/assets contains a LAN IP — not an App Store build"
-  fi
-
-  if [[ -f "$cap_json" ]] && grep -q '"url"' "$cap_json" && grep -q '"server"' "$cap_json"; then
-    python3 - "$cap_json" <<'PY' || die "capacitor.config.json still has server.url (live reload)"
-import json, sys
-p = sys.argv[1]
-with open(p) as f:
-    data = json.load(f)
-server = data.get("server") or {}
-if server.get("url"):
-    sys.exit(1)
+dist, public, cap = map(Path, sys.argv[1:4])
+if not dist.is_dir():
+    sys.exit("dist missing")
+text_ext = {".js", ".css", ".html", ".json"}
+lan = re.compile(r"192\.168\.\d+\.\d+|10\.\d+\.\d+\.\d+|localhost:5173|127\.0\.0\.1:5173")
+joined = []
+for folder in (dist, public):
+    if not folder.exists():
+        continue
+    for p in folder.rglob("*"):
+        if p.suffix.lower() in text_ext and p.is_file():
+            t = p.read_text(errors="ignore")
+            joined.append(t)
+            if lan.search(t):
+                sys.exit(f"LAN/dev URL in {p}")
+if "api.meald.app" not in "\n".join(joined):
+    sys.exit("api.meald.app missing from js/css/html/json")
+if cap.is_file():
+    data = json.loads(cap.read_text())
+    if (data.get("server") or {}).get("url"):
+        sys.exit("capacitor.config.json has server.url")
+print("verify ok: prod API, no live-reload, no LAN in js/css/html/json")
 PY
+}
+
+read_last_uploaded_build() {
+  local n=0
+  if [[ -f "$LAST_UPLOAD_FILE" ]]; then
+    n="$(awk -F= '/^BUILD=/{print $2; exit}' "$LAST_UPLOAD_FILE" | tr -d '[:space:]')"
   fi
+  [[ "$n" =~ ^[0-9]+$ ]] || n=0
+  echo "$n"
+}
+
+read_pbx_build() {
+  python3 - "$PBXPROJ" <<'PY'
+import re, sys
+text = open(sys.argv[1]).read()
+nums = [int(x) for x in re.findall(r"CURRENT_PROJECT_VERSION = (\d+);", text)]
+print(max(nums) if nums else 0)
+PY
+}
+
+read_pbx_marketing() {
+  python3 - "$PBXPROJ" <<'PY'
+import re, sys
+text = open(sys.argv[1]).read()
+m = re.search(r"MARKETING_VERSION = ([^;]+);", text)
+print((m.group(1).strip() if m else "1.0").strip('"'))
+PY
+}
+
+restore_info_plist_version_var() {
+  python3 - "$INFO_PLIST" <<'PY'
+import re, sys
+from pathlib import Path
+p = Path(sys.argv[1])
+text = p.read_text()
+new, n = re.subn(
+    r"(<key>CFBundleVersion</key>\s*<string>)[^<]+(</string>)",
+    r"\1$(CURRENT_PROJECT_VERSION)\2",
+    text,
+    count=1,
+)
+if n:
+    p.write_text(new)
+PY
+}
+
+write_last_upload() {
+  cat > "$LAST_UPLOAD_FILE" <<EOF
+# Last successful App Store Connect binary upload.
+# The helper reads BUILD and will not upload a number ≤ this.
+# Update after each successful upload (the script does this).
+MARKETING=$MARKETING
+BUILD=$BUILD_NUM
+DATE=$(date +%F)
+EOF
+}
+
+set_build_number() {
+  local n="$1"
+  log "Setting CURRENT_PROJECT_VERSION=$n"
+  (cd "$IOS_APP" && xcrun agvtool new-version -all "$n" >/dev/null)
+  restore_info_plist_version_var
+  BUILD_NUM="$(read_pbx_build)"
+  MARKETING="$(read_pbx_marketing)"
+  log "Version $MARKETING ($BUILD_NUM)"
+}
+
+bump_build() {
+  local current last next
+  current="$(read_pbx_build)"
+  last="$(read_last_uploaded_build)"
+  next="$(( (current > last ? current : last) + 1 ))"
+  log "Build floor: pbxproj=$current last-upload=$last → $next"
+  set_build_number "$next"
+}
+
+patch_app_signing_automatic() {
+  cp "$PBXPROJ" "$PBXPROJ_BACKUP"
+  python3 - "$PBXPROJ" <<'PY'
+from pathlib import Path
+import sys
+p = Path(sys.argv[1])
+text = p.read_text()
+old = '''\t\t\t\t"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "iPhone Distribution";
+\t\t\t\tCODE_SIGN_STYLE = Manual;'''
+new = '''\t\t\t\t"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = "Apple Development";
+\t\t\t\tCODE_SIGN_STYLE = Automatic;'''
+if text.count(old) != 2:
+    raise SystemExit(f"unexpected CODE_SIGN_STYLE/identity count {text.count(old)} (want 2)")
+text = text.replace(old, new)
+oldp = '''\t\t\t\t"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "Meald Development";'''
+newp = '''\t\t\t\t"PROVISIONING_PROFILE_SPECIFIER[sdk=iphoneos*]" = "";'''
+if text.count(oldp) != 2:
+    raise SystemExit(f"unexpected profile specifier count {text.count(oldp)} (want 2)")
+p.write_text(text.replace(oldp, newp))
+PY
+  SIGNING_PATCHED=1
+  log "Temporarily set App target signing to Automatic (pbxproj will be restored)"
 }
 
 resolve_auth() {
@@ -129,8 +293,7 @@ resolve_auth() {
 
 write_export_plist() {
   local method="$1"
-  local signing="$2"
-  local profile_name="${3:-}"
+  local dest="${2:-export}"
   cat > "$EXPORT_PLIST" <<EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -139,102 +302,46 @@ write_export_plist() {
   <key>method</key>
   <string>${method}</string>
   <key>destination</key>
-  <string>export</string>
+  <string>${dest}</string>
   <key>teamID</key>
   <string>${TEAM_ID}</string>
   <key>signingStyle</key>
-  <string>${signing}</string>
+  <string>automatic</string>
   <key>uploadSymbols</key>
   <true/>
   <key>manageAppVersionAndBuildNumber</key>
   <false/>
   <key>stripSwiftSymbols</key>
   <true/>
-EOF
-  if [[ "$signing" == "manual" && -n "$profile_name" ]]; then
-    cat >> "$EXPORT_PLIST" <<EOF
-  <key>signingCertificate</key>
-  <string>Apple Distribution</string>
-  <key>provisioningProfiles</key>
-  <dict>
-    <key>${BUNDLE_ID}</key>
-    <string>${profile_name}</string>
-  </dict>
-EOF
-  fi
-  cat >> "$EXPORT_PLIST" <<'EOF'
 </dict>
 </plist>
 EOF
 }
 
-find_app_store_profile_name() {
-  python3 - "$BUNDLE_ID" "$TEAM_ID" <<'PY'
-import os, subprocess, sys, plistlib
-from pathlib import Path
-
-bundle, team = sys.argv[1], sys.argv[2]
-want = f"{team}.{bundle}"
-dirs = [
-    Path.home() / "Library/Developer/Xcode/UserData/Provisioning Profiles",
-    Path.home() / "Library/MobileDevice/Provisioning Profiles",
-]
-found = []
-for d in dirs:
-    if not d.is_dir():
-        continue
-    for p in list(d.glob("*.mobileprovision")) + list(d.glob("*.provisionprofile")):
-        try:
-            xml = subprocess.check_output(["security", "cms", "-D", "-i", str(p)], stderr=subprocess.DEVNULL)
-            data = plistlib.loads(xml)
-        except Exception:
-            continue
-        ents = data.get("Entitlements") or {}
-        app_id = ents.get("application-identifier") or ""
-        if want not in app_id:
-            continue
-        if "ProvisionedDevices" in data or data.get("ProvisionsAllDevices"):
-            continue
-        found.append(data.get("Name") or "")
-# Prefer a name that looks like App Store / Distribution
-ranked = sorted(found, key=lambda n: (("app store" not in n.lower() and "distribution" not in n.lower()), n.lower()))
-if ranked:
-    print(ranked[0])
-PY
-}
-
-bump_build() {
-  log "Bumping CURRENT_PROJECT_VERSION"
-  (cd "$IOS_APP" && xcrun agvtool next-version -all)
-  MARKETING="$(cd "$IOS_APP" && xcrun agvtool what-marketing-version -terse1)"
-  BUILD_NUM="$(cd "$IOS_APP" && xcrun agvtool what-version -terse)"
-  log "Version $MARKETING ($BUILD_NUM)"
-}
-
 archive_app() {
-  log "Archiving (Release, generic iOS)"
+  log "Archiving (Release, generic iOS) — temporary Automatic on App target only"
   rm -rf "$ARCHIVE_PATH"
+  patch_app_signing_automatic
+  # Do NOT pass CODE_SIGN_STYLE / PROVISIONING_PROFILE_SPECIFIER / sdk-specific
+  # identities on the CLI (signing conflict, xcodebuild parse bug, SPM leak).
   xcodebuild \
     -project "$PROJECT" \
     -scheme "$SCHEME" \
     -configuration Release \
     -destination "generic/platform=iOS" \
     -archivePath "$ARCHIVE_PATH" \
-    CODE_SIGN_STYLE=Automatic \
     DEVELOPMENT_TEAM="$TEAM_ID" \
-    PROVISIONING_PROFILE_SPECIFIER= \
     -allowProvisioningUpdates \
     ${AUTH_FLAGS[@]+"${AUTH_FLAGS[@]}"} \
     archive
+  restore_signing
   [[ -d "$ARCHIVE_PATH" ]] || die "archive not produced"
 }
 
 export_ipa() {
   local method="$1"
-  local signing="$2"
-  local profile_name="${3:-}"
-  write_export_plist "$method" "$signing" "$profile_name"
-  log "Exporting IPA (method=$method signing=$signing ${profile_name:+profile=$profile_name})"
+  write_export_plist "$method" "export"
+  log "Exporting IPA (method=$method signing=automatic)"
   rm -rf "$EXPORT_DIR"
   mkdir -p "$EXPORT_DIR"
   xcodebuild -exportArchive \
@@ -254,9 +361,8 @@ find_ipa() {
 
 upload_ipa() {
   local ipa="$1"
-  log "Uploading $(basename "$ipa") to App Store Connect"
+  log "Uploading $(basename "$ipa") to App Store Connect (version $MARKETING ($BUILD_NUM))"
   if [[ -n "${AUTH_KEY_ID:-}" && -n "${AUTH_ISSUER:-}" ]]; then
-    # altool reads AuthKey_<id>.p8 from ~/.appstoreconnect/private_keys or ~/.private_keys
     if [[ -n "${AUTH_KEY_PATH:-}" ]]; then
       mkdir -p "$HOME/.appstoreconnect/private_keys"
       local expected="$HOME/.appstoreconnect/private_keys/AuthKey_${AUTH_KEY_ID}.p8"
@@ -269,14 +375,7 @@ upload_ipa() {
       --apiKey "$AUTH_KEY_ID" \
       --apiIssuer "$AUTH_ISSUER"
   else
-    write_export_plist "app-store-connect" "automatic"
-    # Re-export with destination upload using Xcode session
-    python3 - "$EXPORT_PLIST" <<'PY'
-import pathlib, sys
-p = pathlib.Path(sys.argv[1])
-text = p.read_text().replace("<string>export</string>", "<string>upload</string>", 1)
-p.write_text(text)
-PY
+    write_export_plist "app-store-connect" "upload"
     xcodebuild -exportArchive \
       -archivePath "$ARCHIVE_PATH" \
       -exportPath "$EXPORT_DIR" \
@@ -286,14 +385,19 @@ PY
   fi
 }
 
-cleanup() {
-  if [[ -n "${CLEAN_KEY_LINK:-}" && -L "$CLEAN_KEY_LINK" ]]; then
-    rm -f "$CLEAN_KEY_LINK"
-  fi
+parse_min_build_from_log() {
+  python3 - "$1" <<'PY'
+import re, sys
+from pathlib import Path
+text = Path(sys.argv[1]).read_text(errors="ignore")
+m = re.search(r"previously uploaded version:\s*[''‘’\"]?(\d+)", text)
+if m:
+    print(m.group(1))
+PY
 }
-trap cleanup EXIT
 
 # --- main ---
+select_xcode
 PROD_API="$(read_prod_api)"
 require_prod_api "$PROD_API"
 resolve_auth
@@ -304,6 +408,7 @@ fi
 
 log "npm run build (production API)"
 (cd "$FRONTEND" && production_env npm run build)
+strip_js_maps
 
 log "npx cap sync ios"
 (cd "$FRONTEND" && production_env npx cap sync ios)
@@ -315,34 +420,47 @@ if ! xcodebuild -project "$PROJECT" -list | grep -q "$SCHEME"; then
   die "scheme $SCHEME not found. Open the project once in Xcode or run: xcodebuild -project $PROJECT -list"
 fi
 
-archive_app
+attempt=1
+max_attempts=3
+upload_status=1
+while [[ $attempt -le $max_attempts ]]; do
+  archive_app
 
-set +e
-export_ipa "app-store-connect" "automatic"
-export_status=$?
-if [[ $export_status -ne 0 ]]; then
-  export_ipa "app-store" "automatic"
+  set +e
+  export_ipa "app-store-connect"
   export_status=$?
-fi
-if [[ $export_status -ne 0 ]]; then
-  PROFILE_NAME="$(find_app_store_profile_name || true)"
-  [[ -n "$PROFILE_NAME" ]] || die "export failed and no App Store provisioning profile found for $BUNDLE_ID"
-  export_ipa "app-store-connect" "manual" "$PROFILE_NAME"
-  export_status=$?
-fi
-set -e
-[[ $export_status -eq 0 ]] || die "IPA export failed"
+  if [[ $export_status -ne 0 ]]; then
+    export_ipa "app-store"
+    export_status=$?
+  fi
+  set -e
+  [[ $export_status -eq 0 ]] || die "IPA export failed (automatic signing only; do not manual-export the Xcode-managed Team Store profile)"
 
-IPA="$(find_ipa)"
-set +e
-upload_ipa "$IPA"
-upload_status=$?
-set -e
+  IPA="$(find_ipa)"
+  upload_log="$BUILD_DIR/upload.log"
+  set +e
+  upload_ipa "$IPA" 2>&1 | tee "$upload_log"
+  upload_status=${PIPESTATUS[0]}
+  set -e
 
-if [[ $upload_status -ne 0 ]]; then
+  if [[ $upload_status -eq 0 ]]; then
+    break
+  fi
+
+  apple_min="$(parse_min_build_from_log "$upload_log" || true)"
+  if [[ "$apple_min" =~ ^[0-9]+$ ]]; then
+    next="$((apple_min + 1))"
+    log "Apple requires CFBundleVersion > $apple_min; retrying as $next (no JS rebuild)"
+    set_build_number "$next"
+    attempt=$((attempt + 1))
+    continue
+  fi
   echo "FAIL: upload failed (exit $upload_status). If Apple said the build number was taken, re-run after another bump." >&2
   exit "$upload_status"
-fi
+done
+
+[[ $upload_status -eq 0 ]] || die "upload failed after $max_attempts attempts"
+write_last_upload
 
 cat <<EOF
 
@@ -356,4 +474,5 @@ Processing in App Store Connect can take several minutes. Then the build appears
 This script does not submit the app for App Review.
 
 CURRENT_PROJECT_VERSION was bumped in frontend/ios/App/App.xcodeproj/project.pbxproj (uncommitted).
+last-upload.md now records build $BUILD_NUM.
 EOF
