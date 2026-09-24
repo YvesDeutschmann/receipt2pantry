@@ -39,9 +39,18 @@ function getInitialBaseURL() {
   return `http://${hostname}:5000/api`
 }
 
+export function shouldSyncApiBaseFromSupabase() {
+  return import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_SETTINGS === '1'
+}
+
 export async function initApiBaseUrl() {
   if (initPromise) return initPromise
   initPromise = (async () => {
+    if (!shouldSyncApiBaseFromSupabase()) {
+      manualOverride = null
+      syncedValue = null
+      return
+    }
     try {
       const [{ value: m }, { value: s }] = await Promise.all([
         Preferences.get({ key: PREF_MANUAL }),
@@ -65,11 +74,10 @@ export async function initApiBaseUrl() {
   return initPromise
 }
 
-export function shouldSyncApiBaseFromSupabase() {
-  return import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEV_SETTINGS === '1'
-}
-
 export async function refreshSyncedApiBaseUrl() {
+  if (!shouldSyncApiBaseFromSupabase()) {
+    return { ok: true, skipped: true, value: null }
+  }
   try {
     const { data, error } = await supabase
       .from('app_config')
@@ -123,8 +131,10 @@ export async function setApiBaseUrlOverride(url) {
 }
 
 export function getEffectiveApiBaseUrl() {
-  if (manualOverride) return { url: manualOverride, source: 'override' }
-  if (syncedValue) return { url: syncedValue, source: 'supabase' }
+  if (shouldSyncApiBaseFromSupabase()) {
+    if (manualOverride) return { url: manualOverride, source: 'override' }
+    if (syncedValue) return { url: syncedValue, source: 'supabase' }
+  }
   if (import.meta.env.VITE_API_BASE_URL) {
     return { url: import.meta.env.VITE_API_BASE_URL, source: 'build' }
   }
