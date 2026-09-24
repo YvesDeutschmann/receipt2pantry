@@ -2,7 +2,7 @@ import { Capacitor } from '@capacitor/core'
 import { openLegalPage } from '../utils/openLegalPage'
 
 /**
- * Link to a compile-time legal URL. Native: system browser via App.openUrl.
+ * Link to a compile-time legal URL. Native: system browser via InAppBrowser.open.
  */
 export default function LegalLink({ url, children, className = '' }) {
   const isNative = Capacitor.isNativePlatform()

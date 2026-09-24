@@ -22,6 +22,7 @@ def pool_store():
     ps.supabase.get_household_members.return_value = [{"user_id": "u1"}]
     ps.start_generation.return_value = {"generation_id": "gen-1", "already_running": False}
     ps.get_swiped_recipe_ids.return_value = set()
+    ps.get_pool_recipe_slots.return_value = []
     ps.add_suggestions.return_value = 2
     return ps
 
@@ -313,9 +314,11 @@ def test_threshold_walks_from_point_nine_to_point_seven(
     thresholds_seen = []
     real_filter = gen._filter_recipes
 
-    def tracking_filter(recipes, threshold, banned, swiped, run_ids):
+    def tracking_filter(recipes, threshold, banned, swiped, run_ids, blocked_other_slot):
         thresholds_seen.append(threshold)
-        return real_filter(recipes, threshold, banned, swiped, run_ids)
+        return real_filter(
+            recipes, threshold, banned, swiped, run_ids, blocked_other_slot
+        )
 
     gen._filter_recipes = tracking_filter  # type: ignore[method-assign]
 
@@ -354,9 +357,11 @@ def test_threshold_walk_stops_at_first_non_empty_set(
     thresholds_seen = []
     real_filter = gen._filter_recipes
 
-    def tracking_filter(recipes, threshold, banned, swiped, run_ids):
+    def tracking_filter(recipes, threshold, banned, swiped, run_ids, blocked_other_slot):
         thresholds_seen.append(threshold)
-        return real_filter(recipes, threshold, banned, swiped, run_ids)
+        return real_filter(
+            recipes, threshold, banned, swiped, run_ids, blocked_other_slot
+        )
 
     gen._filter_recipes = tracking_filter  # type: ignore[method-assign]
 
@@ -452,7 +457,7 @@ def test_staple_recipe_bypasses_threshold_gate(generator):
             "missedIngredientCount": 99,
         }
     ]
-    out = generator._filter_recipes(recipes, 0.9, set(), set(), set())
+    out = generator._filter_recipes(recipes, 0.9, set(), set(), set(), set())
     assert len(out) == 1
     assert out[0]["match_percentage"] == 1.0
 
@@ -469,7 +474,7 @@ def test_filter_excludes_banned_recipe_ids(generator):
             "missedIngredientCount": 0,
         }
     ]
-    assert generator._filter_recipes(recipes, 0.5, {"10"}, set(), set()) == []
+    assert generator._filter_recipes(recipes, 0.5, {"10"}, set(), set(), set()) == []
 
 
 def test_filter_excludes_swiped_recipe_ids(generator):
@@ -481,7 +486,7 @@ def test_filter_excludes_swiped_recipe_ids(generator):
             "missedIngredientCount": 0,
         }
     ]
-    assert generator._filter_recipes(recipes, 0.5, set(), {"20"}, set()) == []
+    assert generator._filter_recipes(recipes, 0.5, set(), {"20"}, set(), set()) == []
 
 
 def test_filter_excludes_recipes_already_added_in_run(generator):
@@ -493,7 +498,7 @@ def test_filter_excludes_recipes_already_added_in_run(generator):
             "missedIngredientCount": 0,
         }
     ]
-    assert generator._filter_recipes(recipes, 0.5, set(), set(), {"30"}) == []
+    assert generator._filter_recipes(recipes, 0.5, set(), set(), {"30"}, set()) == []
 
 
 # --- Group E — depletion between steps ---------------------------------------
@@ -696,10 +701,11 @@ def test_partial_after_first_success_does_not_clear_pool(
 
     gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
 
+    pool_store.add_suggestions.return_value = 1
     out = gen.generate_pool("hh", "user", "receipt_scan", ["lunch", "dinner"])
     assert out["status"] == "partial"
-    pool_store.clear_unused.assert_not_called()
-    pool_store.add_suggestions.assert_not_called()
+    pool_store.clear_unused.assert_called_once_with("hh", meal_type="lunch")
+    pool_store.add_suggestions.assert_called_once()
 
 
 def test_recipes_for_step_passes_meal_type_to_complex_search(
@@ -777,16 +783,21 @@ def test_clear_unused_scoped_per_requested_meal_type_never_unfiltered(
 ):
     _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
     gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
-    recipe_service.search_recipes_complex.return_value = [
-        {
-            "id": 902,
-            "title": "Ok",
-            "usedIngredientCount": 2,
-            "missedIngredientCount": 0,
-            "extendedIngredients": [{"name": "pasta", "amount": 0.1, "unit": "lb"}],
-        }
-    ]
-    pool_store.add_suggestions.return_value = 2
+
+    def search_by_meal(hid, uid, av, meal_type, number=5):
+        rid = 902 if meal_type == "breakfast" else 903
+        return [
+            {
+                "id": rid,
+                "title": "Ok",
+                "usedIngredientCount": 2,
+                "missedIngredientCount": 0,
+                "extendedIngredients": [{"name": "pasta", "amount": 0.1, "unit": "lb"}],
+            }
+        ]
+
+    recipe_service.search_recipes_complex.side_effect = search_by_meal
+    pool_store.add_suggestions.return_value = 1
 
     gen.generate_pool("hh", "user", "manual_refresh", ["breakfast", "dinner"])
 
@@ -846,8 +857,116 @@ def test_recipe_quota_during_depletion_marks_partial_not_failed(
     )
     gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
 
+    pool_store.add_suggestions.return_value = 1
     out = gen.generate_pool("hh", "user", "manual_refresh", ["dinner", "lunch"])
     assert out["status"] == "partial"
     assert "rate limit" in (out.get("error") or "").lower()
+    pool_store.clear_unused.assert_called_once_with("hh", meal_type="dinner")
+    pool_store.add_suggestions.assert_called_once()
+
+
+def test_completed_zero_candidates_does_not_clear_or_insert(
+    pool_store, depletion, recipe_service, meal_plan_service
+):
+    depletion.snapshot_pantry.return_value = {}
+    depletion.available_ingredient_names.return_value = []
+    meal_plan_service.suggest_staple_meals = AsyncMock(return_value=[])
+    recipe_service.search_recipes_complex.return_value = []
+    gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
+
+    out = gen.generate_pool("hh", "user", "onboarding", ["breakfast"])
+
+    assert out["status"] == "completed"
+    assert out["suggestions_generated"] == 0
     pool_store.clear_unused.assert_not_called()
     pool_store.add_suggestions.assert_not_called()
+
+
+def test_same_recipe_id_on_second_meal_type_does_not_clear_that_slot(
+    pool_store, depletion, recipe_service, meal_plan_service
+):
+    _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
+    gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
+    recipe_service.search_recipes_complex.return_value = [
+        {
+            "id": 902,
+            "title": "Ok",
+            "usedIngredientCount": 2,
+            "missedIngredientCount": 0,
+            "extendedIngredients": [{"name": "pasta", "amount": 0.1, "unit": "lb"}],
+        }
+    ]
+    pool_store.add_suggestions.return_value = 1
+    meal_plan_service.suggest_staple_meals = AsyncMock(return_value=[])
+    slot_calls = {"n": 0}
+
+    def get_slots(_hh):
+        slot_calls["n"] += 1
+        if slot_calls["n"] <= 1:
+            return []
+        return [{"recipe_id": "902", "meal_type": "breakfast", "status": "unused"}]
+
+    pool_store.get_pool_recipe_slots.side_effect = get_slots
+
+    gen.generate_pool("hh", "user", "manual_refresh", ["breakfast", "dinner"])
+
+    pool_store.clear_unused.assert_called_once_with("hh", meal_type="breakfast")
+
+
+def test_write_back_includes_same_slot_id_and_new_id(
+    pool_store, depletion, recipe_service, meal_plan_service
+):
+    _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
+    gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
+    recipe_service.search_recipes_complex.return_value = [
+        {
+            "id": 100,
+            "title": "Existing",
+            "usedIngredientCount": 2,
+            "missedIngredientCount": 0,
+            "extendedIngredients": [{"name": "pasta", "amount": 0.1, "unit": "lb"}],
+        },
+        {
+            "id": 101,
+            "title": "New",
+            "usedIngredientCount": 2,
+            "missedIngredientCount": 0,
+            "extendedIngredients": [{"name": "rice", "amount": 0.1, "unit": "cup"}],
+        },
+    ]
+    pool_store.get_pool_recipe_slots.return_value = [
+        {"recipe_id": "100", "meal_type": "breakfast", "status": "unused"},
+    ]
+    pool_store.add_suggestions.return_value = 2
+
+    gen.generate_pool("hh", "user", "manual_refresh", ["breakfast"])
+
+    pool_store.clear_unused.assert_called_once_with("hh", meal_type="breakfast")
+    write_back = pool_store.add_suggestions.call_args[0][3]
+    ids = {str(r["recipe_id"]) for r in write_back}
+    assert ids == {"100", "101"}
+
+
+def test_filter_excludes_recipe_ids_on_other_meal_slots(generator):
+    recipes = [
+        {
+            "id": "40",
+            "title": "Other slot",
+            "usedIngredientCount": 1,
+            "missedIngredientCount": 0,
+        }
+    ]
+    assert generator._filter_recipes(recipes, 0.5, set(), set(), set(), {"40"}) == []
+
+
+def test_pool_slot_lookup_failure_marks_failed_without_clear(
+    pool_store, depletion, recipe_service, meal_plan_service
+):
+    _wire_depletion_snapshot(depletion, _dense_pantry_snapshot())
+    pool_store.get_pool_recipe_slots.side_effect = RuntimeError("db down")
+    gen = _generator_with_bans_mock(pool_store, depletion, recipe_service, meal_plan_service)
+
+    out = gen.generate_pool("hh", "user", "manual_refresh", ["dinner"])
+
+    assert out["status"] == "failed"
+    pool_store.clear_unused.assert_not_called()

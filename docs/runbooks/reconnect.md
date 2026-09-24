@@ -159,4 +159,4 @@ UPDATE grocery_accounts SET connection_status = 'needs_reconnect' ...
 - [ ] Support can follow resolution steps without referencing `connection_status`
 - [ ] Nav paths match app: Dinner `/recipes` Needs attention, Settings → Connected Stores → Manage → `/providers`
 - [ ] Forced-reconnect **primary** path documented for Area 5 device QA
-- [ ] Forced-reconnect smoke on **physical iOS + Android** signed off in Area 5 (not owned by this runbook alone)
+- [x] Forced-reconnect smoke on **physical iOS + Android** signed off in Area 5 — [`area-5-dual-platform-sign-off.md`](area-5-dual-platform-sign-off.md) (Sep 2026)

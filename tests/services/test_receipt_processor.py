@@ -774,3 +774,130 @@ class TestGroupG_ParityRegression:
         assert len(result["normalized_items"]) == 1
         assert result["normalized_items"][0]["normalized"] == named_normalized
 
+    @pytest.mark.asyncio
+    async def test_process_receipt_skips_non_grocery_lines_before_normalize(
+        self,
+        mock_supabase,
+        mock_normalization_service,
+        mock_pantry_service,
+        sample_household,
+        sample_normalized_product,
+        test_receipt_id,
+        test_user_id,
+    ):
+        items = [
+            {
+                "id": "1",
+                "raw_name": "UNLEADED GASOLINE",
+                "name": "UNLEADED GASOLINE",
+                "category": "Fuel",
+                "quantity": 111.28,
+            },
+            {
+                "id": "2",
+                "raw_name": "BAG FEE",
+                "name": "BAG FEE",
+                "category": "Grocery",
+                "quantity": 1,
+            },
+            {
+                "id": "3",
+                "raw_name": "COLGATE TP",
+                "name": "COLGATE TP",
+                "category": "Grocery",
+                "quantity": 1,
+            },
+            {
+                "id": "4",
+                "raw_name": "Lucerne Whole Milk 1 Gallon",
+                "name": "Lucerne Whole Milk 1 Gallon",
+                "category": "REFRIG/FROZEN",
+                "quantity": 1,
+            },
+        ]
+        milk_normalized = {**sample_normalized_product, "base_ingredient": "milk", "normalized_name": "milk"}
+        mock_supabase.get_user_household.return_value = sample_household
+        mock_supabase.get_receipt.return_value = {}
+        mock_supabase.get_receipt_items.return_value = items
+        mock_normalization_service.normalize_products_batch.return_value = [milk_normalized]
+        mock_pantry_service.add_to_pantry = AsyncMock(return_value="pantry-1")
+
+        processor = ReceiptProcessor(
+            mock_supabase, mock_normalization_service, mock_pantry_service
+        )
+        result = await processor.process_receipt(test_receipt_id, test_user_id)
+
+        assert result["items_skipped_non_grocery"] == 3
+        assert result["items_added_to_pantry"] == 1
+        mock_normalization_service.normalize_products_batch.assert_called_once()
+        batch_arg = mock_normalization_service.normalize_products_batch.call_args[0][0]
+        assert len(batch_arg) == 1
+        assert batch_arg[0]["raw_name"] == "Lucerne Whole Milk 1 Gallon"
+        assert mock_pantry_service.add_to_pantry.call_count == 1
+
+    @pytest.mark.asyncio
+    async def test_process_receipt_skips_normalized_household_category(
+        self,
+        mock_supabase,
+        mock_normalization_service,
+        mock_pantry_service,
+        sample_household,
+        test_receipt_id,
+        test_user_id,
+    ):
+        item = {
+            "id": "1",
+            "raw_name": "STORE BRAND ITEM 123",
+            "name": "STORE BRAND ITEM 123",
+            "category": "Grocery",
+            "quantity": 1,
+        }
+        household_normalized = {
+            "base_ingredient": "detergent",
+            "normalized_name": "detergent",
+            "category": "household",
+        }
+        mock_supabase.get_user_household.return_value = sample_household
+        mock_supabase.get_receipt.return_value = {}
+        mock_supabase.get_receipt_items.return_value = [item]
+        mock_normalization_service.normalize_products_batch.return_value = [household_normalized]
+        mock_pantry_service.add_to_pantry = AsyncMock(return_value="pantry-1")
+
+        processor = ReceiptProcessor(
+            mock_supabase, mock_normalization_service, mock_pantry_service
+        )
+        result = await processor.process_receipt(test_receipt_id, test_user_id)
+
+        assert result["items_skipped_non_grocery"] == 1
+        assert result["items_added_to_pantry"] == 0
+        mock_pantry_service.add_to_pantry.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_process_receipt_all_grocery_unchanged(
+        self,
+        mock_supabase,
+        mock_normalization_service,
+        mock_pantry_service,
+        sample_household,
+        sample_receipt_items,
+        sample_normalized_product,
+        test_receipt_id,
+        test_user_id,
+    ):
+        mock_supabase.get_user_household.return_value = sample_household
+        mock_supabase.get_receipt.return_value = {}
+        mock_supabase.get_receipt_items.return_value = sample_receipt_items
+        mock_normalization_service.normalize_products_batch.return_value = [
+            sample_normalized_product,
+            sample_normalized_product,
+        ]
+        mock_pantry_service.add_to_pantry = AsyncMock(return_value="pantry-1")
+
+        processor = ReceiptProcessor(
+            mock_supabase, mock_normalization_service, mock_pantry_service
+        )
+        result = await processor.process_receipt(test_receipt_id, test_user_id)
+
+        assert result.get("items_skipped_non_grocery", 0) == 0
+        assert result["items_added_to_pantry"] == 2
+

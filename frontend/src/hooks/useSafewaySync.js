@@ -346,6 +346,8 @@ export function useSafewaySync(userId) {
         setError(SAFEWAY_RECONNECT_MESSAGE);
         setStatus(STATUS.ERROR);
         window.dispatchEvent(new CustomEvent('safeway-sync-needs-reconnect'));
+        // TODO(area-5): log needs_reconnect like useAppSyncScheduler.dispatchOutcomeEvent
+        // (reportAnomaly + SyncPhase.NEEDS_RECONNECT) so manual Silent Sync matches auto-sync telemetry.
         return;
       }
 
@@ -385,6 +387,7 @@ export function useSafewaySync(userId) {
           setError(SAFEWAY_RECONNECT_MESSAGE);
           setStatus(STATUS.ERROR);
           window.dispatchEvent(new CustomEvent('safeway-sync-needs-reconnect'));
+          // TODO(area-5): reportAnomaly(..., NEEDS_RECONNECT) on silent fetch-auth expired (see above).
           return;
         }
         const fetchMsg = fetchErr?.message || String(fetchErr);

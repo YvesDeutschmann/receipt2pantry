@@ -61,12 +61,18 @@ class PoolGenerator:
         banned: Set[str],
         swiped: Set[str],
         run_ids: Set[str],
+        blocked_other_slot: Set[str],
     ) -> List[Dict]:
         out = []
         for recipe in recipes:
             rid = str(recipe.get("id", ""))
             is_staple = recipe.get("is_staple", False) or rid.startswith("staple_")
-            if rid in banned or rid in swiped or rid in run_ids:
+            if (
+                rid in banned
+                or rid in swiped
+                or rid in run_ids
+                or rid in blocked_other_slot
+            ):
                 continue
             if is_staple:
                 recipe = dict(recipe)
@@ -95,6 +101,7 @@ class PoolGenerator:
         banned: Set[str],
         swiped: Set[str],
         run_ids: Set[str],
+        blocked_other_slot: Set[str],
     ) -> List[Dict]:
         av = self.depletion.available_ingredient_names(simulated)
         candidates: List[Dict] = []
@@ -114,7 +121,9 @@ class PoolGenerator:
             staples = loop.run_until_complete(
                 self.meal_plan_service.suggest_staple_meals(simulated, meal_type)
             )
-            candidates = self._filter_recipes(staples, 0.0, banned, swiped, run_ids)
+            candidates = self._filter_recipes(
+                staples, 0.0, banned, swiped, run_ids, blocked_other_slot
+            )
         elif not av:
             return []
         else:
@@ -132,7 +141,9 @@ class PoolGenerator:
 
             threshold = 0.9
             while threshold >= 0.7:
-                candidates = self._filter_recipes(raw, threshold, banned, swiped, run_ids)
+                candidates = self._filter_recipes(
+                    raw, threshold, banned, swiped, run_ids, blocked_other_slot
+                )
                 if candidates:
                     break
                 threshold -= 0.1
@@ -147,9 +158,60 @@ class PoolGenerator:
                 candidates = loop.run_until_complete(
                     self.meal_plan_service.suggest_staple_meals(simulated, meal_type)
                 )
-                candidates = self._filter_recipes(candidates, 0.0, banned, swiped, run_ids)
+                candidates = self._filter_recipes(
+                    candidates, 0.0, banned, swiped, run_ids, blocked_other_slot
+                )
 
         return candidates[:5]
+
+    def _other_slot_recipe_ids(
+        self, pool_slots: List[Dict[str, Any]], meal_type: str
+    ) -> Set[str]:
+        return {
+            str(r["recipe_id"])
+            for r in pool_slots
+            if r.get("meal_type") != meal_type and r.get("recipe_id")
+        }
+
+    def _persist_write_back(
+        self,
+        household_id: str,
+        user_id: str,
+        gen_id: str,
+        meal_types: List[str],
+        accumulated_rows: List[Dict[str, Any]],
+    ) -> int:
+        """Replace per meal type only when write-back rows would insert after clear."""
+        by_type: Dict[str, List[Dict[str, Any]]] = {}
+        for row in accumulated_rows:
+            mt = row.get("meal_type")
+            if mt:
+                by_type.setdefault(mt, []).append(row)
+
+        total_inserted = 0
+        for meal_type in meal_types:
+            rows_for_type = by_type.get(meal_type, [])
+            if not rows_for_type:
+                continue
+
+            pool_slots = self.pool_store.get_pool_recipe_slots(household_id)
+            swiped = self.pool_store.get_swiped_recipe_ids(household_id)
+            other_slot = self._other_slot_recipe_ids(pool_slots, meal_type)
+
+            write_back = [
+                r
+                for r in rows_for_type
+                if str(r.get("recipe_id", "")) not in swiped
+                and str(r.get("recipe_id", "")) not in other_slot
+            ]
+            if not write_back:
+                continue
+
+            self.pool_store.clear_unused(household_id, meal_type=meal_type)
+            total_inserted += self.pool_store.add_suggestions(
+                household_id, user_id, gen_id, write_back
+            )
+        return total_inserted
 
     def generate_pool(
         self,
@@ -178,8 +240,6 @@ class PoolGenerator:
             swiped = self.pool_store.get_swiped_recipe_ids(household_id)
             banned = self._load_banned_ids(user_id)
             simulated = self.depletion.snapshot_pantry(user_id, household_id)
-            # Do not clear_unused until generation completes successfully — preserves
-            # existing pool on partial/failed runs (SUG-015/016).
 
             run_ids: Set[str] = set()
 
@@ -187,6 +247,8 @@ class PoolGenerator:
             for meal_type in meal_types:
                 if stop_meal_types:
                     break
+                pool_slots = self.pool_store.get_pool_recipe_slots(household_id)
+                blocked_other_slot = self._other_slot_recipe_ids(pool_slots, meal_type)
                 try:
                     candidates = self._recipes_for_step(
                         simulated,
@@ -196,6 +258,7 @@ class PoolGenerator:
                         banned,
                         swiped,
                         run_ids,
+                        blocked_other_slot,
                     )
                 except (AIServiceException, RecipeQuotaException) as e:
                     err_msg = str(e)
@@ -238,7 +301,9 @@ class PoolGenerator:
                         ex = inline_ex
                     else:
                         details = self.recipe_service.get_recipe_details(
-                            int(top["id"])
+                            int(top["id"]),
+                            user_id=user_id,
+                            caller="pool_generate",
                         )
                         members = self.supabase.get_household_members(household_id)
                         member_count = len(members) if members else 1
@@ -256,14 +321,21 @@ class PoolGenerator:
                     final_status = "partial"
                     stop_meal_types = True
                     break
+                except AIServiceException as e:
+                    err_msg = str(e)
+                    final_status = "partial"
+                    stop_meal_types = True
+                    break
                 except Exception as e:
                     logger.warning(f"Depletion step skipped for recipe {top_id}: {e}")
 
-            if final_status == "completed":
-                for meal_type in meal_types:
-                    self.pool_store.clear_unused(household_id, meal_type=meal_type)
-                total_inserted = self.pool_store.add_suggestions(
-                    household_id, user_id, gen_id, accumulated_rows
+            if final_status in ("completed", "partial"):
+                total_inserted = self._persist_write_back(
+                    household_id,
+                    user_id,
+                    gen_id,
+                    meal_types,
+                    accumulated_rows,
                 )
 
         except Exception as e:

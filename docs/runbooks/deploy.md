@@ -21,6 +21,7 @@ Deploy the Meald Flask backend to Fly.io at **`https://api.meald.app`**.
 | `SENTRY_ENVIRONMENT` | `production` | |
 | `FEATURE_MEAL_PLANNER` | `0` | Meal planner deferred from MVP |
 | `SPOONACULAR_CALL_BUDGET` | `30` | Per-worker; 2 workers ≈ 60/hour effective (tester-sized) |
+| `SPOONACULAR_USER_DAILY_POINT_CAP` | `150` | Per-user UTC day; `0` disables cap but keeps ledger |
 
 ### Set via `fly secrets set` (secret)
 

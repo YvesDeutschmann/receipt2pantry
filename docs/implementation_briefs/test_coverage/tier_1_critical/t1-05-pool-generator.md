@@ -18,7 +18,7 @@
 ## 2. Logic Guardrails
 
 - **Mutex honored:** if `pool_store.start_generation` returns `already_running=True`, `generate_pool` must short-circuit with `status="already_running"` and **not** clear the pool.
-- **No clear-on-failure:** `clear_unused` must fire ONLY when `final_status == "completed"` (SUG-015/016).
+- **No clear without write-back:** `clear_unused` runs only for a meal type whose post-clear `write_back` set is non-empty (ids not swiped and not owned by another meal slot). Applies on `completed` and `partial`; never on `failed`. Empty candidate / zero-insert runs must not clear (SUG-015/016, 0004 lock 1).
 - **Threshold walk:** match threshold starts at 0.9 and steps down to 0.7 (inclusive) in 0.1 increments. Stops at first non-empty candidate set.
 - **Staple fallback rules:**
   - Triggered when `len(available_ingredients) < INGREDIENT_SPARSE_THRESHOLD` AND meal is breakfast/lunch.
@@ -80,5 +80,5 @@ Expand `tests/services/test_pool_generator.py`.
 - All 5 test groups present with ≥ 15 test cases total.
 - Tests patch `_agent_dbg` so no debug file is written during CI.
 - Tests do NOT use real `asyncio.get_event_loop()` — inject mock `meal_plan_service` whose `suggest_staple_meals` returns a ready list.
-- SUG-015/016 (no clear-on-partial) is locked in by tests 6 and 7.
+- SUG-015/016 (no clear without insertable write-back; partial still persists earlier meal types) is locked in by the partial/quota and zero-candidate tests.
 - Depends on T1-04 (depletion engine) being correct — if T1-04 tests still fail, this brief is blocked.

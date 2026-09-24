@@ -53,6 +53,52 @@ GlitchTip supports JS source maps. Native dSYM/ProGuard symbolication is **not**
 - GlitchTip Cloud: plan retention (free tier event cap 1k/mo). Self-host default: `GLITCHTIP_MAX_EVENT_LIFE_DAYS=90`.
 - Funnel telemetry: `funnel_events` table — delete rows by `user_id` on account deletion request (service role).
 - Provider sync lifecycle: `sync_events` table — delete rows by `user_id` on account deletion request (service role).
+- Spoonacular usage: `spoonacular_usage` rows cascade when `auth.users` is deleted (account deletion flow).
+
+### Spoonacular usage by user (operator)
+
+Service-role SQL editor only (`spoonacular_usage` is not exposed to the mobile client):
+
+```sql
+SELECT user_id, caller, SUM(points) AS points, COUNT(*) AS requests
+FROM spoonacular_usage
+WHERE created_at >= (date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')
+GROUP BY 1, 2
+ORDER BY points DESC;
+```
+
+Use a separate Spoonacular API key for local dev so laptop traffic does not share the production Cook daily pool.
+
+### OpenAI / Gemini usage (operator)
+
+Service-role SQL editor only (`ai_processing_log` is not exposed to the mobile client). Rows are written by the API ledger (`AI_USER_DAILY_USD_CAP` = 0 logs best-effort; cap &gt; 0 reserves before each call).
+
+Spend by user today (UTC):
+
+```sql
+SELECT user_id, operation, provider, SUM(estimated_cost) AS usd, COUNT(*) AS requests
+FROM ai_processing_log
+WHERE created_at >= (date_trunc('day', now() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')
+GROUP BY 1, 2, 3
+ORDER BY usd DESC NULLS LAST;
+```
+
+Spend for one receipt import:
+
+```sql
+SELECT id, operation, model, estimated_cost, success, request_id, created_at
+FROM ai_processing_log
+WHERE receipt_id = '<receipt-uuid>'
+ORDER BY created_at;
+```
+
+Combined vendor view (LLM USD + Spoonacular points):
+
+```sql
+SELECT * FROM vendor_usage_daily
+WHERE day_utc = (now() AT TIME ZONE 'UTC')::date
+ORDER BY estimated_usd DESC NULLS LAST, points DESC NULLS LAST;
+```
 - No email, receipt contents, or tokens are intentionally stored in monitoring payloads (`send_default_pii=False`, scrubbers on both sides).
 
 ## DSN rotation

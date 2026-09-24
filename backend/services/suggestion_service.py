@@ -24,6 +24,10 @@ from backend.services.confidence_engine import (
 )
 from backend.services.pantry_service import PantryService
 from backend.services.recipe_service import RecipeService
+from backend.services.spoonacular_ledger import (
+    is_ledger_unavailable_error,
+    is_user_cap_error,
+)
 from backend.services.supabase_service import SupabaseService
 from backend.utils.exceptions import AIServiceException, RecipeQuotaException, ValidationException
 from backend.utils.logger import get_logger
@@ -557,6 +561,7 @@ class SuggestionService:
             user_id,
             available_ingredients=ingredient_names,
             number=CANDIDATE_NUMBER,
+            caller="suggestion_search",
             ranking=1,
             ignore_pantry=True,
             cache_ttl_seconds=SUGGESTION_CACHE_TTL_SECONDS,
@@ -819,8 +824,12 @@ class SuggestionService:
             if rid is None:
                 continue
             try:
-                details = self.recipe_service.get_recipe_details(int(rid))
-            except AIServiceException:
+                details = self.recipe_service.get_recipe_details(
+                    int(rid), user_id=user_id, caller="suggestion_score"
+                )
+            except AIServiceException as e:
+                if is_user_cap_error(str(e)) or is_ledger_unavailable_error(str(e)):
+                    raise
                 break
             except Exception as e:
                 logger.warning("Skipping recipe %s: %s", rid, e)
@@ -1105,7 +1114,9 @@ class SuggestionService:
             household_id = self._get_household_id(user_id)
         if not self.recipe_service:
             return
-        details = self.recipe_service.get_recipe_details(recipe_id)
+        details = self.recipe_service.get_recipe_details(
+            recipe_id, user_id=user_id, caller="dismiss"
+        )
         self._increment_dismiss_signals_for_ingredients(
             user_id,
             household_id,

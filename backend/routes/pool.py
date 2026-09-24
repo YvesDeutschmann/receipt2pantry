@@ -4,7 +4,16 @@ from typing import Optional
 
 from flask import Blueprint, current_app, jsonify, request
 
-from backend.routes.recipes import RECIPE_BUDGET_MESSAGE, RECIPE_QUOTA_MESSAGE
+from backend.routes.recipes import (
+    RECIPE_BUDGET_MESSAGE,
+    RECIPE_LEDGER_UNAVAILABLE_MESSAGE,
+    RECIPE_QUOTA_MESSAGE,
+    RECIPE_USER_CAP_MESSAGE,
+)
+from backend.services.spoonacular_ledger import (
+    SPOONACULAR_LEDGER_UNAVAILABLE_MSG,
+    SPOONACULAR_USER_CAP_MSG,
+)
 from backend.services.pool_generator import meal_types_from_slots
 from backend.utils.auth import get_user_id_from_request
 from backend.utils.exceptions import DatabaseException, RecipeQuotaException, ValidationException
@@ -29,6 +38,14 @@ def _is_vendor_quota_error(error: Optional[str]) -> bool:
     if not error:
         return False
     return any(marker in error for marker in _VENDOR_QUOTA_ERROR_MARKERS)
+
+
+def _is_user_cap_error(error: Optional[str]) -> bool:
+    return bool(error and SPOONACULAR_USER_CAP_MSG in error)
+
+
+def _is_ledger_unavailable_error(error: Optional[str]) -> bool:
+    return bool(error and SPOONACULAR_LEDGER_UNAVAILABLE_MSG in error)
 
 
 def _get_pool_store():
@@ -188,6 +205,12 @@ def generate_pool():
             suggestions_generated = 0
         error = result.get("error")
         if status in ("partial", "failed") and suggestions_generated == 0:
+            if _is_ledger_unavailable_error(error):
+                return jsonify({"error": RECIPE_LEDGER_UNAVAILABLE_MESSAGE}), 503
+            if _is_user_cap_error(error):
+                return jsonify(
+                    {"error": RECIPE_USER_CAP_MESSAGE, "code": "recipe_user_cap"}
+                ), 429
             if _is_budget_error(error):
                 return jsonify(
                     {"error": RECIPE_BUDGET_MESSAGE, "code": "recipe_budget"}
