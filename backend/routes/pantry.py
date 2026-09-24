@@ -444,19 +444,25 @@ def voice_transcribe():
     if mime not in _VOICE_AUDIO_TYPES:
         mime = _voice_guess_mime(safe_name)
 
-    try:
-        transcript = ai.transcribe_audio(raw_bytes, mime, safe_name)
-    except AIRateLimitException as e:
-        logger.warning(f"Voice transcribe rate limited: {e}")
-        return jsonify({"error": "transcription_failed", "message": str(e)}), 429
-    except AIServiceException as e:
-        logger.warning(f"Voice transcribe failed: {e}")
-        return jsonify({"error": "transcription_failed", "message": str(e)}), 422
-    except Exception as e:
-        logger.error(f"Voice transcribe unexpected: {e}")
-        return jsonify({"error": "transcription_failed", "message": str(e)}), 422
+    from backend.services.ai_usage_ledger import AI_USER_CAP_MSG, AI_LEDGER_UNAVAILABLE_MSG
+    from backend.utils.ai_call_context import merge_ai_call_context, reset_ai_call_context
 
+    ctx_token, _ = merge_ai_call_context(user_id=user_id)
     try:
+        try:
+            transcript = ai.transcribe_audio(raw_bytes, mime, safe_name)
+        except AIRateLimitException as e:
+            logger.warning(f"Voice transcribe rate limited: {e}")
+            return jsonify({"error": "transcription_failed", "message": str(e)}), 429
+        except AIServiceException as e:
+            if str(e) in (AI_USER_CAP_MSG, AI_LEDGER_UNAVAILABLE_MSG):
+                return jsonify({"error": "ai_usage_limited", "message": str(e)}), 429
+            logger.warning(f"Voice transcribe failed: {e}")
+            return jsonify({"error": "transcription_failed", "message": str(e)}), 422
+        except Exception as e:
+            logger.error(f"Voice transcribe unexpected: {e}")
+            return jsonify({"error": "transcription_failed", "message": str(e)}), 422
+
         canon = supabase.list_active_canonical_ingredients_compact()
         by_display: Dict[str, Dict[str, Any]] = {}
         by_base: Dict[str, Dict[str, Any]] = {}
@@ -511,11 +517,15 @@ def voice_transcribe():
             }
         ), 200
     except AIServiceException as e:
+        if str(e) in (AI_USER_CAP_MSG, AI_LEDGER_UNAVAILABLE_MSG):
+            return jsonify({"error": "ai_usage_limited", "message": str(e)}), 429
         logger.warning(f"Voice extraction failed: {e}")
         return jsonify({"error": "extraction_failed", "message": str(e)}), 422
     except Exception as e:
         logger.error(f"Voice pipeline error: {e}")
         return jsonify({"error": str(e)}), 500
+    finally:
+        reset_ai_call_context(ctx_token)
 
 
 @pantry_bp.route("/pantry/voice-confirm", methods=["POST"])

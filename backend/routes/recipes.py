@@ -11,8 +11,27 @@ from backend.utils.exceptions import (
 
 RECIPE_QUOTA_MESSAGE = "Daily recipe quota reached, try again later."
 RECIPE_BUDGET_MESSAGE = "Recipe lookup limit reached for now. Try again in a bit."
+RECIPE_USER_CAP_MESSAGE = (
+    "You've used your recipe lookups for today. Try again tomorrow."
+)
+RECIPE_LEDGER_UNAVAILABLE_MESSAGE = "Recipe service temporarily unavailable."
 
 logger = get_logger(__name__)
+
+
+def _recipe_ai_service_response(e: AIServiceException):
+    from backend.services.spoonacular_ledger import (
+        is_ledger_unavailable_error,
+        is_user_cap_error,
+    )
+
+    msg = str(e)
+    if is_user_cap_error(msg):
+        return jsonify({"error": RECIPE_USER_CAP_MESSAGE, "code": "recipe_user_cap"}), 429
+    if is_ledger_unavailable_error(msg):
+        return jsonify({"error": RECIPE_LEDGER_UNAVAILABLE_MESSAGE}), 503
+    logger.error(f"API service error: {e}")
+    return jsonify({"error": str(e)}), 500
 
 recipes_bp = Blueprint("recipes", __name__)
 
@@ -58,8 +77,7 @@ def get_recipes():
         logger.error(f"Recipe quota exceeded getting recipes: {e}")
         return jsonify({"error": RECIPE_QUOTA_MESSAGE, "code": "recipe_quota"}), 429
     except AIServiceException as e:
-        logger.error(f"API service error getting recipes: {e}")
-        return jsonify({"error": str(e)}), 500
+        return _recipe_ai_service_response(e)
     except Exception as e:
         logger.error(f"Error getting recipes: {e}")
         return jsonify({"error": str(e)}), 500
@@ -85,7 +103,9 @@ def get_recipe_details(recipe_id):
         return jsonify({"error": "Recipe service not available"}), 503
     
     try:
-        recipe = service.get_recipe_details(recipe_id)
+        recipe = service.get_recipe_details(
+            recipe_id, user_id=user_id, caller="recipe_open"
+        )
         return jsonify(recipe)
     except ValidationException as e:
         logger.error(f"Validation error getting recipe details: {e}")
@@ -94,8 +114,7 @@ def get_recipe_details(recipe_id):
         logger.error(f"Recipe quota exceeded getting recipe details: {e}")
         return jsonify({"error": RECIPE_QUOTA_MESSAGE, "code": "recipe_quota"}), 429
     except AIServiceException as e:
-        logger.error(f"API service error getting recipe details: {e}")
-        return jsonify({"error": str(e)}), 500
+        return _recipe_ai_service_response(e)
     except Exception as e:
         logger.error(f"Error getting recipe details: {e}")
         return jsonify({"error": str(e)}), 500
@@ -127,8 +146,7 @@ def get_suggestions():
         logger.error(f"Recipe quota exceeded getting suggestions: {e}")
         return jsonify({"error": RECIPE_QUOTA_MESSAGE, "code": "recipe_quota"}), 429
     except AIServiceException as e:
-        logger.error(f"API service error getting suggestions: {e}")
-        return jsonify({"error": str(e)}), 500
+        return _recipe_ai_service_response(e)
     except Exception as e:
         logger.error(f"Error getting suggestions: {e}")
         return jsonify({"error": str(e)}), 500
@@ -160,7 +178,7 @@ def dismiss_suggestion():
     except RecipeQuotaException as e:
         return jsonify({"error": RECIPE_QUOTA_MESSAGE, "code": "recipe_quota"}), 429
     except AIServiceException as e:
-        return jsonify({"error": str(e)}), 500
+        return _recipe_ai_service_response(e)
     except Exception as e:
         logger.error(f"Error recording dismiss: {e}")
         return jsonify({"error": str(e)}), 500

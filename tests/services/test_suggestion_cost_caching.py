@@ -56,6 +56,7 @@ def _recipe_config(**overrides):
     cfg.SPOONACULAR_TIMEOUT = 30
     cfg.SPOONACULAR_CALL_BUDGET = overrides.get("budget", 500)
     cfg.SPOONACULAR_CALL_BUDGET_PERIOD_SECONDS = overrides.get("period_s", 3600)
+    cfg.SPOONACULAR_USER_DAILY_POINT_CAP = overrides.get("user_daily_cap", 0)
     return cfg
 
 
@@ -734,7 +735,7 @@ def test_suggestion_details_budget_exhaustion_returns_partial(monkeypatch):
         {"id": 2, "title": "B", "image": "", "missedIngredientCount": 0},
     ]
 
-    def details_side_effect(rid):
+    def details_side_effect(rid, **kwargs):
         if rid == 1:
             return {
                 "id": 1,
@@ -749,6 +750,23 @@ def test_suggestion_details_budget_exhaustion_returns_partial(monkeypatch):
     assert len(out["cook_tonight"]) + len(out["probably_have"]) + len(out["check_first"]) == 1
 
 
+def test_suggestion_details_user_cap_reraises(monkeypatch):
+    _patch_suggestion_compute(monkeypatch)
+    supabase, pantry_service, _ = _suggestion_pantry_setup()
+    recipe_service = MagicMock()
+    recipe_service.get_recipes_by_pantry.return_value = [
+        {"id": 1, "title": "A", "image": "", "missedIngredientCount": 0},
+    ]
+    from backend.services.spoonacular_ledger import SPOONACULAR_USER_CAP_MSG
+
+    recipe_service.get_recipe_details.side_effect = AIServiceException(
+        SPOONACULAR_USER_CAP_MSG
+    )
+    svc = SuggestionService(supabase, pantry_service, recipe_service, MagicMock())
+    with pytest.raises(AIServiceException, match=SPOONACULAR_USER_CAP_MSG):
+        svc.get_recipe_suggestions("user-1", "hh", today=TEST_DATE)
+
+
 def test_suggestion_details_quota_returns_partial(monkeypatch):
     _patch_suggestion_compute(monkeypatch)
     supabase, pantry_service, _ = _suggestion_pantry_setup()
@@ -758,7 +776,7 @@ def test_suggestion_details_quota_returns_partial(monkeypatch):
         {"id": 2, "title": "B", "image": "", "missedIngredientCount": 0},
     ]
 
-    def details_side_effect(rid):
+    def details_side_effect(rid, **kwargs):
         if rid == 1:
             return {
                 "id": 1,
@@ -782,7 +800,7 @@ def test_suggestion_details_generic_exception_skips_continues(monkeypatch):
         {"id": 2, "title": "B", "image": "", "missedIngredientCount": 0},
     ]
 
-    def details_side_effect(rid):
+    def details_side_effect(rid, **kwargs):
         if rid == 1:
             raise ValueError("bad recipe")
         return {

@@ -22,6 +22,7 @@ def _make_config(
     cfg.SPOONACULAR_TIMEOUT = timeout
     cfg.SPOONACULAR_CALL_BUDGET = budget
     cfg.SPOONACULAR_CALL_BUDGET_PERIOD_SECONDS = budget_period_s
+    cfg.SPOONACULAR_USER_DAILY_POINT_CAP = 0
     return cfg
 
 

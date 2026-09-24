@@ -159,6 +159,25 @@ def test_post_generate_returns_429_on_zero_insert_recipe_budget(client_pool, poo
     assert data["error"] == "Recipe lookup limit reached for now. Try again in a bit."
 
 
+def test_post_generate_returns_429_on_zero_insert_recipe_user_cap(
+    client_pool, pool_generator
+):
+    pool_generator.generate_pool.return_value = {
+        "generation_id": "g1",
+        "status": "partial",
+        "suggestions_generated": 0,
+        "error": "Spoonacular user daily point cap exceeded",
+    }
+
+    res = client_pool.post(
+        "/api/suggestions/pool/generate",
+        json={"trigger_reason": "manual_refresh", "household_id": "hh-1"},
+        headers={"X-User-Id": "user-1"},
+    )
+    assert res.status_code == 429
+    assert res.get_json()["code"] == "recipe_user_cap"
+
+
 def test_post_generate_returns_429_on_zero_insert_recipe_quota(client_pool, pool_generator):
     pool_generator.generate_pool.return_value = {
         "generation_id": "g1",
