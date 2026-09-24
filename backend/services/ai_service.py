@@ -345,8 +345,10 @@ Return JSON with this structure:
 2. variant: Important variant that affects cooking (e.g., "unsalted", "whole", "boneless skinless")
 3. normalized_name: Combination like "butter (unsalted)" or just "eggs" if no variant
 4. product_type: Type like "dairy product", "meat product", "produce", "grain product", "condiment", "beverage", "snack", "grocery item"
-5. category: Food category (dairy, meat, produce, pantry, frozen, beverages, bakery, deli, household)
+5. category: Food category (dairy, meat, produce, pantry, frozen, beverages, bakery, deli, household, personal_care, pet, pharmacy, non_food)
 6. tags: Array of relevant tags (organic, fresh, frozen, low-fat, etc.)
+
+Use personal_care, pet, pharmacy, or non_food for items that are not eaten or drunk (toiletries, cleaning, paper goods, pet supplies, medicine). Use household for general non-food merchandise.
 
 Focus on what matters for cooking and pantry management. Ignore brand names."""
 

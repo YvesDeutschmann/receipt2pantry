@@ -6,6 +6,7 @@ from backend.services.normalization_service import NormalizationService
 from backend.services.pantry_service import PantryService, pantry_item_has_display_name
 from backend.utils.exceptions import DatabaseException
 from backend.utils.logger import get_logger
+from backend.utils.non_grocery import is_non_grocery_line, is_non_grocery_normalized
 
 logger = get_logger(__name__)
 
@@ -75,6 +76,7 @@ class ReceiptProcessor:
                     'status': 'no_items',
                     'items_processed': 0,
                     'items_added_to_pantry': 0,
+                    'items_skipped_non_grocery': 0,
                     'errors': [],
                     'ai_used': False
                 }
@@ -84,6 +86,7 @@ class ReceiptProcessor:
             # 2. Prepare items for batch normalization
             products_to_normalize = []
             valid_items = []
+            items_skipped_non_grocery = 0
             
             for item in items:
                 raw_name = item.get('raw_name') or item.get('name')
@@ -91,6 +94,10 @@ class ReceiptProcessor:
                 
                 if not raw_name:
                     logger.warning(f"Skipping item with no name: {item}")
+                    continue
+
+                if is_non_grocery_line(raw_name, category):
+                    items_skipped_non_grocery += 1
                     continue
                 
                 products_to_normalize.append({
@@ -111,6 +118,24 @@ class ReceiptProcessor:
                     f"{len(valid_items)} items — length parity contract violated"
                 )
 
+            if not valid_items:
+                logger.info(
+                    f"Receipt {receipt_id}: all {items_skipped_non_grocery} line(s) "
+                    "skipped as non-grocery"
+                )
+                return {
+                    'receipt_id': receipt_id,
+                    'household_id': household_id,
+                    'status': 'processed',
+                    'total_items': len(items),
+                    'items_processed': 0,
+                    'items_added_to_pantry': 0,
+                    'items_skipped_non_grocery': items_skipped_non_grocery,
+                    'normalized_items': [],
+                    'errors': [],
+                    'ai_used': False,
+                }
+
             # 4. Add normalized items to pantry
             items_processed = 0
             items_added = 0
@@ -126,6 +151,10 @@ class ReceiptProcessor:
                         continue
                     if not pantry_item_has_display_name(normalized):
                         logger.info(f"Skipping nameless normalized item '{raw_name}'")
+                        items_processed += 1
+                        continue
+                    if is_non_grocery_normalized(normalized):
+                        items_skipped_non_grocery += 1
                         items_processed += 1
                         continue
                     normalized_items.append({
@@ -178,6 +207,12 @@ class ReceiptProcessor:
                 if n
             )
             
+            if items_skipped_non_grocery:
+                logger.info(
+                    f"Receipt {receipt_id}: skipped {items_skipped_non_grocery} "
+                    "non-grocery line(s)"
+                )
+
             result = {
                 'receipt_id': receipt_id,
                 'household_id': household_id,
@@ -185,6 +220,7 @@ class ReceiptProcessor:
                 'total_items': len(items),
                 'items_processed': items_processed,
                 'items_added_to_pantry': items_added,
+                'items_skipped_non_grocery': items_skipped_non_grocery,
                 'normalized_items': normalized_items,
                 'errors': errors,
                 'ai_used': ai_used
