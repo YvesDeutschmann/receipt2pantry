@@ -2,9 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent } from '@testing-library/react'
 import { PRIVACY_URL, TERMS_URL } from '../config/legal'
 
-const { isNativePlatformMock, openUrlMock } = vi.hoisted(() => ({
+const { isNativePlatformMock, inAppBrowserOpenMock } = vi.hoisted(() => ({
   isNativePlatformMock: vi.fn(() => false),
-  openUrlMock: vi.fn(() => Promise.resolve({ completed: true })),
+  inAppBrowserOpenMock: vi.fn(() => Promise.resolve()),
 }))
 
 vi.mock('@capacitor/core', () => ({
@@ -13,9 +13,9 @@ vi.mock('@capacitor/core', () => ({
   },
 }))
 
-vi.mock('@capacitor/app', () => ({
-  App: {
-    openUrl: (...args) => openUrlMock(...args),
+vi.mock('@capgo/inappbrowser', () => ({
+  InAppBrowser: {
+    open: (...args) => inAppBrowserOpenMock(...args),
   },
 }))
 
@@ -25,10 +25,11 @@ import { openLegalPage } from '../utils/openLegalPage'
 describe('legal links', () => {
   beforeEach(() => {
     isNativePlatformMock.mockReturnValue(false)
-    openUrlMock.mockClear()
-    openUrlMock.mockResolvedValue({ completed: true })
+    inAppBrowserOpenMock.mockClear()
+    inAppBrowserOpenMock.mockResolvedValue(undefined)
     vi.stubGlobal('open', vi.fn(() => ({})))
     vi.stubGlobal('prompt', vi.fn())
+    vi.spyOn(console, 'warn').mockImplementation(() => {})
   })
 
   it('renders external anchor on web', () => {
@@ -38,16 +39,16 @@ describe('legal links', () => {
     expect(link).toHaveAttribute('target', '_blank')
   })
 
-  it('uses App.openUrl on native', async () => {
+  it('uses InAppBrowser.open on native', async () => {
     isNativePlatformMock.mockReturnValue(true)
     render(<LegalLink url={TERMS_URL}>Terms of Service</LegalLink>)
     fireEvent.click(screen.getByRole('button', { name: 'Terms of Service' }))
-    expect(openUrlMock).toHaveBeenCalledWith({ url: TERMS_URL })
+    expect(inAppBrowserOpenMock).toHaveBeenCalledWith({ url: TERMS_URL })
   })
 
   it('openLegalPage ignores arbitrary URLs', async () => {
     await openLegalPage('https://evil.example/phish')
-    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(inAppBrowserOpenMock).not.toHaveBeenCalled()
     expect(window.prompt).not.toHaveBeenCalled()
   })
 
@@ -55,22 +56,15 @@ describe('legal links', () => {
     window.open.mockReturnValue(null)
     await openLegalPage(PRIVACY_URL)
     expect(window.prompt).toHaveBeenCalledWith('Copy this link:', PRIVACY_URL)
-    expect(openUrlMock).not.toHaveBeenCalled()
+    expect(inAppBrowserOpenMock).not.toHaveBeenCalled()
   })
 
-  it('openLegalPage prompts when App.openUrl rejects on native', async () => {
+  it('openLegalPage does not prompt when InAppBrowser.open rejects on native', async () => {
     isNativePlatformMock.mockReturnValue(true)
-    openUrlMock.mockRejectedValue(new Error('Activity not found'))
+    inAppBrowserOpenMock.mockRejectedValue(new Error('Activity not found'))
     await openLegalPage(TERMS_URL)
-    expect(openUrlMock).toHaveBeenCalledWith({ url: TERMS_URL })
-    expect(window.prompt).toHaveBeenCalledWith('Copy this link:', TERMS_URL)
-  })
-
-  it('openLegalPage prompts when App.openUrl returns completed false on native', async () => {
-    isNativePlatformMock.mockReturnValue(true)
-    openUrlMock.mockResolvedValue({ completed: false })
-    await openLegalPage(PRIVACY_URL)
-    expect(window.prompt).toHaveBeenCalledWith('Copy this link:', PRIVACY_URL)
+    expect(inAppBrowserOpenMock).toHaveBeenCalledWith({ url: TERMS_URL })
+    expect(window.prompt).not.toHaveBeenCalled()
   })
 
   it('constants are pinned to api.meald.app', () => {

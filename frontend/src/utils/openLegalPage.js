@@ -1,4 +1,4 @@
-import { App } from '@capacitor/app'
+import { InAppBrowser } from '@capgo/inappbrowser'
 import { Capacitor } from '@capacitor/core'
 import { PRIVACY_URL, TERMS_URL } from '../config/legal'
 
@@ -24,11 +24,8 @@ export async function openLegalPage(url) {
     return
   }
   try {
-    const result = await App.openUrl({ url })
-    if (result?.completed === false) {
-      promptCopyLink(url)
-    }
-  } catch {
-    promptCopyLink(url)
+    await InAppBrowser.open({ url })
+  } catch (err) {
+    console.warn('[openLegalPage] InAppBrowser.open failed:', err?.message ?? err)
   }
 }
