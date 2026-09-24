@@ -115,6 +115,17 @@ class PoolStoreService:
         )
         return {str(r["recipe_id"]) for r in (res.data or [])}
 
+    def get_pool_recipe_slots(self, household_id: str) -> List[Dict[str, Any]]:
+        """recipe_id, meal_type, status only (no recipe_data)."""
+        client = self._client()
+        res = (
+            client.table("suggestion_pool")
+            .select("recipe_id, meal_type, status")
+            .eq("household_id", household_id)
+            .execute()
+        )
+        return res.data or []
+
     def get_pool(
         self,
         household_id: str,
