@@ -1,8 +1,8 @@
 # Meald — MVP Scope, Coverage Analysis & Roadmap
 
 **Document type:** Product scope + gap analysis
-**Status:** Draft for review — **M6 in progress (NO-GO)**; Areas 1–4 live-verified; signed prod builds done; Area 5 checklist open
-**Last updated:** 2026-07-28
+**Status:** Draft for review — **M6 in progress**; Areas 1–5 product gates live-verified on signed prod builds (Area 5 Sep 2026); third-pass ops open for open beta  
+**Last updated:** 2026-09-24
 **Inputs:** `docs/PRODUCT_BRIEF.md`, current codebase (`backend/`, `frontend/`, `supabase/migrations/`), existing implementation briefs.
 
 ---
@@ -15,7 +15,7 @@ Surfaced during the gap-closure brief authoring (see [`docs/implementation_brief
 2. ~~**`SUPABASE_JWT_SECRET` not validated at startup**~~ **FIXED** — `ProductionConfig.validate()` + set on Fly.
 3. ~~**`MockSecretsService` in production**~~ **FIXED / Area 2 closed (2026-07-25).**
 
-**Still open for friends beta:** Area 5 device QA checklist on signed prod builds; delete-account; spend caps/backups; commit/merge of launch-readiness work. ~~Apple agreements + signed iOS/Android against `api.meald.app`~~ **DONE**. ~~Privacy/terms pages~~ **DONE** (2026-09-13).
+**Still open for friends beta:** delete-account; spend caps/backups; commit/merge of launch-readiness work; optional **5c.9** Logcat/Xcode notes. ~~Area 5 device QA checklist~~ **DONE** (2026-09-24 — [`area-5-dual-platform-sign-off.md`](runbooks/area-5-dual-platform-sign-off.md)). ~~Apple agreements + signed iOS/Android against `api.meald.app`~~ **DONE**. ~~Privacy/terms pages~~ **DONE** (2026-09-13).
 
 ---
 
@@ -235,11 +235,11 @@ Status as of **2026-07-28** (see [`06-launch-readiness-findings.md`](implementat
 | Reconnect support runbook | Done |
 | OAuth-only auth (`VITE_FEATURE_EMAIL_AUTH` off) | Done (working tree) |
 | Apple agreements + signed iOS/Android against `api.meald.app` | Done |
-| Dual-platform Area 5 checklist (cold-start / reconnect) | **Open** |
+| Dual-platform Area 5 checklist (cold-start / reconnect) | **Done** (2026-09-24 — [`area-5-dual-platform-sign-off.md`](runbooks/area-5-dual-platform-sign-off.md)) |
 | Privacy/terms + delete-account + spend caps/backups | **Open** |
 | Commit/merge launch-readiness tree | **Open** |
 
-- **Exit:** TestFlight / Play **internal** friends beta (not open testing) after Area 5 + remaining ops above.
+- **Exit:** TestFlight / Play **internal** friends beta (not open testing) after remaining ops above (Area 5 **done**).
 
 **Indicative total: ~6.5–7.5 weeks of focused work**, dominated by M1 (reliability + on-by-default auto-sync) and the iOS+Android dual-platform QA in M3/M6. No large greenfield builds are on the MVP critical path.
 

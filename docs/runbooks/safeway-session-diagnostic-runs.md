@@ -2,7 +2,7 @@
 
 Status: **closed (2026-09-06).** Bounded four-case matrix passed on a debug Android APK + laptop Flask.
 
-This chapter does **not** substitute for Area 5 on signed builds vs `https://api.meald.app`.
+This chapter does **not** substitute for Area 5 on signed builds vs `https://api.meald.app` (Area 5 **PASS** Sep 2026 — [`area-5-dual-platform-sign-off.md`](area-5-dual-platform-sign-off.md)).
 
 Do **not** reopen [431 cookie fix](../safeway_cookie_431_fix.md), [dedup fix](../safeway_dedup_fix.md), or MFA unless they appear on this APK.
 
@@ -140,7 +140,7 @@ Interactive login clears the smash flag automatically.
 | S-leftover | **PASS** 2026-09-06 `fa349725` |
 | S-cooldown | **PASS** 2026-09-06 `37dfad2e` |
 
-Debug-APK + LAN Flask chapter is **closed**. Next: signed builds for Area 5 vs `api.meald.app`. Redeploy Fly only if the API changed.
+Debug-APK + LAN Flask chapter is **closed**. Area 5 vs `api.meald.app` **PASS** (Sep 2026). Redeploy Fly only if the API changed.
 
 ## Related
 

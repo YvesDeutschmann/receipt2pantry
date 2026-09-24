@@ -17,7 +17,7 @@ causes and hypotheses already ruled out. Do not re-litigate them here.
 | AccessToken on success | **Never present.** Extract uses the IdToken. RefreshToken is present; silent redeem shipped 2026-08-27 (was Bug A). |
 | IdToken lifetime | **~15 minutes**, not ~1 hour. |
 | Run C (Play ×3 vs Fly) | **Closed without running.** A/B already settled interactive login; C would not diagnose silent auto-fetch. |
-| Next chapter | **Silent sync after expiry.** Bug A fix shipped 2026-08-27; resilience shipped 2026-08-29. Device matrix S1–S5 **pass** (S3 2026-08-31). Leftover cleanup re-verified **without** force-stop (**C1** 2026-09-06). Scheduler 6 h cooldown **pass** (**C2** 2026-09-06). Safeway bounded matrix **closed 2026-09-06**. Next: Area 5 on signed builds. |
+| Next chapter | **Silent sync after expiry.** Bug A fix shipped 2026-08-27; resilience shipped 2026-08-29. Device matrix S1–S5 **pass** (S3 2026-08-31). Leftover cleanup re-verified **without** force-stop (**C1** 2026-09-06). Scheduler 6 h cooldown **pass** (**C2** 2026-09-06). Safeway bounded matrix **closed 2026-09-06**. **Area 5 signed prod builds — PASS** Sep 2026 ([`area-5-dual-platform-sign-off.md`](area-5-dual-platform-sign-off.md)). |
 
 ---
 
@@ -660,7 +660,7 @@ Safeway silent sync hit `needs_reconnect` three times on 2026-07-29 (08:57, 09:2
 five `sync_skipped`. Same critical path, different provider.
 
 **Closed 2026-09-06** on debug APK + LAN Flask: [safeway-session-diagnostic-runs.md](safeway-session-diagnostic-runs.md)
-(S-live, S-reconnect, S-leftover, S-cooldown all **PASS**). Do not reopen 431/dedup/MFA unless they appear on this APK. Area 5 vs `api.meald.app` is still open.
+(S-live, S-reconnect, S-leftover, S-cooldown all **PASS**). Do not reopen 431/dedup/MFA unless they appear on this APK. **Area 5 on signed builds vs `api.meald.app` — PASS** ([`area-5-dual-platform-sign-off.md`](area-5-dual-platform-sign-off.md), Sep 2026).
 
 ## Remaining Costco silent items
 
@@ -672,7 +672,7 @@ five `sync_skipped`. Same critical path, different provider.
 | `webview_orphan_closed` telemetry ingest 500 | **Closed 2026-09-06.** Migration `20260831190000` applied to remote; Flask maps CHECK `23514` to HTTP 400 so client isolate+poison works |
 | Silent `sync_events` census / `rt-refresh-*` on the terminal row | **Closed 2026-09-06.** Silent page RT refresh persists as `token_exchange` (`reason=refreshed`, metadata `status`/`source`/`policy`). Join on `sync_id`; Flask `/api/dev/log` is debug-only |
 | Durable ingest queue across process death | **Out of scope** for the resilience ship. Force-kill before ingest still drops the in-memory payload; next silent re-fetches |
-| Launch Area 5 (cold-start / auto-sync / forced-reconnect on prod iOS + Android) | **Still open** in [06-launch-readiness-findings.md](../implementation_briefs/mvp_gaps/06-launch-readiness-findings.md). S1–S5 is debug-APK + LAN Flask, not that sign-off |
+| Launch Area 5 (cold-start / auto-sync / forced-reconnect on prod iOS + Android) | **PASS** 2026-09-24 — [`area-5-dual-platform-sign-off.md`](area-5-dual-platform-sign-off.md) |
 
 ## Exit criteria
 
@@ -693,4 +693,4 @@ Interactive-login token chapter is **closed**. Bug A fix shipped 2026-08-27 (in-
 Resilience shipped 2026-08-29 (transient failures keep tokens). Leftover cleanup re-verified
 2026-09-06. Scheduler cooldown re-verified 2026-09-06. Do not commit an expired-cache wipe.
 Device validation: **S1–S5 + C1 + C2 pass** (debug APK + LAN Flask). Safeway bounded matrix
-**closed 2026-09-06**. Next: Area 5 on signed builds vs `api.meald.app`.
+**closed 2026-09-06**. Area 5 on signed builds vs `api.meald.app` — **PASS** Sep 2026 ([`area-5-dual-platform-sign-off.md`](area-5-dual-platform-sign-off.md)).
