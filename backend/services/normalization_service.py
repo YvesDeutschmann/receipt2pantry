@@ -387,6 +387,13 @@ class NormalizationService:
                 logger.info(f"AI normalized {len(all_ai_results)} products")
                 
             except Exception as e:
+                from backend.services.ai_usage_ledger import (
+                    AI_LEDGER_UNAVAILABLE_MSG,
+                    AI_USER_CAP_MSG,
+                )
+
+                if str(e) in (AI_USER_CAP_MSG, AI_LEDGER_UNAVAILABLE_MSG):
+                    raise
                 logger.error(f"AI batch normalization failed: {e}, falling back to rules")
                 # Fall back to rule-based for failures
                 for idx, product in zip(cache_miss_indices, cache_misses):

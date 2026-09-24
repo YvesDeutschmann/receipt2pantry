@@ -12,6 +12,10 @@ from backend.utils.exceptions import (
     RecipeQuotaException,
     ValidationException,
 )
+from backend.services.spoonacular_ledger import (
+    SpoonacularLedger,
+    estimate_points,
+)
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -34,16 +38,29 @@ def _raise_for_spoonacular_http(e: requests.exceptions.HTTPError, context: str) 
 class RecipeService:
     """Service for fetching recipes from Spoonacular API based on pantry items"""
 
-    def __init__(self, pantry_service: PantryService, config: Config):
+    def __init__(
+        self,
+        pantry_service: PantryService,
+        config: Config,
+        admin_client: Optional[Any] = None,
+    ):
         """
         Initialize RecipeService
 
         Args:
             pantry_service: Pantry service instance
             config: Configuration object with Spoonacular API settings
+            admin_client: Supabase service-role client for usage ledger (optional)
         """
         self.pantry_service = pantry_service
         self.config = config
+        self._ledger: Optional[SpoonacularLedger] = None
+        if admin_client is not None:
+            self._ledger = SpoonacularLedger(
+                admin_client, config.SPOONACULAR_USER_DAILY_POINT_CAP
+            )
+        elif config.SPOONACULAR_USER_DAILY_POINT_CAP > 0:
+            self._ledger = SpoonacularLedger(None, config.SPOONACULAR_USER_DAILY_POINT_CAP)
         self.api_key = config.SPOONACULAR_API_KEY
         self.base_url = config.SPOONACULAR_BASE_URL
         self.timeout = config.SPOONACULAR_TIMEOUT
@@ -85,6 +102,39 @@ class RecipeService:
             "over_budget": self._period_call_count > self._call_budget,
         }
         logger.info(json.dumps(payload))
+
+    def _begin_external_call(
+        self,
+        user_id: Optional[str],
+        caller: str,
+        endpoint: str,
+        number: int = 1,
+    ) -> tuple[Optional[str], float]:
+        estimate = estimate_points(endpoint, number)
+        if not self._ledger:
+            return None, estimate
+        reservation_id = self._ledger.reserve_before_call(
+            user_id, caller, endpoint, estimate
+        )
+        return reservation_id, estimate
+
+    def _finish_external_call(
+        self,
+        reservation_id: Optional[str],
+        estimate: float,
+        response: Optional[requests.Response],
+        user_id: Optional[str],
+        caller: str,
+        endpoint: str,
+    ) -> None:
+        if not self._ledger:
+            return
+        if reservation_id:
+            self._ledger.reconcile_after_call(reservation_id, estimate, response)
+        else:
+            self._ledger.record_after_call_cap_off(
+                user_id, caller, endpoint, estimate, response
+            )
 
     def get_call_stats(self, now: Optional[float] = None) -> Dict[str, Any]:
         self._reset_period_if_elapsed(now)
@@ -243,6 +293,7 @@ class RecipeService:
         ranking: int = 2,
         ignore_pantry: bool = False,
         cache_ttl_seconds: Optional[int] = None,
+        caller: str = "suggestion_search",
     ) -> List[Dict]:
         """
         Get recipe suggestions based on pantry items
@@ -284,38 +335,58 @@ class RecipeService:
                 logger.info(f"Returning cached recipes for {len(ingredients)} ingredients")
                 return cached_entry[0]
 
-            if self.is_budget_exceeded():
-                raise AIServiceException("Spoonacular call budget exceeded for this period")
-            self._record_external_call("findByIngredients")
+            reservation_id: Optional[str] = None
+            estimate = 1.0
+            response: Optional[requests.Response] = None
+            try:
+                reservation_id, estimate = self._begin_external_call(
+                    user_id, caller, "findByIngredients", number
+                )
+                if self.is_budget_exceeded():
+                    raise AIServiceException(
+                        "Spoonacular call budget exceeded for this period"
+                    )
+                self._record_external_call("findByIngredients")
 
-            # Call Spoonacular API
-            ingredients_str = ",".join(ingredients)
-            url = f"{self.base_url}/recipes/findByIngredients"
+                ingredients_str = ",".join(ingredients)
+                url = f"{self.base_url}/recipes/findByIngredients"
 
-            params = {
-                "apiKey": self.api_key,
-                "ingredients": ingredients_str,
-                "number": max(1, min(100, int(number))),  # API allows up to 100
-                "ranking": int(ranking),
-                "ignorePantry": bool(ignore_pantry),
-            }
+                params = {
+                    "apiKey": self.api_key,
+                    "ingredients": ingredients_str,
+                    "number": max(1, min(100, int(number))),
+                    "ranking": int(ranking),
+                    "ignorePantry": bool(ignore_pantry),
+                }
 
-            logger.info(f"Calling Spoonacular API with {len(ingredients)} ingredients")
-            response = requests.get(url, params=params, timeout=self.timeout)
-            response.raise_for_status()
+                logger.info(
+                    f"Calling Spoonacular API with {len(ingredients)} ingredients"
+                )
+                response = requests.get(url, params=params, timeout=self.timeout)
+                response.raise_for_status()
 
-            recipes = response.json()
+                recipes = response.json()
 
-            # Transform recipes to include only needed fields
-            transformed_recipes = [
-                self._transform_find_by_ingredients_recipe(recipe) for recipe in recipes
-            ]
+                transformed_recipes = [
+                    self._transform_find_by_ingredients_recipe(recipe)
+                    for recipe in recipes
+                ]
 
-            # Cache the results
-            self._cache[cache_key] = (transformed_recipes, time.time())
+                self._cache[cache_key] = (transformed_recipes, time.time())
 
-            logger.info(f"Retrieved {len(transformed_recipes)} recipes from Spoonacular")
-            return transformed_recipes
+                logger.info(
+                    f"Retrieved {len(transformed_recipes)} recipes from Spoonacular"
+                )
+                return transformed_recipes
+            finally:
+                self._finish_external_call(
+                    reservation_id,
+                    estimate,
+                    response,
+                    user_id,
+                    caller,
+                    "findByIngredients",
+                )
 
         except requests.exceptions.HTTPError as e:
             logger.error(f"Spoonacular API HTTP error: {e}")
@@ -338,6 +409,7 @@ class RecipeService:
         number: int = 10,
         *,
         cache_ttl_seconds: Optional[int] = None,
+        caller: str = "pool_generate",
     ) -> List[Dict]:
         """
         Meal-type-aware pantry search via Spoonacular complexSearch.
@@ -364,37 +436,57 @@ class RecipeService:
         if cached and self._is_cache_valid(cached, ttl_seconds=ttl):
             return cached[0]
 
-        if self.is_budget_exceeded():
-            raise AIServiceException("Spoonacular call budget exceeded for this period")
-        self._record_external_call("complexSearch")
-
+        reservation_id: Optional[str] = None
+        estimate = estimate_points("complexSearch", number)
+        response: Optional[requests.Response] = None
         try:
-            url = f"{self.base_url}/recipes/complexSearch"
-            params = {
-                "apiKey": self.api_key,
-                "includeIngredients": ",".join(ingredients),
-                "type": spoonacular_type_for_meal(meal_type),
-                "sort": "max-used-ingredients",
-                "sortDirection": "desc",
-                "number": max(1, min(100, int(number))),
-                "fillIngredients": True,
-                "addRecipeInformation": True,
-                "ignorePantry": True,
-            }
-            logger.info(
-                "complexSearch meal_type=%s ingredients=%d number=%d",
-                meal_type,
-                len(ingredients),
-                number,
-            )
-            response = requests.get(url, params=params, timeout=self.timeout)
-            response.raise_for_status()
-            data = response.json()
-            results = data.get("results") or []
-            transformed = [self._transform_complex_search_recipe(r) for r in results]
-            self._complex_cache[cache_key] = (transformed, time.time())
-            logger.info("complexSearch returned %d recipes", len(transformed))
-            return transformed
+            try:
+                reservation_id, estimate = self._begin_external_call(
+                    user_id, caller, "complexSearch", number
+                )
+                if self.is_budget_exceeded():
+                    raise AIServiceException(
+                        "Spoonacular call budget exceeded for this period"
+                    )
+                self._record_external_call("complexSearch")
+
+                url = f"{self.base_url}/recipes/complexSearch"
+                params = {
+                    "apiKey": self.api_key,
+                    "includeIngredients": ",".join(ingredients),
+                    "type": spoonacular_type_for_meal(meal_type),
+                    "sort": "max-used-ingredients",
+                    "sortDirection": "desc",
+                    "number": max(1, min(100, int(number))),
+                    "fillIngredients": True,
+                    "addRecipeInformation": True,
+                    "ignorePantry": True,
+                }
+                logger.info(
+                    "complexSearch meal_type=%s ingredients=%d number=%d",
+                    meal_type,
+                    len(ingredients),
+                    number,
+                )
+                response = requests.get(url, params=params, timeout=self.timeout)
+                response.raise_for_status()
+                data = response.json()
+                results = data.get("results") or []
+                transformed = [
+                    self._transform_complex_search_recipe(r) for r in results
+                ]
+                self._complex_cache[cache_key] = (transformed, time.time())
+                logger.info("complexSearch returned %d recipes", len(transformed))
+                return transformed
+            finally:
+                self._finish_external_call(
+                    reservation_id,
+                    estimate,
+                    response,
+                    user_id,
+                    caller,
+                    "complexSearch",
+                )
         except requests.exceptions.HTTPError as e:
             logger.error(f"Spoonacular complexSearch HTTP error: {e}")
             _raise_for_spoonacular_http(e, "complexSearch")
@@ -407,12 +499,20 @@ class RecipeService:
             logger.error(f"Unexpected error in complexSearch: {e}")
             raise AIServiceException(f"Failed to search recipes: {e}")
 
-    def get_recipe_details(self, recipe_id: int) -> Dict:
+    def get_recipe_details(
+        self,
+        recipe_id: int,
+        *,
+        user_id: Optional[str] = None,
+        caller: str = "recipe_open",
+    ) -> Dict:
         """
         Get full recipe details including instructions
 
         Args:
             recipe_id: Spoonacular recipe ID
+            user_id: User attributed for usage ledger (required when daily cap is on)
+            caller: Ledger caller label
 
         Returns:
             Full recipe dictionary with instructions, ingredients, etc.
@@ -426,42 +526,59 @@ class RecipeService:
             if time.time() - ts < self._details_cache_ttl:
                 return payload
 
-        if self.is_budget_exceeded():
-            raise AIServiceException("Spoonacular call budget exceeded for this period")
-        self._record_external_call("recipeInformation")
-
+        reservation_id: Optional[str] = None
+        estimate = 1.0
+        response: Optional[requests.Response] = None
         try:
-            url = f"{self.base_url}/recipes/{recipe_id}/information"
+            try:
+                reservation_id, estimate = self._begin_external_call(
+                    user_id, caller, "recipeInformation", 1
+                )
+                if self.is_budget_exceeded():
+                    raise AIServiceException(
+                        "Spoonacular call budget exceeded for this period"
+                    )
+                self._record_external_call("recipeInformation")
 
-            params = {
-                "apiKey": self.api_key,
-                "includeNutrition": False,
-            }
+                url = f"{self.base_url}/recipes/{recipe_id}/information"
 
-            logger.info(f"Fetching recipe details for ID {recipe_id}")
-            response = requests.get(url, params=params, timeout=self.timeout)
-            response.raise_for_status()
+                params = {
+                    "apiKey": self.api_key,
+                    "includeNutrition": False,
+                }
 
-            recipe = response.json()
+                logger.info(f"Fetching recipe details for ID {recipe_id}")
+                response = requests.get(url, params=params, timeout=self.timeout)
+                response.raise_for_status()
 
-            # Transform to include only needed fields
-            out = {
-                "id": recipe.get("id"),
-                "title": recipe.get("title"),
-                "summary": recipe.get("summary", ""),
-                "image": recipe.get("image"),
-                "readyInMinutes": recipe.get("readyInMinutes"),
-                "servings": recipe.get("servings"),
-                "instructions": recipe.get("instructions", ""),
-                "extendedIngredients": recipe.get("extendedIngredients", []),
-                "analyzedInstructions": recipe.get("analyzedInstructions", []),
-                "sourceUrl": recipe.get("sourceUrl"),
-                "spoonacularSourceUrl": recipe.get("spoonacularSourceUrl"),
-                "dishTypes": recipe.get("dishTypes") or [],
-                "cuisines": recipe.get("cuisines") or [],
-            }
-            self._details_cache[recipe_id] = (out, time.time())
-            return out
+                recipe = response.json()
+
+                out = {
+                    "id": recipe.get("id"),
+                    "title": recipe.get("title"),
+                    "summary": recipe.get("summary", ""),
+                    "image": recipe.get("image"),
+                    "readyInMinutes": recipe.get("readyInMinutes"),
+                    "servings": recipe.get("servings"),
+                    "instructions": recipe.get("instructions", ""),
+                    "extendedIngredients": recipe.get("extendedIngredients", []),
+                    "analyzedInstructions": recipe.get("analyzedInstructions", []),
+                    "sourceUrl": recipe.get("sourceUrl"),
+                    "spoonacularSourceUrl": recipe.get("spoonacularSourceUrl"),
+                    "dishTypes": recipe.get("dishTypes") or [],
+                    "cuisines": recipe.get("cuisines") or [],
+                }
+                self._details_cache[recipe_id] = (out, time.time())
+                return out
+            finally:
+                self._finish_external_call(
+                    reservation_id,
+                    estimate,
+                    response,
+                    user_id,
+                    caller,
+                    "recipeInformation",
+                )
 
         except requests.exceptions.HTTPError as e:
             logger.error(f"Spoonacular API HTTP error: {e}")
@@ -529,15 +646,20 @@ class RecipeService:
             return recipe_details
 
 
-def create_recipe_service(pantry_service: PantryService, config: Config) -> RecipeService:
+def create_recipe_service(
+    pantry_service: PantryService,
+    config: Config,
+    admin_client: Optional[Any] = None,
+) -> RecipeService:
     """
     Factory function to create RecipeService
 
     Args:
         pantry_service: Pantry service instance
         config: Configuration object
+        admin_client: Supabase service-role client for usage ledger
 
     Returns:
         Initialized RecipeService instance
     """
-    return RecipeService(pantry_service, config)
+    return RecipeService(pantry_service, config, admin_client=admin_client)

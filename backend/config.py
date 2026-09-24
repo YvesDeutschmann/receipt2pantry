@@ -87,7 +87,9 @@ class Config:
     GEMINI_API_KEY: Optional[str] = os.getenv("GEMINI_API_KEY")
     GEMINI_MODEL: str = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
     COSTCO_AI_MODEL: str = os.getenv("COSTCO_AI_MODEL", "auto")  # openai, gemini, or auto
-    
+    AI_USER_DAILY_USD_CAP: float = float(os.getenv("AI_USER_DAILY_USD_CAP", "0"))
+    AI_KEY_LABEL: str = os.getenv("AI_KEY_LABEL", "default")
+
     # Costco Contentstack (read-only CMS verification)
     CONTENTSTACK_ACCESS_TOKEN: Optional[str] = os.getenv("CONTENTSTACK_ACCESS_TOKEN")
 
@@ -98,6 +100,9 @@ class Config:
     SPOONACULAR_CALL_BUDGET: int = int(os.getenv("SPOONACULAR_CALL_BUDGET", "30"))
     SPOONACULAR_CALL_BUDGET_PERIOD_SECONDS: int = int(
         os.getenv("SPOONACULAR_CALL_BUDGET_PERIOD_SECONDS", "3600")
+    )
+    SPOONACULAR_USER_DAILY_POINT_CAP: int = int(
+        os.getenv("SPOONACULAR_USER_DAILY_POINT_CAP", "150")
     )
 
     # Feature flags (default off; set to 1 or true to enable)

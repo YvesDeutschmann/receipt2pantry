@@ -1508,6 +1508,23 @@ describe('SuggestionScreen', () => {
     })
   })
 
+  it('GENERATE_USER_CAP_SHOWS_PERSONAL_COPY_NOT_GLOBAL_QUOTA', async () => {
+    getSuggestions.mockResolvedValue(EMPTY_SUGGESTIONS)
+    triggerGeneration.mockRejectedValue({
+      response: {
+        status: 429,
+        data: {
+          code: 'recipe_user_cap',
+          error: "You've used your recipe lookups for today. Try again tomorrow.",
+        },
+      },
+    })
+    render(<Recipes />)
+    await waitFor(() => expect(triggerGeneration).toHaveBeenCalledTimes(1))
+    await screen.findByText(/your recipe lookups for today/i)
+    expect(screen.queryByText(/Daily recipe quota reached/i)).toBeNull()
+  })
+
   it('GENERATE_429_DOES_NOT_LOOP', async () => {
     getSuggestions.mockResolvedValue(EMPTY_SUGGESTIONS)
     triggerGeneration.mockRejectedValue({

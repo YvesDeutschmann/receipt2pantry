@@ -2,17 +2,11 @@
 
 import io
 import json
-from typing import Dict, List, Optional, Any
-from datetime import datetime
+import time
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Tuple
 
 from openai import OpenAI
 from openai import APIError, RateLimitError, APIConnectionError
-from tenacity import (
-    retry,
-    stop_after_attempt,
-    wait_exponential,
-    retry_if_exception_type,
-)
 
 try:
     import google.generativeai as genai
@@ -22,23 +16,38 @@ except ImportError:
     genai = None
 
 from backend.config import Config
+from backend.services.ai_usage_ledger import (
+    AiCallReservation,
+    stable_error_code,
+)
 from backend.utils.logger import get_logger
 from backend.utils.exceptions import AIServiceException, AIRateLimitException
 
+if TYPE_CHECKING:
+    from backend.services.ai_usage_ledger import AiUsageLedger
+
 logger = get_logger(__name__)
+
+_OPENAI_CHAT_MAX_ATTEMPTS = 3
 
 
 class AIService:
     """Service for AI-powered operations using OpenAI"""
     
-    def __init__(self, config: Optional[Config] = None):
+    def __init__(
+        self,
+        config: Optional[Config] = None,
+        ledger: Optional["AiUsageLedger"] = None,
+    ):
         """
         Initialize AIService
         
         Args:
             config: Configuration object (uses default if not provided)
+            ledger: Optional usage ledger for ai_processing_log
         """
         self.config = config or Config
+        self.ledger: Optional["AiUsageLedger"] = ledger
         self.client: Optional[OpenAI] = None
         self.gemini_client: Optional[Any] = None
         self.total_tokens_used = 0
@@ -93,79 +102,224 @@ class AIService:
         output_tokens = self.total_tokens_used * 0.3
         return (input_tokens * 0.15 / 1_000_000) + (output_tokens * 0.60 / 1_000_000)
     
-    @retry(
-        retry=retry_if_exception_type((APIConnectionError,)),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10)
-    )
+    def _openai_chat_once(
+        self,
+        messages: List[Dict],
+        response_format: Optional[Dict],
+        temperature: float,
+    ) -> Tuple[Dict, int, int]:
+        if not self.client:
+            raise AIServiceException("OpenAI client not initialized - missing API key")
+
+        kwargs = {
+            "model": self.config.OPENAI_MODEL,
+            "messages": messages,
+            "temperature": temperature,
+        }
+        if response_format:
+            kwargs["response_format"] = response_format
+
+        response = self.client.chat.completions.create(**kwargs)
+        inp = 0
+        out = 0
+        if response.usage:
+            self.total_tokens_used += response.usage.total_tokens
+            inp = response.usage.prompt_tokens or 0
+            out = response.usage.completion_tokens or 0
+        self.total_requests += 1
+
+        content = response.choices[0].message.content
+        if response_format and response_format.get("type") == "json_object":
+            try:
+                return json.loads(content), inp, out
+            except json.JSONDecodeError as e:
+                logger.error(f"Failed to parse JSON response: {e}")
+                raise AIServiceException(f"Invalid JSON response from OpenAI: {e}")
+        return {"content": content}, inp, out
+
     def _call_openai(
         self,
         messages: List[Dict],
         response_format: Optional[Dict] = None,
-        temperature: float = 0.1
+        temperature: float = 0.1,
+        operation: str = "unknown",
+        items_processed: Optional[int] = None,
     ) -> Dict:
-        """
-        Make a call to OpenAI API with retry logic
-        
-        Args:
-            messages: List of message dictionaries
-            response_format: Optional JSON schema for structured output
-            temperature: Temperature for response generation
-        
-        Returns:
-            Parsed response content
-        
-        Raises:
-            AIServiceException: If the API call fails
-            AIRateLimitException: If rate limit is exceeded
-        """
-        if not self.client:
-            raise AIServiceException("OpenAI client not initialized - missing API key")
-        
-        try:
-            kwargs = {
-                "model": self.config.OPENAI_MODEL,
-                "messages": messages,
-                "temperature": temperature,
-            }
-            
-            if response_format:
-                kwargs["response_format"] = response_format
-            
-            response = self.client.chat.completions.create(**kwargs)
-            
-            # Track usage
-            if response.usage:
-                self.total_tokens_used += response.usage.total_tokens
-            self.total_requests += 1
-            
-            content = response.choices[0].message.content
-            
-            # Parse JSON if response_format was specified
-            if response_format and response_format.get("type") == "json_object":
-                try:
-                    return json.loads(content)
-                except json.JSONDecodeError as e:
-                    logger.error(f"Failed to parse JSON response: {e}")
-                    raise AIServiceException(f"Invalid JSON response from OpenAI: {e}")
-            
-            return {"content": content}
-            
-        except RateLimitError as e:
-            logger.error(f"OpenAI rate limit exceeded: {e}")
-            raise AIRateLimitException(f"Rate limit exceeded: {e}")
-        except APIError as e:
-            logger.error(f"OpenAI API error: {e}")
-            raise AIServiceException(f"OpenAI API error: {e}")
-        except Exception as e:
-            logger.error(f"Unexpected error calling OpenAI: {e}")
-            raise AIServiceException(f"Failed to call OpenAI: {e}")
+        model = self.config.OPENAI_MODEL
+        reservation = self._begin_reservation(
+            operation, "openai", model, items_processed=items_processed
+        )
+        last_connection: Optional[APIConnectionError] = None
 
-    @retry(
-        retry=retry_if_exception_type((APIConnectionError,)),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-    )
+        for attempt in range(_OPENAI_CHAT_MAX_ATTEMPTS):
+            if attempt > 0 and self.ledger and reservation:
+                self.ledger.record_attempt(reservation)
+                time.sleep(min(2 ** attempt, 10))
+            started = time.monotonic()
+            try:
+                parsed, inp, out = self._openai_chat_once(
+                    messages, response_format, temperature
+                )
+                duration_ms = int((time.monotonic() - started) * 1000)
+                self._reconcile_success(
+                    reservation,
+                    "openai",
+                    model,
+                    operation,
+                    duration_ms,
+                    inp,
+                    out,
+                    items_processed,
+                )
+                return parsed
+            except RateLimitError as e:
+                logger.error(f"OpenAI rate limit exceeded: {e}")
+                self._reconcile_failure(
+                    reservation,
+                    stable_error_code(e),
+                    False,
+                    "openai",
+                    model,
+                    operation,
+                    int((time.monotonic() - started) * 1000),
+                    items_processed,
+                )
+                raise AIRateLimitException(f"Rate limit exceeded: {e}")
+            except APIConnectionError as e:
+                last_connection = e
+                if attempt < _OPENAI_CHAT_MAX_ATTEMPTS - 1:
+                    continue
+                logger.error(f"OpenAI connection error: {e}")
+                self._reconcile_failure(
+                    reservation,
+                    "connection",
+                    True,
+                    "openai",
+                    model,
+                    operation,
+                    int((time.monotonic() - started) * 1000),
+                    items_processed,
+                )
+                raise AIServiceException(f"Failed to call OpenAI: {e}")
+            except APIError as e:
+                logger.error(f"OpenAI API error: {e}")
+                self._reconcile_failure(
+                    reservation,
+                    stable_error_code(e),
+                    False,
+                    "openai",
+                    model,
+                    operation,
+                    int((time.monotonic() - started) * 1000),
+                    items_processed,
+                )
+                raise AIServiceException(f"OpenAI API error: {e}")
+            except AIServiceException as e:
+                self._reconcile_failure(
+                    reservation,
+                    stable_error_code(e),
+                    False,
+                    "openai",
+                    model,
+                    operation,
+                    int((time.monotonic() - started) * 1000),
+                    items_processed,
+                )
+                raise
+            except Exception as e:
+                logger.error(f"Unexpected error calling OpenAI: {e}")
+                self._reconcile_failure(
+                    reservation,
+                    "api_error",
+                    False,
+                    "openai",
+                    model,
+                    operation,
+                    int((time.monotonic() - started) * 1000),
+                    items_processed,
+                )
+                raise AIServiceException(f"Failed to call OpenAI: {e}")
+
+        if last_connection:
+            raise AIServiceException(f"Failed to call OpenAI: {last_connection}")
+        raise AIServiceException("Failed to call OpenAI")
+
+    def _begin_reservation(
+        self,
+        operation: str,
+        provider: str,
+        model: str,
+        items_processed: Optional[int] = None,
+        audio_bytes: Optional[int] = None,
+    ) -> AiCallReservation:
+        if not self.ledger:
+            from backend.services.ai_usage_ledger import pre_estimate_usd
+
+            return AiCallReservation(
+                row_id=None,
+                pre_estimate=pre_estimate_usd(operation, audio_bytes),
+                cap_enabled=False,
+            )
+        return self.ledger.begin_call(
+            operation,
+            provider,
+            model,
+            items_processed=items_processed,
+            audio_bytes=audio_bytes,
+        )
+
+    def _reconcile_success(
+        self,
+        reservation: AiCallReservation,
+        provider: str,
+        model: str,
+        operation: str,
+        duration_ms: int,
+        input_tokens: int,
+        output_tokens: int,
+        items_processed: Optional[int],
+        audio_bytes: Optional[int] = None,
+    ) -> None:
+        if not self.ledger:
+            return
+        self.ledger.reconcile_success(
+            reservation,
+            provider,
+            model,
+            operation,
+            duration_ms,
+            input_tokens,
+            output_tokens,
+            items_processed=items_processed,
+            audio_bytes=audio_bytes,
+        )
+
+    def _reconcile_failure(
+        self,
+        reservation: AiCallReservation,
+        error_code: str,
+        before_http_response: bool,
+        provider: str,
+        model: str,
+        operation: str,
+        duration_ms: Optional[int],
+        items_processed: Optional[int],
+        audio_bytes: Optional[int] = None,
+    ) -> None:
+        if not self.ledger:
+            return
+        self.ledger.reconcile_failure(
+            reservation,
+            error_code,
+            before_http_response,
+            provider,
+            model,
+            operation,
+            duration_ms=duration_ms,
+            items_processed=items_processed,
+            audio_bytes=audio_bytes,
+        )
+
     def transcribe_audio(self, audio_bytes: bytes, content_type: str, filename: str) -> str:
         """
         Pantry Layer 3: transcribe recorded audio to text (Whisper).
@@ -179,28 +333,105 @@ class AIService:
             raise AIServiceException("OpenAI client not initialized - missing API key")
         if not audio_bytes:
             raise AIServiceException("Empty audio payload")
+
+        operation = "transcribe"
+        model = self.config.WHISPER_MODEL
+        reservation = self._begin_reservation(
+            operation, "openai", model, audio_bytes=len(audio_bytes)
+        )
+        started = time.monotonic()
         try:
             bio = io.BytesIO(audio_bytes)
             bio.name = filename or "audio.webm"
             response = self.client.audio.transcriptions.create(
-                model=self.config.WHISPER_MODEL,
+                model=model,
                 file=bio,
             )
             self.total_requests += 1
             text = (response.text or "").strip()
             if not text:
                 raise AIServiceException("Transcription returned empty text")
+            duration_ms = int((time.monotonic() - started) * 1000)
+            self._reconcile_success(
+                reservation,
+                "openai",
+                model,
+                operation,
+                duration_ms,
+                0,
+                0,
+                None,
+                audio_bytes=len(audio_bytes),
+            )
             return text
         except RateLimitError as e:
             logger.error(f"OpenAI Whisper rate limit: {e}")
+            self._reconcile_failure(
+                reservation,
+                "rate_limit",
+                False,
+                "openai",
+                model,
+                operation,
+                int((time.monotonic() - started) * 1000),
+                None,
+                audio_bytes=len(audio_bytes),
+            )
             raise AIRateLimitException(f"Rate limit exceeded: {e}")
+        except APIConnectionError as e:
+            logger.error(f"OpenAI Whisper connection error: {e}")
+            self._reconcile_failure(
+                reservation,
+                "connection",
+                True,
+                "openai",
+                model,
+                operation,
+                int((time.monotonic() - started) * 1000),
+                None,
+                audio_bytes=len(audio_bytes),
+            )
+            raise AIServiceException(f"Transcription failed: {e}")
         except APIError as e:
             logger.error(f"OpenAI Whisper API error: {e}")
+            self._reconcile_failure(
+                reservation,
+                stable_error_code(e),
+                False,
+                "openai",
+                model,
+                operation,
+                int((time.monotonic() - started) * 1000),
+                None,
+                audio_bytes=len(audio_bytes),
+            )
             raise AIServiceException(f"Transcription failed: {e}")
-        except AIServiceException:
+        except AIServiceException as e:
+            self._reconcile_failure(
+                reservation,
+                stable_error_code(e),
+                False,
+                "openai",
+                model,
+                operation,
+                int((time.monotonic() - started) * 1000),
+                None,
+                audio_bytes=len(audio_bytes),
+            )
             raise
         except Exception as e:
             logger.error(f"Whisper transcription error: {e}")
+            self._reconcile_failure(
+                reservation,
+                "api_error",
+                False,
+                "openai",
+                model,
+                operation,
+                int((time.monotonic() - started) * 1000),
+                None,
+                audio_bytes=len(audio_bytes),
+            )
             raise AIServiceException(f"Transcription failed: {e}")
 
     def extract_ingredients_from_transcript(
@@ -252,6 +483,7 @@ Return JSON:
             ],
             response_format={"type": "json_object"},
             temperature=0.1,
+            operation="extract_ingredients",
         )
     
     def parse_receipt(self, email_content: str) -> Dict:
@@ -311,16 +543,15 @@ Return JSON with this structure:
     "total": 54.50
 }}"""
 
-        response = self._call_openai(
+        return self._call_openai(
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt}
             ],
             response_format={"type": "json_object"},
-            temperature=0.1
+            temperature=0.1,
+            operation="parse_receipt",
         )
-        
-        return response
     
     def normalize_products_batch(self, products: List[Dict[str, str]]) -> List[Dict]:
         """
@@ -380,7 +611,9 @@ Return JSON array with normalized products in the same order:
                 {"role": "user", "content": user_prompt}
             ],
             response_format={"type": "json_object"},
-            temperature=0.1
+            temperature=0.1,
+            operation="normalize_batch",
+            items_processed=len(products),
         )
         
         normalized = response.get("products", [])
@@ -412,7 +645,8 @@ If you cannot identify the store, return "unknown"."""
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": email_content[:2000]}
             ],
-            temperature=0.0
+            temperature=0.0,
+            operation="detect_store",
         )
         
         store = response.get("content", "").strip().lower()
@@ -422,7 +656,9 @@ If you cannot identify the store, return "unknown"."""
         self,
         prompt: str,
         system_instruction: Optional[str] = None,
-        temperature: float = 0.1
+        temperature: float = 0.1,
+        operation: str = "unknown",
+        items_processed: Optional[int] = None,
     ) -> Dict:
         """
         Make a call to Gemini API
@@ -440,35 +676,77 @@ If you cannot identify the store, return "unknown"."""
         """
         if not self.gemini_client:
             raise AIServiceException("Gemini client not initialized - missing API key")
-        
+
+        model = getattr(self.config, "GEMINI_MODEL", "gemini-1.5-flash")
+        if not isinstance(model, str):
+            model = "gemini-1.5-flash"
+        reservation = self._begin_reservation(
+            operation, "gemini", model, items_processed=items_processed
+        )
+        started = time.monotonic()
         try:
             generation_config = {
                 "temperature": temperature,
                 "response_mime_type": "application/json",
             }
-            
+
             full_prompt = prompt
             if system_instruction:
                 full_prompt = f"{system_instruction}\n\n{prompt}"
-            
+
             response = self.gemini_client.generate_content(
                 full_prompt,
-                generation_config=generation_config
+                generation_config=generation_config,
             )
-            
+
             self.total_requests += 1
-            
-            # Parse JSON response
+            duration_ms = int((time.monotonic() - started) * 1000)
             try:
                 content = response.text
-                return json.loads(content)
+                parsed = json.loads(content)
             except json.JSONDecodeError as e:
                 logger.error(f"Failed to parse JSON response from Gemini: {e}")
-                logger.debug(f"Response text: {response.text[:500]}")
+                self._reconcile_failure(
+                    reservation,
+                    "bad_response",
+                    False,
+                    "gemini",
+                    model,
+                    operation,
+                    duration_ms,
+                    items_processed,
+                )
                 raise AIServiceException(f"Invalid JSON response from Gemini: {e}")
-            
+
+            usage = getattr(response, "usage_metadata", None)
+            inp = getattr(usage, "prompt_token_count", 0) or 0
+            out = getattr(usage, "candidates_token_count", 0) or 0
+            self._reconcile_success(
+                reservation,
+                "gemini",
+                model,
+                operation,
+                duration_ms,
+                inp,
+                out,
+                items_processed,
+            )
+            return parsed
+
+        except AIServiceException:
+            raise
         except Exception as e:
             logger.error(f"Gemini API error: {e}")
+            self._reconcile_failure(
+                reservation,
+                stable_error_code(e),
+                False,
+                "gemini",
+                model,
+                operation,
+                int((time.monotonic() - started) * 1000),
+                items_processed,
+            )
             raise AIServiceException(f"Failed to call Gemini: {e}")
     
     def parse_costco_receipt(self, receipt_text: str, model: str = "auto") -> Dict:
@@ -578,7 +856,8 @@ Return JSON with this structure:
                 return self._call_gemini(
                     prompt=user_prompt,
                     system_instruction=system_prompt,
-                    temperature=0.1
+                    temperature=0.1,
+                    operation="parse_costco",
                 )
             else:  # openai
                 logger.info("Parsing Costco receipt with OpenAI")
@@ -588,7 +867,8 @@ Return JSON with this structure:
                         {"role": "user", "content": user_prompt}
                     ],
                     response_format={"type": "json_object"},
-                    temperature=0.1
+                    temperature=0.1,
+                    operation="parse_costco",
                 )
         except Exception as e:
             # Try fallback if primary model fails
@@ -600,19 +880,24 @@ Return JSON with this structure:
                         {"role": "user", "content": user_prompt}
                     ],
                     response_format={"type": "json_object"},
-                    temperature=0.1
+                    temperature=0.1,
+                    operation="parse_costco",
                 )
             elif model == "openai" and self.gemini_client:
                 logger.warning(f"OpenAI parsing failed, falling back to Gemini: {e}")
                 return self._call_gemini(
                     prompt=user_prompt,
                     system_instruction=system_prompt,
-                    temperature=0.1
+                    temperature=0.1,
+                    operation="parse_costco",
                 )
             raise
 
 
-def create_ai_service(config: Optional[Config] = None) -> AIService:
+def create_ai_service(
+    config: Optional[Config] = None,
+    ledger: Optional["AiUsageLedger"] = None,
+) -> AIService:
     """
     Factory function to create AIService
     
@@ -622,7 +907,7 @@ def create_ai_service(config: Optional[Config] = None) -> AIService:
     Returns:
         Initialized AIService instance
     """
-    return AIService(config)
+    return AIService(config, ledger=ledger)
 
 
 

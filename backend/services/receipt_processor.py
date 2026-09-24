@@ -5,6 +5,7 @@ from backend.services.supabase_service import SupabaseService
 from backend.services.normalization_service import NormalizationService
 from backend.services.pantry_service import PantryService, pantry_item_has_display_name
 from backend.utils.exceptions import DatabaseException
+from backend.utils.ai_call_context import merge_ai_call_context, reset_ai_call_context
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -52,6 +53,7 @@ class ReceiptProcessor:
         Returns:
             Dictionary with processing results
         """
+        ctx_token = None
         try:
             logger.info(f"Starting receipt processing for receipt {receipt_id}")
             
@@ -61,6 +63,18 @@ class ReceiptProcessor:
                 household_id = household["id"] if household else None
 
             receipt = self.supabase.get_receipt(receipt_id)
+            receipt_household = (
+                str(receipt.get("household_id"))
+                if receipt and receipt.get("household_id")
+                else None
+            )
+            if receipt_household:
+                household_id = receipt_household
+            ctx_token, _ = merge_ai_call_context(
+                user_id=user_id,
+                receipt_id=receipt_id,
+                household_id=household_id,
+            )
             reference_date = self.pantry._parse_receipt_order_date(
                 receipt.get("order_date") if receipt else None
             )
@@ -201,6 +215,9 @@ class ReceiptProcessor:
         except Exception as e:
             logger.error(f"Failed to process receipt {receipt_id}: {e}")
             raise DatabaseException(f"Receipt processing failed: {e}")
+        finally:
+            if ctx_token is not None:
+                reset_ai_call_context(ctx_token)
     
     async def process_multiple_receipts(self, receipt_ids: List[str], user_id: str) -> Dict:
         """

@@ -14,6 +14,7 @@ primary_region = 'sjc'
   LOG_LEVEL = 'INFO'
   SENTRY_ENVIRONMENT = 'production'
   SPOONACULAR_CALL_BUDGET = '30'
+  SPOONACULAR_USER_DAILY_POINT_CAP = '150'
 
 [http_service]
   internal_port = 8080

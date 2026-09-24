@@ -238,7 +238,9 @@ class PoolGenerator:
                         ex = inline_ex
                     else:
                         details = self.recipe_service.get_recipe_details(
-                            int(top["id"])
+                            int(top["id"]),
+                            user_id=user_id,
+                            caller="pool_generate",
                         )
                         members = self.supabase.get_household_members(household_id)
                         member_count = len(members) if members else 1
@@ -252,6 +254,11 @@ class PoolGenerator:
                         simulated, ex
                     )
                 except RecipeQuotaException as e:
+                    err_msg = str(e)
+                    final_status = "partial"
+                    stop_meal_types = True
+                    break
+                except AIServiceException as e:
                     err_msg = str(e)
                     final_status = "partial"
                     stop_meal_types = True

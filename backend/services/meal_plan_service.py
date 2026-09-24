@@ -232,7 +232,12 @@ class MealPlanService:
             # Get recipes from Spoonacular (meal-type-aware complexSearch)
             household_id = session["household_id"]
             recipes = self.recipe_service.search_recipes_complex(
-                household_id, user_id, available_ingredients, meal_type, number=10
+                household_id,
+                user_id,
+                available_ingredients,
+                meal_type,
+                number=10,
+                caller="meal_plan",
             )
             
             # Filter by threshold (calculate match percentage) and exclude rejected/accepted/banned recipes
@@ -620,7 +625,9 @@ class MealPlanService:
                 ingredients_reserved = []
             else:
                 # Get recipe from Spoonacular
-                recipe_details = self.recipe_service.get_recipe_details(int(recipe_id))
+                recipe_details = self.recipe_service.get_recipe_details(
+                    int(recipe_id), user_id=user_id, caller="meal_plan"
+                )
                 recipe_name = recipe_details.get("title", recipe_name)
                 recipe_image = recipe_details.get("image")
                 original_servings = recipe_details.get("servings", member_count)
