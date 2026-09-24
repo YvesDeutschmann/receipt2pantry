@@ -154,32 +154,9 @@ Run in WebView remote debug console on `/providers`. Do **not** use this as Area
 UPDATE grocery_accounts SET connection_status = 'needs_reconnect' ...
 ```
 
-### Area 5 QA — Safeway reconnect without Meald sign-out (Play build)
-
-When Safeway password revoke is unavailable, operators have used **Costco Connect** as a session
-invalidation probe: opening Costco login runs `clearSessionBeforeLogin`, which today calls
-`InAppBrowser.clearAllCookies({})` and can remove Safeway’s `SWY_SHARED_SESSION` in the **shared**
-InAppBrowser jar. **Do not tap Safeway Connect/Sync first** after invalidation — that re-logs the
-store and clears the test. Foreground auto-sync or **Silent Sync** should surface toast / banner /
-Needs attention; tap **Reconnect** and complete WebView login.
-
-**Device sign-off record:** [`area-5-android-sign-off.md`](area-5-android-sign-off.md).
-
-**Post-validation engineering (not blocking UX sign-off):**
-
-1. **Manual silent sync telemetry** — Providers **Silent Sync** (`useSafewaySync.startSilent`) shows
-   the same reconnect UI as auto-sync but often **does not** write `sync_events.phase = 'needs_reconnect'`.
-   Foreground scheduler (`useAppSyncScheduler`) does via `reportAnomaly`. When verifying in Supabase,
-   prefer a **foreground auto-sync** attempt after invalidation, or accept device screenshots as
-   evidence until manual path logs `needs_reconnect` (see brief 01b + Android sign-off doc).
-
-2. **Costco login cookie scope** — After Area 5 Android reconnect is validated, Costco pre-login
-   cleanup should clear **Costco-only** tokens/cookies, not `clearAllCookies` for the whole WebView
-   jar, so Costco Connect does not disconnect Safeway in production.
-
 ## Verification checklist
 
 - [ ] Support can follow resolution steps without referencing `connection_status`
 - [ ] Nav paths match app: Dinner `/recipes` Needs attention, Settings → Connected Stores → Manage → `/providers`
 - [ ] Forced-reconnect **primary** path documented for Area 5 device QA
-- [ ] Forced-reconnect smoke on **physical iOS + Android** signed off in Area 5 (not owned by this runbook alone)
+- [x] Forced-reconnect smoke on **physical iOS + Android** signed off in Area 5 — [`area-5-dual-platform-sign-off.md`](area-5-dual-platform-sign-off.md) (Sep 2026)

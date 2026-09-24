@@ -2,30 +2,32 @@
 
 > **Assessed against:** [`06-launch-readiness.md`](06-launch-readiness.md)  
 > **Assessment date:** 2026-07-22 (Area 1 remediation + live audit refreshed 2026-07-24; **Area 2 secrets closed 2026-07-25**; **third pass — solo-dev friends-beta review — 2026-07-28**, see bottom section)  
-> **Status refresh:** 2026-07-28 evening — prod API live, GlitchTip + UptimeRobot live, OAuth-only flag shipped, sync-event visibility shipped; **Apple agreements accepted; signed iOS + Android release builds against `api.meald.app`**.  
+> **Status refresh:** **2026-09-24** — **Area 5 dual-platform device sign-off recorded** ([`area-5-dual-platform-sign-off.md`](../../runbooks/area-5-dual-platform-sign-off.md)). Prod API live, GlitchTip + UptimeRobot live, OAuth-only flag shipped, sync-event visibility shipped; **Apple agreements accepted; signed iOS + Android release builds against `api.meald.app`**.  
 > **Scope of this review:** Codebase + migration review, local secret greps, and DoD checklist scoring.  
 > **Area 1 live audit:** Run 2026-07-24 post-remediation against project `pvmezsxdqotxaqfymmzd`. Household RLS recursion later landed on master as `024_postgres_best_practices_hardening.sql` (#67). Anon table revoke ships in this tree as `026_revoke_anon_table_grants.sql`. DB verification via Supabase MCP `execute_sql`; local checks via `uv run python backend/scripts/area1_security_audit.py`. Packaged `npx supabase` v2.67.0 lacks `db query` subcommand — SQL role-simulation checks use MCP or ephemeral-user fallback.  
-> **Still not performed:** formal Area 5 cold-start / forced-reconnect checklist sign-off on those prod builds. **GlitchTip Cloud + UptimeRobot live 2026-07-28** (see Area 3 + runbooks).
+> **Area 5 live audit:** Run 2026-09-24 against prod `funnel_events`, `sync_attempt_outcomes`, `sync_events` for Android QA user `46aa5da5-bd44-4f9c-9b57-f34cd83de04a` and iOS QA user `666909f5-4189-4ce9-8ba5-52e2e7bfbf42` (see runbook).
 
 ---
 
 ## Verdict
 
-**NO-GO for TestFlight external beta / Google Play open testing.**
+**GO for TestFlight internal / Play internal friends beta** (signed prod builds; dual-platform Area 5 product gates signed off Sep 2026 — [`area-5-dual-platform-sign-off.md`](../../runbooks/area-5-dual-platform-sign-off.md)).
 
-Hard blockers are now **Area 5 device QA checklist** (cold-start / auto-sync / forced-reconnect sign-off) plus remaining third-pass ops (delete-account, spend caps/backups, commit/merge of the launch-readiness tree). ~~Apple agreements + signed release builds against prod~~ **DONE**. ~~Privacy/terms pages~~ **DONE** (2026-09-13). **Areas 1–4 are effectively closed for code + live verify:**
+**NO-GO for App Store / Play open testing** until third-pass ops close: delete-account (or remove dead button), spend caps/backups verification, `NO_SECRETS_IN_BUNDLE` CI, commit/merge of any remaining launch-readiness tree, optional formal **5c.9** Logcat/Xcode notes.
 
-| Area | Status (2026-07-28) |
+Remaining hard blockers are **operational / store-policy**, not cold-start or reconnect UX on device. ~~Apple agreements + signed release builds against prod~~ **DONE**. ~~Privacy/terms pages~~ **DONE** (2026-09-13). **Areas 1–4 are effectively closed for code + live verify:**
+
+| Area | Status (2026-09-24) |
 |---|---|
 | 1 Security / RLS | **PASS** (code + live DB audit) |
 | 2 Secrets | **CLOSED** (2026-07-25) |
 | 3 Monitoring | **PASS** — GlitchTip Cloud + UptimeRobot + sync_events |
-| 4 Reconnect runbook | **PASS** (packaging); device smoke → Area 5 |
-| 5 Dual-platform QA | **PARTIAL** — Android 5c/5d device sign-off recorded 2026-09-23 ([`area-5-android-sign-off.md`](../../runbooks/area-5-android-sign-off.md)); iOS + Logcat + E6 open |
+| 4 Reconnect runbook | **PASS** (packaging); device smoke **PASS** (Area 5) |
+| 5 Dual-platform QA | **PASS (product gates)** — paperwork: E6 funnel, optional `needs_reconnect` rows, **5c.9** |
 
 **Production backend:** Fly.io `meald-api` at `https://api.meald.app` (2026-07-28, finding 3.1). Prod env: `SUPABASE_JWT_SECRET`, `CORS_ORIGINS=capacitor://localhost`, `SENTRY_DSN` via `fly secrets` / `fly.toml`. Frontend release builds bake `VITE_API_BASE_URL=https://api.meald.app/api` from `frontend/.env.production`.
 
-**Prerequisite note:** Brief 05 substitution stub landed in `78b0aa2`. Signed iOS + Android release builds against `https://api.meald.app` are available (2026-07-28). Remaining gate before flipping GO: commit/merge the uncommitted launch-readiness working tree, then complete Area 5 checklist on those builds.
+**Prerequisite note:** Brief 05 substitution stub landed in `78b0aa2`. Signed iOS + Android release builds against `https://api.meald.app` are available (2026-07-28). **Area 5 checklist signed off on prod builds 2026-09-24** (runbook above). Remaining before open beta: third-pass ops + store submission hygiene.
 
 ---
 
@@ -81,9 +83,9 @@ Legend: **PASS** | **FAIL** | **PARTIAL** | **BLOCKED** (needs prod/device acces
 | DoD item | Status | Evidence |
 |---|---|---|
 | Cold-start on physical iOS | **PARTIAL** | Signed TestFlight build against prod exists; formal checklist not signed off |
-| Cold-start on physical Android | **PASS** | QA user `46aa5da5-…`; funnel + cook + initial sync — [`area-5-android-sign-off.md`](../../runbooks/area-5-android-sign-off.md) |
-| Auto-sync on-by-default both platforms | **PARTIAL** | Android silent `sync_succeeded` verified; iOS not signed off |
-| Forced-reconnect both platforms | **PARTIAL** | Android reconnect UX signed off 2026-09-23; iOS open; server `needs_reconnect` row open for manual Silent Sync path |
+| Cold-start on physical Android | **PARTIAL** | Signed Play/internal build against prod exists; formal checklist not signed off |
+| Auto-sync on-by-default both platforms | **BLOCKED** | Code present (`useAppSyncScheduler.js`); device verification not signed off |
+| Forced-reconnect both platforms | **BLOCKED** | Not signed off |
 | No crashes in Organizer / Logcat | **BLOCKED** | Not signed off |
 
 ### Logic Audit
@@ -123,7 +125,7 @@ Legend: **PASS** | **FAIL** | **PARTIAL** | **BLOCKED** (needs prod/device acces
 | `/api/dev/log` gated | **PASS** | 403 unless `app.debug` |
 | DEPRECATED_SAFEWAY (expect 404) | **PASS** | all four paths → 404 |
 
-Commands: `npx supabase db push --linked` (024/025); Supabase MCP `execute_sql`; `uv run python backend/scripts/area1_security_audit.py`; `uv run pytest tests/backend/test_config_security.py tests/backend/test_routes/test_area1_security.py`. Overall launch verdict remains **NO-GO** (Area 5 device QA + remaining third-pass ops).
+Commands: `npx supabase db push --linked` (024/025); Supabase MCP `execute_sql`; `uv run python backend/scripts/area1_security_audit.py`; `uv run pytest tests/backend/test_config_security.py tests/backend/test_routes/test_area1_security.py`. Friends-beta verdict **GO** for internal tracks; open-store **NO-GO** until third-pass ops complete (see Verdict).
 
 #### 1a. RLS enabled on every public table
 
@@ -232,17 +234,19 @@ Preferences, and Costco `_reconnect_response()` 401 JSON (`needs_reconnect`, `pr
 
 Standalone runbook: [`docs/runbooks/reconnect.md`](../../runbooks/reconnect.md). Nav validated:
 Dashboard Needs attention → `/providers`; Settings → Connected Stores → Manage → `/providers`.
-Forced-reconnect device smoke remains **Area 5 / BLOCKED**.
+Forced-reconnect device smoke **PASS** — recorded in [`area-5-dual-platform-sign-off.md`](../../runbooks/area-5-dual-platform-sign-off.md) (Sep 2026).
 
 ---
 
 ### Area 5 — Dual-Platform Release QA Gate
 
-**Builds: PASS** — Apple agreements accepted; signed iOS + Android release artifacts rebuilt against **`https://api.meald.app`** (2026-07-28).
+**Builds: PASS** — Apple agreements accepted; signed iOS + Android release artifacts against **`https://api.meald.app`** (2026-07-28).
 
-**Checklist: PARTIAL** — **Android** cold-start, silent auto-sync, and forced-reconnect **UX** signed off 2026-09-23 on Play build against prod ([`area-5-android-sign-off.md`](../../runbooks/area-5-android-sign-off.md)). **iOS** checklist still open. Remaining Android paperwork: 5c.9 Logcat, funnel E6, `sync_events.needs_reconnect` when using manual Silent Sync (engineering follow-up in reconnect runbook).
+**Checklist: PASS (product gates)** — formal cold-start / auto-sync / forced-reconnect sign-off on physical devices recorded **2026-09-24** for Android (Google + Safeway) and iOS (Apple + Safeway). Evidence: [`docs/runbooks/area-5-dual-platform-sign-off.md`](../../runbooks/area-5-dual-platform-sign-off.md) + prod `funnel_events`, `sync_attempt_outcomes`, `sync_events`.
 
-Earlier partial device work: Play-installed Android client + onboarding forensics; Google OAuth SHA troubleshooting; Costco WebView hang / Safeway post failure — instrumented via `sync_events` + GlitchTip anomalies.
+**Paperwork still open (non-blocking for internal beta):** `funnel_first_cook_logged` (E6); server-side `needs_reconnect` when reconnect is triggered via manual silent sync or `silent_timeout` before interactive login; formal **5c.9** Logcat/Xcode one-liners.
+
+Partial device work before sign-off (instrumentation only): Play-installed Android onboarding forensics; Google OAuth SHA troubleshooting; Costco WebView hang / Safeway post failure — now instrumented via `sync_events` + GlitchTip anomalies.
 
 Code readiness notes:
 
@@ -277,7 +281,7 @@ Code readiness notes:
 4. ~~**RLS isolation + anon-blocked live audit**~~ **DONE** (Area 1, 2026-07-24)
 5. ~~**Confirm production env:** JWT + CORS + DSN on dedicated prod deploy~~ **DONE** — Fly `api.meald.app` 2026-07-28
 6. **Add `NO_SECRETS_IN_BUNDLE` CI check** on release build artifacts (plan drafted; no pytest/vitest workflow yet — only `.github/workflows/fly-deploy.yml`).
-7. **Complete dual-platform physical-device cold-start + forced-reconnect checklist against `https://api.meald.app`.**
+7. ~~**Complete dual-platform physical-device cold-start + forced-reconnect checklist against `https://api.meald.app`.**~~ **DONE** (2026-09-24 — [`area-5-dual-platform-sign-off.md`](../../runbooks/area-5-dual-platform-sign-off.md)).
 8. ~~Finish brief 05~~ **DONE** (`78b0aa2`).
 9. **Commit + merge** the launch-readiness working tree (still largely uncommitted as of 2026-07-28 EOD).
 10. ~~**Apple agreements + signed iOS/Android against `api.meald.app`**~~ **DONE** (2026-07-28).
@@ -300,20 +304,20 @@ Code readiness notes:
 
 ---
 
-## Manual device smoke checklist (unchanged — all unchecked except monitoring)
+## Manual device smoke checklist
 
-Copied from brief 06 for operator tracking:
+Copied from brief 06 for operator tracking. Area 5 evidence in [`area-5-dual-platform-sign-off.md`](../../runbooks/area-5-dual-platform-sign-off.md).
 
-- [ ] Fresh install completes cold-start arc in < 3 minutes **against prod API**.
-- [ ] No crash or native exception in Xcode Organizer (iOS) / Android Logcat during cold-start.
+- [x] Fresh install completes cold-start arc in < 3 minutes **against prod API** (Android Sep 22; iOS Sep 23 PT).
+- [ ] No crash or native exception in Xcode Organizer (iOS) / Android Logcat during cold-start (**5c.9** — operator note not filed).
 - [x] GlitchTip receives a test event (backend + frontend) — Cloud smoke 2026-07-28; operator confirmed
 - [x] UptimeRobot green on `https://api.meald.app/api/health` — 2026-07-28
-- [ ] App foreground auto-sync fires; no reconnect prompt on a freshly-connected account.
-- [ ] Forced reconnect scenario: banner appears → reconnect → banner dismisses → sync succeeds.
+- [x] App foreground auto-sync fires; no reconnect prompt on a freshly-connected account (after throttle window; iOS `silent` `sync_succeeded` 2026-09-24 ~4:36 AM PT).
+- [x] Forced reconnect scenario: banner appears → reconnect → banner dismisses → sync succeeds (both platforms; Sep 2026).
 - [ ] `network_security_config.xml` LAN IP absent from release build (Android) — **code PASS; verify in AAB**.
-- [ ] Recipe suggestions load in < 2 seconds from warm pool.
-- [ ] "I cooked this" depletes pantry correctly.
-- [ ] No `console.error` lines during a normal session (WebInspector / Chrome remote debug).
+- [x] Recipe suggestions load in < 2 seconds from warm pool (funnel + operator).
+- [x] "I cooked this" depletes pantry correctly (`cooking_log` + server).
+- [ ] No `console.error` lines during a normal session (WebInspector / Chrome remote debug) — **5c.9** open.
 - [ ] App Store / Google Play metadata complete; screenshots captured.
 
 ---
@@ -326,7 +330,7 @@ Use the **third-pass go sequence** at the bottom of this document (section 4). S
 2. ~~Accept Apple agreements; signed iOS/Android against `https://api.meald.app`.~~ **DONE**
 3. Spend caps (OpenAI + Spoonacular) + Supabase backup/tier check.
 4. Privacy/terms page + delete-account wire-or-hide.
-5. Run Area 5 checklist on the signed prod builds (cold-start, auto-sync, forced-reconnect).
+5. ~~Run Area 5 checklist on the signed prod builds (cold-start, auto-sync, forced-reconnect).~~ **DONE** (2026-09-24).
 6. Invite friends cohort; watch GlitchTip + `funnel_conversion` + `sync_events` + `ai_cost_monthly`.
 
 **Re-score rule:** flip NO-GO → GO only when every **FAIL** above is **PASS**, and every **BLOCKED** item has been executed with evidence attached (query output, screenshot, GlitchTip event ID, or checklist sign-off).
@@ -424,7 +428,7 @@ Keep primary items 1–8, and add/elevate:
 
 - Overall **NO-GO**.
 - Physical-device / prod SQL / prod env items remain correctly **BLOCKED**.
-- Reconnect UX code readiness vs runbook packaging: runbook **PASS** (`docs/runbooks/reconnect.md`); forced-reconnect device QA still Area 5 **BLOCKED**.
+- Reconnect UX code readiness vs runbook packaging: runbook **PASS** (`docs/runbooks/reconnect.md`); forced-reconnect device QA **PASS** ([`area-5-dual-platform-sign-off.md`](../../runbooks/area-5-dual-platform-sign-off.md)).
 - Recommended next sequence remains sound; insert the IDOR + `/api/dev/log` fixes into step 2 (production assertions / security fixes) before device QA.
 
 ---
@@ -457,8 +461,8 @@ Keep primary items 1–8, and add/elevate:
 ### 2. Roadmap cross-check (MVP_SCOPE_AND_ROADMAP M0–M6)
 
 - **M0 scope lock / M1 reliability + auto-sync / M2 cost + sparse pantry / M4 cook loop / M5 stubs:** code-complete and (mostly) merged. Meal-planner deferral + OAuth-only email auth (owner decisions #5–#6) are implemented in the working tree.
-- **M3 cold-start on-device:** telemetry + sync-event code exists; signed prod builds exist; formal Area 5 checklist sign-off still open.
-- **M6 launch readiness:** Areas 1–4 code + live verify done (prod API, GlitchTip, UptimeRobot, reconnect runbook). Apple agreements + signed release builds **done**. Remaining: commit/merge, Area 5 checklist, third-pass legal/ops items (3.4–3.5, 3.7–3.8, 3.10 partial).
+- **M3 cold-start on-device:** telemetry + sync-event code exists; signed prod builds exist; **Area 5 checklist signed off 2026-09-24**.
+- **M6 launch readiness:** Areas 1–4 code + live verify done; Area 5 product gates **PASS**. Remaining: commit/merge, third-pass legal/ops items (3.4–3.5, 3.7–3.8, 3.10 partial), optional **5c.9** notes.
 
 The roadmap's remaining work is therefore **mostly operational** — device QA, store submission hygiene, and beta ops — not greenfield product.
 
@@ -496,7 +500,7 @@ Ordered by "probability this causes a fire during the friends beta."
 - `https://api.meald.app/api/health` → 200; `/api/health/ready` → 200.
 - **UptimeRobot** HTTP monitor on `/api/health` (5‑min); test email received. (GlitchTip free uptime skipped — event quota.)
 
-Remaining: run Area 5 device QA checklist on the signed builds against `https://api.meald.app`.
+Remaining before open beta: third-pass ops (delete-account, spend caps, backups, CI bundle scan) — not Area 5 device QA.
 
 #### 3.2 DEV = PROD is a beta hazard, not just a secrets note
 
@@ -577,7 +581,7 @@ deliberate simplifications will cut the firefighting surface the most:
 5. ~~Monitoring test events + uptime monitor.~~ **DONE**
 6. ~~OAuth-only / email flag.~~ **DONE** — still open: fix/remove dead Delete-Account button; ~~publish privacy/terms pages~~ **DONE** (2026-09-13).
 7. Minimal CI: pytest + vitest + `NO_SECRETS_IN_BUNDLE` (Fly deploy workflow alone is not enough).
-8. Run Area 5 device checklist on the signed prod builds.
+8. ~~Run Area 5 device checklist on the signed prod builds.~~ **DONE** (2026-09-24 — [`area-5-dual-platform-sign-off.md`](../../runbooks/area-5-dual-platform-sign-off.md)).
 9. TestFlight internal + Play internal with 5–10 person cohort; expectations note; watch GlitchTip + `funnel_conversion` + `sync_events` + `ai_cost_monthly`.
 
-**Re-score rule unchanged** — third-pass items still on the blocker checklist before NO-GO → GO: Area 5 checklist, legal pages/account deletion, spend caps, backups, CI, commit/merge.
+**Re-score rule (2026-09-24):** **GO** for step 9 (internal friends beta) once spend caps, backups, delete-account, CI bundle scan, and commit/merge are closed. ~~Area 5 checklist~~ **DONE**. ~~Legal pages~~ **DONE**.

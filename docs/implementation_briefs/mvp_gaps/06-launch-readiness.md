@@ -4,7 +4,8 @@
 > activation-funnel telemetry from brief 03 is instrumented and confirmed flowing in staging.
 >
 > **Live status:** Track evidence and GO/NO-GO in
-> [`06-launch-readiness-findings.md`](06-launch-readiness-findings.md) (refreshed **2026-07-28**).
+> [`06-launch-readiness-findings.md`](06-launch-readiness-findings.md) (refreshed **2026-09-24**).
+> Device sign-off: [`area-5-dual-platform-sign-off.md`](../../runbooks/area-5-dual-platform-sign-off.md).
 > This brief is the contract; the findings doc is the scorecard.
 >
 > **Scope:** Security/RLS review; production secrets configuration; minimal crash/error monitoring
@@ -308,7 +309,7 @@ Walk the following arc on a physical device (not simulator/emulator) for **both 
 
 **5d. Auto-sync verification (both platforms)**
 
-Device sign-off log: Android partial pass recorded in [`docs/runbooks/area-5-android-sign-off.md`](../../runbooks/area-5-android-sign-off.md) (iOS still required for full Area 5).
+Device sign-off log (Android + iOS, Sep 2026): [`docs/runbooks/area-5-dual-platform-sign-off.md`](../../runbooks/area-5-dual-platform-sign-off.md).
 
 - Auto-sync is on by default per owner decision (M1/M5 owner decision, confirmed 2026-06-09).
 - Verify: after a successful cold-start arc, put the app in background for 5 minutes, foreground
