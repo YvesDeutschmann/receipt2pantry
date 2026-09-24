@@ -46,11 +46,20 @@ describe('buildCookIngredients', () => {
     expect(bom).toEqual([{ name: 'salt', amount: 1, unit: 'serving' }])
   })
 
-  it('returns_empty_for_staples', () => {
+  it('staple_with_merged_details_builds_bom', () => {
+    const bom = buildCookIngredients({
+      recipeIdForCook: 'staple_omelette',
+      title: 'Omelette',
+      extendedIngredients: [{ name: 'egg' }, { name: 'butter' }],
+    })
+    expect(bom.length).toBeGreaterThan(0)
+    expect(isStapleRecipeId({ recipeIdForCook: 'staple_omelette' })).toBe(true)
+  })
+
+  it('staple_thin_snapshot_empty_bom', () => {
     expect(
       buildCookIngredients({ recipeIdForCook: 'staple_omelette', title: 'Omelette' })
     ).toEqual([])
-    expect(isStapleRecipeId({ recipeIdForCook: 'staple_omelette' })).toBe(true)
   })
 
   it('prefers_extended_over_flags', () => {

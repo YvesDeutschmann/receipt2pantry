@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { motion, useMotionValue, useMotionValueEvent } from 'framer-motion'
 import { SKIP_LABEL } from '../utils/dinnerPickerRank'
+import { resolveRecipeImage } from '../utils/resolveRecipeImage'
 
 function useSoonIngredientLine(recipe, resolvedTier) {
   if (resolvedTier !== 'use_soon') return null
@@ -69,7 +70,8 @@ function SuggestionRecipeCard({
   const usesLine = formatUsesLine(recipe.pantry_highlights)
   const showAccent = resolvedTier === 'use_soon' || resolvedTier === 'check_first'
   const [imageFailed, setImageFailed] = useState(false)
-  const showImage = recipe.image && !imageFailed
+  const imageSrc = resolveRecipeImage(recipe.image)
+  const showImage = imageSrc && !imageFailed
   const isPicker = variant === 'picker'
   const isPeek = variant === 'peek'
 
@@ -109,7 +111,7 @@ function SuggestionRecipeCard({
       <div className={`w-full ${imageHeightClass} bg-forest-light overflow-hidden`}>
         {showImage ? (
           <img
-            src={recipe.image}
+            src={imageSrc}
             alt=""
             className="w-full h-full object-cover"
             onError={() => setImageFailed(true)}

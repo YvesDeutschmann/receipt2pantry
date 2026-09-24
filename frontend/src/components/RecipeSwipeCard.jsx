@@ -1,4 +1,5 @@
 import { motion, useMotionValue } from 'framer-motion'
+import { resolveRecipeImage } from '../utils/resolveRecipeImage'
 import { useEffect } from 'react'
 
 const RecipeSwipeCard = ({ 
@@ -58,10 +59,10 @@ const RecipeSwipeCard = ({
       exit={{ opacity: 0, scale: 0.8 }}
     >
       {/* Recipe Image */}
-      {recipe.image && (
+      {resolveRecipeImage(recipe.image) && (
         <div className="w-full h-64 bg-forest-mid overflow-hidden">
           <img
-            src={recipe.image}
+            src={resolveRecipeImage(recipe.image)}
             alt={recipe.title}
             className="w-full h-full object-cover"
             onError={(e) => {

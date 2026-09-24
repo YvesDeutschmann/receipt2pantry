@@ -54,14 +54,14 @@ describe('SuggestionDetailModal helpers', () => {
     expect(shouldFetchRecipeDetails(poolRecipe)).toBe(false)
   })
 
-  it('shouldFetchRecipeDetails_false_for_staple', () => {
+  it('shouldFetchRecipeDetails_true_for_thin_staple', () => {
     expect(
       shouldFetchRecipeDetails({
         id: 's1',
         recipeIdForCook: 'staple_omelette',
         extendedIngredients: [],
       })
-    ).toBe(false)
+    ).toBe(true)
   })
 
   it('shouldFetchRecipeDetails_true_for_thin_spoonacular_snapshot', () => {

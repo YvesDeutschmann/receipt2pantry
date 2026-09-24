@@ -654,7 +654,12 @@ describe('SuggestionScreen', () => {
     })
   })
 
-  it('POOL_COOK_STAPLE_EMPTY_INGREDIENTS', async () => {
+  it('POOL_COOK_STAPLE_AFTER_DETAIL_FETCH', async () => {
+    getRecipeDetails.mockResolvedValue({
+      extendedIngredients: [{ name: 'egg' }, { name: 'butter' }],
+      instructions: 'Cook eggs.',
+      analyzedInstructions: [{ steps: [{ number: 1, step: 'Cook eggs.' }] }],
+    })
     getSuggestions.mockResolvedValue({
       use_soon_shelf: [],
       cook_tonight: [
@@ -675,12 +680,17 @@ describe('SuggestionScreen', () => {
     await cookFromModal('Omelette')
 
     await waitFor(() => {
+      expect(getRecipeDetails).toHaveBeenCalledWith('user-1', 'staple_omelette')
+    })
+    await waitFor(() => {
       expect(markCooked).toHaveBeenCalledWith(
         'user-1',
         expect.objectContaining({
           recipeId: 'staple_omelette',
           poolSuggestionId: 'sug-staple',
-          ingredients: [],
+          ingredients: expect.arrayContaining([
+            expect.objectContaining({ name: 'egg' }),
+          ]),
         })
       )
     })
@@ -1506,6 +1516,23 @@ describe('SuggestionScreen', () => {
         expect.objectContaining({ mealTypes: ['lunch'] })
       )
     })
+  })
+
+  it('GENERATE_USER_CAP_SHOWS_PERSONAL_COPY_NOT_GLOBAL_QUOTA', async () => {
+    getSuggestions.mockResolvedValue(EMPTY_SUGGESTIONS)
+    triggerGeneration.mockRejectedValue({
+      response: {
+        status: 429,
+        data: {
+          code: 'recipe_user_cap',
+          error: "You've used your recipe lookups for today. Try again tomorrow.",
+        },
+      },
+    })
+    render(<Recipes />)
+    await waitFor(() => expect(triggerGeneration).toHaveBeenCalledTimes(1))
+    await screen.findByText(/your recipe lookups for today/i)
+    expect(screen.queryByText(/Daily recipe quota reached/i)).toBeNull()
   })
 
   it('GENERATE_429_DOES_NOT_LOOP', async () => {

@@ -27,6 +27,7 @@ from backend.routes.meal_plan import meal_plan_bp
 from backend.routes.pool import pool_bp
 from backend.routes.telemetry import telemetry_bp
 from backend.routes.legal import legal_bp
+from backend.routes.staples_static import staples_static_bp
 from backend.routes.account import account_bp
 
 
@@ -88,19 +89,8 @@ def create_app(config=None):
             response.headers[REQUEST_ID_HEADER] = request_id
         return response
     
-    # Initialize AI service if configured (do this first so other services can use it)
     ai_service = None
-    if config.OPENAI_API_KEY:
-        try:
-            from backend.services.ai_service import create_ai_service
-            ai_service = create_ai_service(config)
-            app.config["AI_SERVICE"] = ai_service
-            logger.info("AI service initialized")
-        except Exception as e:
-            logger.warning(f"Failed to initialize AI service: {e}")
-    else:
-        logger.info("OpenAI not configured (AI features disabled)")
-    
+
     # Initialize services (only if in production or explicitly configured)
     if config.SUPABASE_URL and config.SUPABASE_KEY:
         try:
@@ -118,6 +108,27 @@ def create_app(config=None):
             )
             app.config["SUPABASE_SERVICE"] = supabase_service
             logger.info("Supabase service initialized")
+
+            if config.OPENAI_API_KEY or config.GEMINI_API_KEY:
+                try:
+                    from backend.services.ai_service import create_ai_service
+                    from backend.services.ai_usage_ledger import AiUsageLedger
+
+                    ai_ledger = None
+                    if supabase_service.admin_client:
+                        ai_ledger = AiUsageLedger(
+                            supabase_service.admin_client,
+                            config.AI_USER_DAILY_USD_CAP,
+                            config.AI_KEY_LABEL,
+                            config.SENTRY_ENVIRONMENT,
+                        )
+                    ai_service = create_ai_service(config, ledger=ai_ledger)
+                    app.config["AI_SERVICE"] = ai_service
+                    logger.info("AI service initialized")
+                except Exception as e:
+                    logger.warning(f"Failed to initialize AI service: {e}")
+            else:
+                logger.info("OpenAI/Gemini not configured (AI features disabled)")
             
             # Initialize household service
             household_service = create_household_service(supabase_service)
@@ -135,7 +146,11 @@ def create_app(config=None):
                 try:
                     from backend.services.recipe_service import create_recipe_service
 
-                    recipe_service = create_recipe_service(pantry_service, config)
+                    recipe_service = create_recipe_service(
+                        pantry_service,
+                        config,
+                        admin_client=supabase_service.admin_client,
+                    )
                     app.config["RECIPE_SERVICE"] = recipe_service
                     logger.info("Recipe service initialized")
                 except Exception as e:
@@ -265,6 +280,7 @@ def create_app(config=None):
     app.register_blueprint(telemetry_bp, url_prefix="/api")
     app.register_blueprint(account_bp, url_prefix="/api")
     app.register_blueprint(legal_bp)
+    app.register_blueprint(staples_static_bp)
     
     logger.info("Routes registered")
     

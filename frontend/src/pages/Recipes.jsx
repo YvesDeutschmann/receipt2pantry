@@ -14,7 +14,7 @@ import MealSlotControl from '../components/MealSlotControl'
 import PageHeader from '../components/PageHeader'
 import NeedsAttentionSection from '../components/NeedsAttentionSection'
 import PullToRefresh from '../components/PullToRefresh'
-import { buildCookIngredients, isStapleRecipeId } from '../utils/buildCookIngredients'
+import { buildCookIngredients } from '../utils/buildCookIngredients'
 import {
   clampDeckIndex,
   computeIndexAfterSkip,
@@ -47,6 +47,8 @@ const POLL_BACKOFF_MS = [500, 1000, 2000, 3000, 4000]
 const MEAL_SLOT_ORDER = ['breakfast', 'lunch', 'dinner']
 const MEAL_SLOT_STORAGE_PREFIX = 'meald.selectedMealSlot'
 const QUOTA_ERROR_MESSAGE = 'Daily recipe quota reached, try again later.'
+const USER_CAP_ERROR_MESSAGE =
+  "You've used your recipe lookups for today. Try again tomorrow."
 const BUDGET_ERROR_MESSAGE = 'Recipe lookup limit reached for now. Try again in a bit.'
 
 function defaultEnabledSlots() {
@@ -87,6 +89,11 @@ function applyGenerateError(err, { setError, quotaBlockedRef }) {
   if (code === 'recipe_quota') {
     quotaBlockedRef.current = true
     setError(apiError || QUOTA_ERROR_MESSAGE)
+    return
+  }
+  if (code === 'recipe_user_cap') {
+    quotaBlockedRef.current = true
+    setError(apiError || USER_CAP_ERROR_MESSAGE)
     return
   }
   if (code === 'recipe_budget') {
@@ -320,6 +327,9 @@ function Recipes() {
         if (code === 'recipe_quota') {
           quotaBlockedRef.current = true
           setError(apiError || QUOTA_ERROR_MESSAGE)
+        } else if (code === 'recipe_user_cap') {
+          quotaBlockedRef.current = true
+          setError(apiError || USER_CAP_ERROR_MESSAGE)
         } else if (code === 'recipe_budget') {
           setError(apiError || BUDGET_ERROR_MESSAGE)
         } else {
@@ -502,7 +512,7 @@ function Recipes() {
     syncCookingUi()
 
     const ingredients = buildCookIngredients(recipe)
-    if (ingredients.length === 0 && !isStapleRecipeId(recipe)) {
+    if (ingredients.length === 0) {
       setError(OPEN_RECIPE_MESSAGE)
       cookInFlightRef.current.delete(cardId)
       syncCookingUi()
