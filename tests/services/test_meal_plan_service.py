@@ -585,8 +585,19 @@ async def test_suggest_staple_meals_returns_breakfast_options_for_sparse_pantry(
 
 
 @pytest.mark.asyncio
-async def test_suggest_staple_meals_returns_empty_for_dinner():
-    """Staple suggestions are only defined for breakfast and lunch, not dinner."""
+async def test_suggest_staple_meals_returns_dinner_when_pantry_has_bases():
+    session_pantry = {
+        "p": {"base_ingredient": "pasta", "quantity": 1, "unit": "box", "name": "pasta", "id": "p", "variant": None},
+        "t": {"base_ingredient": "canned tomatoes", "quantity": 1, "unit": "can", "name": "tomatoes", "id": "t", "variant": None},
+    }
+    svc = _make_service()
+    results = await svc.suggest_staple_meals(session_pantry, "dinner")
+    ids = {r["id"] for r in results}
+    assert "staple_tomato_pasta" in ids
+    assert "staple_aglio_olio" in ids
+
+
+async def test_suggest_staple_meals_returns_empty_for_dinner_without_bases():
     session_pantry = {
         "i1": {"base_ingredient": "egg", "quantity": 6, "unit": "count", "name": "eggs", "id": "i1", "variant": None},
         "i2": {"base_ingredient": "bread", "quantity": 1, "unit": "loaf", "name": "bread", "id": "i2", "variant": None},

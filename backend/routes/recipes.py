@@ -1,13 +1,18 @@
 """Recipe API routes"""
 
+import re
+
 from flask import Blueprint, request, current_app, jsonify
 from backend.utils.logger import get_logger
 from backend.utils.auth import get_user_id_from_request
+from backend.services.staple_catalog import get_staple_recipe, is_known_staple_id
 from backend.utils.exceptions import (
     ValidationException,
     AIServiceException,
     RecipeQuotaException,
 )
+
+_SPOONACULAR_ID_RE = re.compile(r"[0-9]{1,16}")
 
 RECIPE_QUOTA_MESSAGE = "Daily recipe quota reached, try again later."
 RECIPE_BUDGET_MESSAGE = "Recipe lookup limit reached for now. Try again in a bit."
@@ -83,28 +88,37 @@ def get_recipes():
         return jsonify({"error": str(e)}), 500
 
 
-@recipes_bp.route("/recipes/<int:recipe_id>", methods=["GET"])
+@recipes_bp.route("/recipes/<recipe_id>", methods=["GET"])
 def get_recipe_details(recipe_id):
     """
-    Get full recipe details including instructions
-    
+    Get full recipe details including instructions.
+
     Path params:
-        - recipe_id: Spoonacular recipe ID
-    
-    Returns:
-        Full recipe details with instructions
+        - recipe_id: Staple catalog id (staple_*) or Spoonacular numeric id
     """
     user_id = get_user_id_from_request()
     if not user_id:
         return jsonify({"error": "User ID required"}), 401
-    
+
+    if not recipe_id or len(recipe_id) > 64:
+        return jsonify({"error": "Resource not found"}), 404
+
+    if is_known_staple_id(recipe_id):
+        recipe = get_staple_recipe(recipe_id)
+        if recipe is None:
+            return jsonify({"error": "Resource not found"}), 404
+        return jsonify(recipe)
+
+    if not _SPOONACULAR_ID_RE.fullmatch(recipe_id):
+        return jsonify({"error": "Resource not found"}), 404
+
     service = get_recipe_service()
     if not service:
         return jsonify({"error": "Recipe service not available"}), 503
-    
+
     try:
         recipe = service.get_recipe_details(
-            recipe_id, user_id=user_id, caller="recipe_open"
+            int(recipe_id), user_id=user_id, caller="recipe_open"
         )
         return jsonify(recipe)
     except ValidationException as e:

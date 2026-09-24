@@ -27,6 +27,7 @@ from backend.routes.meal_plan import meal_plan_bp
 from backend.routes.pool import pool_bp
 from backend.routes.telemetry import telemetry_bp
 from backend.routes.legal import legal_bp
+from backend.routes.staples_static import staples_static_bp
 from backend.routes.account import account_bp
 
 
@@ -279,6 +280,7 @@ def create_app(config=None):
     app.register_blueprint(telemetry_bp, url_prefix="/api")
     app.register_blueprint(account_bp, url_prefix="/api")
     app.register_blueprint(legal_bp)
+    app.register_blueprint(staples_static_bp)
     
     logger.info("Routes registered")
     

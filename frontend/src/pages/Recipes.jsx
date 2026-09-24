@@ -14,7 +14,7 @@ import MealSlotControl from '../components/MealSlotControl'
 import PageHeader from '../components/PageHeader'
 import NeedsAttentionSection from '../components/NeedsAttentionSection'
 import PullToRefresh from '../components/PullToRefresh'
-import { buildCookIngredients, isStapleRecipeId } from '../utils/buildCookIngredients'
+import { buildCookIngredients } from '../utils/buildCookIngredients'
 import {
   clampDeckIndex,
   computeIndexAfterSkip,
@@ -512,7 +512,7 @@ function Recipes() {
     syncCookingUi()
 
     const ingredients = buildCookIngredients(recipe)
-    if (ingredients.length === 0 && !isStapleRecipeId(recipe)) {
+    if (ingredients.length === 0) {
       setError(OPEN_RECIPE_MESSAGE)
       cookInFlightRef.current.delete(cardId)
       syncCookingUi()

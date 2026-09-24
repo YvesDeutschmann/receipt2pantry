@@ -128,7 +128,7 @@ vi.mock('../components/voice/VoiceInputSheet', () => ({
 
 import { AuthProvider } from '../contexts/AuthContext'
 
-/** 14 items, 6 pre-selected — matches S1-01/S1-03 fixture */
+/** 18 items, 10 pre-selected — matches staples template + dinner defaults */
 const template = {
   categories: [
     {
@@ -160,6 +160,15 @@ const template = {
         { id: '14', base_ingredient: 'yeast', display_name: 'Yeast', pre_selected: false },
       ],
     },
+    {
+      name: 'Grains & Canned',
+      items: [
+        { id: '15', base_ingredient: 'pasta', display_name: 'Pasta', pre_selected: true },
+        { id: '16', base_ingredient: 'white rice', display_name: 'White rice', pre_selected: true },
+        { id: '17', base_ingredient: 'canned tomatoes', display_name: 'Canned tomatoes', pre_selected: true },
+        { id: '18', base_ingredient: 'canned black beans', display_name: 'Canned black beans', pre_selected: true },
+      ],
+    },
   ],
 }
 
@@ -182,7 +191,7 @@ function renderStaples() {
 async function confirmToPayoff() {
   renderStaples()
   await screen.findByText('Olive oil')
-  mockApi.confirmStaples.mockResolvedValueOnce({ receipt_matched: 0, added: 6 })
+  mockApi.confirmStaples.mockResolvedValueOnce({ receipt_matched: 0, added: 10 })
   fireEvent.click(screen.getByRole('button', { name: /Done/i }))
   await screen.findByText(/You're all set/i)
 }
@@ -221,7 +230,7 @@ beforeEach(() => {
   mockApi.getStaplesTemplate.mockResolvedValue(template)
   mockApi.getStaplesReceiptMatches.mockResolvedValue({ matches: [] })
   mockApi.confirmStaples.mockReset()
-  mockApi.confirmStaples.mockResolvedValue({ receipt_matched: 0, added: 6 })
+  mockApi.confirmStaples.mockResolvedValue({ receipt_matched: 0, added: 10 })
   mockApi.getPantry.mockResolvedValue({ grouped: [] })
   mockApi.suggestions.triggerGeneration.mockClear()
   mockUpdateUser.mockClear()
@@ -243,7 +252,7 @@ describe('StaplesTemplate cold-start E2E', () => {
       expect(within(row).getByText(/We assumed you have these/i)).toBeInTheDocument()
     }
 
-    mockApi.confirmStaples.mockResolvedValueOnce({ receipt_matched: 0, added: 6 })
+    mockApi.confirmStaples.mockResolvedValueOnce({ receipt_matched: 0, added: 10 })
     const doneBtn = screen.getByRole('button', { name: /Done/i })
     fireEvent.click(doneBtn)
 
@@ -337,7 +346,7 @@ describe('StaplesTemplate cold-start E2E', () => {
 
   it('ARC-03 / 1.4: Done not blocked while receipt sync polls empty', async () => {
     mockApi.getStaplesReceiptMatches.mockResolvedValue({ matches: [] })
-    mockApi.confirmStaples.mockResolvedValue({ receipt_matched: 0, added: 6 })
+    mockApi.confirmStaples.mockResolvedValue({ receipt_matched: 0, added: 10 })
 
     renderStaples()
     await screen.findByText('Olive oil')
@@ -354,7 +363,7 @@ describe('StaplesTemplate cold-start E2E', () => {
     mockApi.getStaplesReceiptMatches
       .mockResolvedValueOnce({ matches: [] })
       .mockResolvedValue({ matches: ['olive oil', 'garlic'] })
-    mockApi.confirmStaples.mockResolvedValue({ receipt_matched: 2, added: 6 })
+    mockApi.confirmStaples.mockResolvedValue({ receipt_matched: 2, added: 10 })
 
     vi.useFakeTimers({ shouldAdvanceTime: true })
     try {

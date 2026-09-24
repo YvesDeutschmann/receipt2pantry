@@ -654,7 +654,12 @@ describe('SuggestionScreen', () => {
     })
   })
 
-  it('POOL_COOK_STAPLE_EMPTY_INGREDIENTS', async () => {
+  it('POOL_COOK_STAPLE_AFTER_DETAIL_FETCH', async () => {
+    getRecipeDetails.mockResolvedValue({
+      extendedIngredients: [{ name: 'egg' }, { name: 'butter' }],
+      instructions: 'Cook eggs.',
+      analyzedInstructions: [{ steps: [{ number: 1, step: 'Cook eggs.' }] }],
+    })
     getSuggestions.mockResolvedValue({
       use_soon_shelf: [],
       cook_tonight: [
@@ -675,12 +680,17 @@ describe('SuggestionScreen', () => {
     await cookFromModal('Omelette')
 
     await waitFor(() => {
+      expect(getRecipeDetails).toHaveBeenCalledWith('user-1', 'staple_omelette')
+    })
+    await waitFor(() => {
       expect(markCooked).toHaveBeenCalledWith(
         'user-1',
         expect.objectContaining({
           recipeId: 'staple_omelette',
           poolSuggestionId: 'sug-staple',
-          ingredients: [],
+          ingredients: expect.arrayContaining([
+            expect.objectContaining({ name: 'egg' }),
+          ]),
         })
       )
     })

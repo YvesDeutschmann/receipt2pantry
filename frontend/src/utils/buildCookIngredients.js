@@ -11,10 +11,6 @@ export function isStapleRecipeId(recipe) {
  * Never spreads Spoonacular objects — only name, amount: 1, unit: 'serving'.
  */
 export function buildCookIngredients(recipe) {
-  if (isStapleRecipeId(recipe)) {
-    return []
-  }
-
   const seen = new Set()
   const result = []
 

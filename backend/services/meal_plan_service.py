@@ -7,20 +7,16 @@ from backend.services.pantry_service import PantryService
 from backend.services.recipe_service import RecipeService
 from backend.services.household_service import HouseholdService
 from backend.utils.exceptions import DatabaseException, ValidationException
+from backend.services.staple_catalog import (
+    get_staple_recipe,
+    list_staples_for_pantry,
+    staple_recipe_ids,
+)
 from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-STAPLE_RECIPE_IDS = frozenset(
-    {
-        "staple_omelette",
-        "staple_scrambled_eggs",
-        "staple_cereal",
-        "staple_pbj",
-        "staple_grilled_cheese",
-        "staple_toast",
-    }
-)
+STAPLE_RECIPE_IDS = staple_recipe_ids()
 
 
 class MealPlanService:
@@ -297,110 +293,11 @@ class MealPlanService:
         self, session_pantry: Dict, meal_type: str
     ) -> List[Dict]:
         """
-        Suggest staple meals based on common pantry items
-        
-        Args:
-            session_pantry: Session pantry dictionary
-            meal_type: Meal type (breakfast, lunch)
-        
-        Returns:
-            List of staple meal dictionaries
+        Suggest staple meals based on exact pantry base_ingredient matches.
+
+        Returns thin card dicts only (no full recipe body).
         """
-        staple_meals = []
-        
-        # Detect common ingredients
-        has_eggs = False
-        has_bread = False
-        has_peanut_butter = False
-        has_milk = False
-        has_cereal = False
-        has_cheese = False
-        
-        for item_data in session_pantry.values():
-            base_ingredient = item_data.get("base_ingredient", "").lower()
-            quantity = item_data.get("quantity", 0)
-            
-            if quantity > 0:
-                if "egg" in base_ingredient:
-                    has_eggs = True
-                if "bread" in base_ingredient:
-                    has_bread = True
-                if "peanut butter" in base_ingredient or "peanutbutter" in base_ingredient:
-                    has_peanut_butter = True
-                if "milk" in base_ingredient:
-                    has_milk = True
-                if "cereal" in base_ingredient:
-                    has_cereal = True
-                if "cheese" in base_ingredient:
-                    has_cheese = True
-        
-        if meal_type == "breakfast":
-            if has_eggs:
-                staple_meals.append({
-                    "id": "staple_omelette",
-                    "title": "Omelette",
-                    "image": None,
-                    "match_percentage": 1.0,
-                    "usedIngredientCount": 1,
-                    "missedIngredientCount": 0,
-                    "is_staple": True
-                })
-                staple_meals.append({
-                    "id": "staple_scrambled_eggs",
-                    "title": "Scrambled Eggs",
-                    "image": None,
-                    "match_percentage": 1.0,
-                    "usedIngredientCount": 1,
-                    "missedIngredientCount": 0,
-                    "is_staple": True
-                })
-            
-            if has_milk and has_cereal:
-                staple_meals.append({
-                    "id": "staple_cereal",
-                    "title": "Cereal with Milk",
-                    "image": None,
-                    "match_percentage": 1.0,
-                    "usedIngredientCount": 2,
-                    "missedIngredientCount": 0,
-                    "is_staple": True
-                })
-        
-        elif meal_type == "lunch":
-            if has_bread and has_peanut_butter:
-                staple_meals.append({
-                    "id": "staple_pbj",
-                    "title": "Peanut Butter & Jelly Sandwich",
-                    "image": None,
-                    "match_percentage": 1.0,
-                    "usedIngredientCount": 2,
-                    "missedIngredientCount": 0,
-                    "is_staple": True
-                })
-            
-            if has_bread and has_cheese:
-                staple_meals.append({
-                    "id": "staple_grilled_cheese",
-                    "title": "Grilled Cheese Sandwich",
-                    "image": None,
-                    "match_percentage": 1.0,
-                    "usedIngredientCount": 2,
-                    "missedIngredientCount": 0,
-                    "is_staple": True
-                })
-            
-            if has_bread:
-                staple_meals.append({
-                    "id": "staple_toast",
-                    "title": "Toast",
-                    "image": None,
-                    "match_percentage": 1.0,
-                    "usedIngredientCount": 1,
-                    "missedIngredientCount": 0,
-                    "is_staple": True
-                })
-        
-        return staple_meals
+        return list_staples_for_pantry(session_pantry, meal_type)
     
     async def soft_reject_recipe(self, session_id: str, recipe_id: str) -> None:
         """
@@ -610,18 +507,11 @@ class MealPlanService:
             ingredients_reserved = []
             
             if recipe_id.startswith("staple_"):
-                # Staple meal - create simple entry
-                recipe_name = recipe_id.replace("staple_", "").replace("_", " ").title()
-                if recipe_id == "staple_pbj":
-                    recipe_name = "Peanut Butter & Jelly Sandwich"
-                elif recipe_id == "staple_grilled_cheese":
-                    recipe_name = "Grilled Cheese Sandwich"
-                elif recipe_id == "staple_scrambled_eggs":
-                    recipe_name = "Scrambled Eggs"
-                elif recipe_id == "staple_cereal":
-                    recipe_name = "Cereal with Milk"
-                
-                # For staples, don't deduct ingredients (they're too simple)
+                catalog_entry = get_staple_recipe(recipe_id)
+                if catalog_entry:
+                    recipe_name = catalog_entry.get("title", recipe_name)
+                    recipe_image = catalog_entry.get("image")
+                # For staples, don't deduct ingredients in wizard session
                 ingredients_reserved = []
             else:
                 # Get recipe from Spoonacular

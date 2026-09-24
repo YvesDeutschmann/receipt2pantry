@@ -4,6 +4,8 @@ import ConfidenceIndicator from './ConfidenceIndicator'
 import IngredientCorrection from './IngredientCorrection'
 import { api } from '../services/apiClient'
 import { pantryIngredientNamesMatch } from '../utils/pantryIngredientMatch'
+import { resolveRecipeImage } from '../utils/resolveRecipeImage'
+import { buildCookIngredients } from '../utils/buildCookIngredients'
 
 function findPantryVariantForIngredient(pantryData, ing) {
   if (!pantryData?.grouped || !ing) return null
@@ -63,10 +65,14 @@ export function resolveRecipeFetchId(recipe) {
 export function shouldFetchRecipeDetails(recipe) {
   const fetchId = resolveRecipeFetchId(recipe)
   if (!fetchId) return false
-  if (fetchId.startsWith('staple_')) return false
-  if (!/^\d+$/.test(fetchId)) return false
   if ((recipe?.extendedIngredients || []).length > 0) return false
-  return true
+  if (fetchId.startsWith('staple_')) return true
+  if (/^\d+$/.test(fetchId)) return true
+  return false
+}
+
+export function isStapleDetailRecipe(recipe) {
+  return resolveRecipeFetchId(recipe).startsWith('staple_')
 }
 
 export function mergeRecipeDetails(recipe, details) {
@@ -226,7 +232,10 @@ function SuggestionDetailModal({
     }
   }, [isOpen, requestClose])
 
-  const cookActionDisabled = cookDisabled || mergedLoading
+  const resolvedImage = resolveRecipeImage(display?.image)
+  const cookBom = buildCookIngredients(display)
+  const cookActionDisabled =
+    cookDisabled || mergedLoading || (!mergedLoading && cookBom.length === 0)
 
   const cookFooter = (
     <div className="px-4 py-3 sm:px-6 space-y-2">
@@ -264,10 +273,10 @@ function SuggestionDetailModal({
           </div>
         ) : (
           <div className="space-y-6">
-            {display.image && (
+            {resolvedImage && (
               <div className="rounded-lg overflow-hidden">
                 <img
-                  src={display.image}
+                  src={resolvedImage}
                   alt={display.title}
                   className="w-full h-64 object-cover"
                   onError={(e) => {
@@ -377,6 +386,8 @@ function SuggestionDetailModal({
                       </div>
                     ))}
                   </div>
+                ) : isStapleDetailRecipe(display) ? (
+                  <p className="text-sage-light whitespace-pre-line">{display.instructions}</p>
                 ) : (
                   <div
                     className="text-sage-light prose prose-sm max-w-none prose-invert whitespace-pre-line"

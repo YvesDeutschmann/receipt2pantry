@@ -1,0 +1,250 @@
+[
+  {
+    "id": "staple_omelette",
+    "meal_type": "breakfast",
+    "required_bases": ["egg"],
+    "title": "Omelette",
+    "readyInMinutes": 10,
+    "servings": 2,
+    "summary": "A quick folded omelette for two. Beat the eggs, cook in a hot pan, and fold when the edges set.",
+    "image": "/staples/staple_omelette.webp",
+    "extendedIngredients": [
+      {"name": "egg", "original": "4 large eggs", "amount": 4, "unit": ""},
+      {"name": "butter", "original": "1 tablespoon butter", "amount": 1, "unit": "Tbsp"},
+      {"name": "salt", "original": "pinch of salt", "amount": 0.25, "unit": "tsp"},
+      {"name": "black pepper", "original": "pinch of black pepper", "amount": 0.125, "unit": "tsp"}
+    ],
+    "instructions": "Beat the eggs with salt and pepper.\nMelt butter in a nonstick pan over medium heat.\nPour in the eggs and let the bottom set for 30 seconds.\nGently push cooked edges toward the center and tilt the pan so raw egg flows out.\nWhen mostly set but still soft on top, fold in half and slide onto a plate.",
+    "analyzedInstructions": [
+      {
+        "name": "",
+        "steps": [
+          {"number": 1, "step": "Beat the eggs with salt and pepper in a bowl."},
+          {"number": 2, "step": "Melt butter in a nonstick skillet over medium heat."},
+          {"number": 3, "step": "Pour in the eggs and let the bottom set for about 30 seconds."},
+          {"number": 4, "step": "Push cooked edges toward the center and tilt the pan so runny egg fills gaps."},
+          {"number": 5, "step": "When mostly set but still slightly wet on top, fold the omelette in half and serve."}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "staple_scrambled_eggs",
+    "meal_type": "breakfast",
+    "required_bases": ["egg"],
+    "title": "Scrambled Eggs",
+    "readyInMinutes": 8,
+    "servings": 2,
+    "summary": "Soft scrambled eggs cooked low and slow for a creamy texture.",
+    "image": "/staples/staple_scrambled_eggs.webp",
+    "extendedIngredients": [
+      {"name": "egg", "original": "4 large eggs", "amount": 4, "unit": ""},
+      {"name": "butter", "original": "1 tablespoon butter", "amount": 1, "unit": "Tbsp"},
+      {"name": "salt", "original": "pinch of salt", "amount": 0.25, "unit": "tsp"},
+      {"name": "black pepper", "original": "pinch of black pepper", "amount": 0.125, "unit": "tsp"}
+    ],
+    "instructions": "Beat eggs with salt and pepper.\nMelt butter in a pan over medium-low heat.\nAdd eggs and stir gently with a spatula.\nRemove from heat while still slightly wet; they will finish on the plate.",
+    "analyzedInstructions": [
+      {
+        "name": "",
+        "steps": [
+          {"number": 1, "step": "Beat the eggs with salt and pepper."},
+          {"number": 2, "step": "Melt butter in a skillet over medium-low heat."},
+          {"number": 3, "step": "Pour in eggs and stir slowly with a spatula, scraping the bottom."},
+          {"number": 4, "step": "When eggs are mostly set but still glossy, take the pan off the heat and serve right away."}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "staple_cereal",
+    "meal_type": "breakfast",
+    "required_bases": ["cereal", "milk"],
+    "title": "Cereal with Milk",
+    "readyInMinutes": 3,
+    "servings": 1,
+    "summary": "Bowl your favorite cereal and pour cold milk over the top.",
+    "image": "/staples/staple_cereal.webp",
+    "extendedIngredients": [
+      {"name": "cereal", "original": "1 cup cereal", "amount": 1, "unit": "cup"},
+      {"name": "milk", "original": "3/4 cup milk", "amount": 0.75, "unit": "cup"}
+    ],
+    "instructions": "Pour cereal into a bowl.\nAdd milk to cover.\nEat right away so it stays crunchy.",
+    "analyzedInstructions": [
+      {
+        "name": "",
+        "steps": [
+          {"number": 1, "step": "Add cereal to a bowl."},
+          {"number": 2, "step": "Pour in cold milk to your liking."},
+          {"number": 3, "step": "Serve immediately."}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "staple_pbj",
+    "meal_type": "lunch",
+    "required_bases": ["bread", "peanut butter"],
+    "title": "Peanut Butter and Jelly Sandwich",
+    "readyInMinutes": 5,
+    "servings": 1,
+    "summary": "Classic peanut butter and jelly on sandwich bread.",
+    "image": "/staples/staple_pbj.webp",
+    "extendedIngredients": [
+      {"name": "bread", "original": "2 slices bread", "amount": 2, "unit": "slices"},
+      {"name": "peanut butter", "original": "2 tablespoons peanut butter", "amount": 2, "unit": "Tbsp"}
+    ],
+    "instructions": "Spread peanut butter on one slice of bread.\nSpread jelly on the other slice if you have it.\nPress slices together and cut if you like.",
+    "analyzedInstructions": [
+      {
+        "name": "",
+        "steps": [
+          {"number": 1, "step": "Spread peanut butter evenly on one slice of bread."},
+          {"number": 2, "step": "Add jelly on the second slice if you have it in the pantry."},
+          {"number": 3, "step": "Close the sandwich, cut in half if desired, and serve."}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "staple_grilled_cheese",
+    "meal_type": "lunch",
+    "required_bases": ["bread", "cheese"],
+    "title": "Grilled Cheese Sandwich",
+    "readyInMinutes": 10,
+    "servings": 1,
+    "summary": "Buttered bread and melted cheese cooked in a skillet until golden.",
+    "image": "/staples/staple_grilled_cheese.webp",
+    "extendedIngredients": [
+      {"name": "bread", "original": "2 slices bread", "amount": 2, "unit": "slices"},
+      {"name": "cheese", "original": "2 slices cheese", "amount": 2, "unit": "slices"},
+      {"name": "butter", "original": "1 tablespoon butter", "amount": 1, "unit": "Tbsp"}
+    ],
+    "instructions": "Butter one side of each bread slice.\nPlace cheese between bread, buttered sides out.\nCook in a skillet over medium heat until golden, flipping once.",
+    "analyzedInstructions": [
+      {
+        "name": "",
+        "steps": [
+          {"number": 1, "step": "Butter the outside of each bread slice."},
+          {"number": 2, "step": "Stack cheese between the bread, buttered sides facing out."},
+          {"number": 3, "step": "Cook in a dry skillet over medium heat until the bottom is golden, about 3 minutes."},
+          {"number": 4, "step": "Flip and cook until the second side is golden and cheese melts."}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "staple_toast",
+    "meal_type": "lunch",
+    "required_bases": ["bread"],
+    "title": "Toast",
+    "readyInMinutes": 5,
+    "servings": 1,
+    "summary": "Simple buttered toast when you need something fast.",
+    "image": "/staples/staple_toast.webp",
+    "extendedIngredients": [
+      {"name": "bread", "original": "2 slices bread", "amount": 2, "unit": "slices"},
+      {"name": "butter", "original": "1 teaspoon butter", "amount": 1, "unit": "tsp"}
+    ],
+    "instructions": "Toast bread until golden.\nSpread butter on warm slices.\nServe hot.",
+    "analyzedInstructions": [
+      {
+        "name": "",
+        "steps": [
+          {"number": 1, "step": "Toast the bread in a toaster or dry skillet until golden."},
+          {"number": 2, "step": "Spread butter on the warm slices and serve."}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "staple_aglio_olio",
+    "meal_type": "dinner",
+    "required_bases": ["pasta"],
+    "title": "Spaghetti Aglio e Olio",
+    "readyInMinutes": 20,
+    "servings": 4,
+    "summary": "Pasta tossed with olive oil, garlic, and a pinch of chili for a simple weeknight dinner.",
+    "image": "/staples/staple_aglio_olio.webp",
+    "extendedIngredients": [
+      {"name": "pasta", "original": "12 ounces spaghetti", "amount": 12, "unit": "oz"},
+      {"name": "olive oil", "original": "1/3 cup olive oil", "amount": 0.33, "unit": "cup"},
+      {"name": "garlic powder", "original": "1 teaspoon garlic powder", "amount": 1, "unit": "tsp"},
+      {"name": "chili flakes", "original": "1/2 teaspoon chili flakes", "amount": 0.5, "unit": "tsp"},
+      {"name": "salt", "original": "salt for pasta water", "amount": 1, "unit": "tsp"}
+    ],
+    "instructions": "Boil pasta in salted water until al dente; reserve 1/2 cup pasta water.\nWarm olive oil in a large pan with garlic powder and chili flakes.\nToss drained pasta in the oil, adding pasta water as needed.\nSeason with salt and pepper and serve.",
+    "analyzedInstructions": [
+      {
+        "name": "",
+        "steps": [
+          {"number": 1, "step": "Cook pasta in a large pot of salted boiling water until al dente. Reserve 1/2 cup of the cooking water."},
+          {"number": 2, "step": "While pasta cooks, warm olive oil in a large skillet over medium-low heat with garlic powder and chili flakes for 1 minute."},
+          {"number": 3, "step": "Drain pasta and add to the skillet. Toss with the oil."},
+          {"number": 4, "step": "Splash in reserved pasta water a little at a time until the sauce coats the noodles."},
+          {"number": 5, "step": "Season with salt and black pepper and serve immediately."}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "staple_tomato_pasta",
+    "meal_type": "dinner",
+    "required_bases": ["pasta", "canned tomatoes"],
+    "title": "Pasta with Tomato Sauce",
+    "readyInMinutes": 25,
+    "servings": 4,
+    "summary": "Quick pasta with a simple sauce from canned tomatoes and olive oil.",
+    "image": "/staples/staple_tomato_pasta.webp",
+    "extendedIngredients": [
+      {"name": "pasta", "original": "12 ounces pasta", "amount": 12, "unit": "oz"},
+      {"name": "canned tomatoes", "original": "1 can (14 oz) canned tomatoes", "amount": 14, "unit": "oz"},
+      {"name": "olive oil", "original": "2 tablespoons olive oil", "amount": 2, "unit": "Tbsp"},
+      {"name": "garlic powder", "original": "1/2 teaspoon garlic powder", "amount": 0.5, "unit": "tsp"},
+      {"name": "salt", "original": "salt to taste", "amount": 0.5, "unit": "tsp"}
+    ],
+    "instructions": "Simmer canned tomatoes with olive oil and garlic powder for 10 minutes.\nCook pasta in salted water; drain.\nToss pasta with the sauce and serve.",
+    "analyzedInstructions": [
+      {
+        "name": "",
+        "steps": [
+          {"number": 1, "step": "Bring a pot of salted water to a boil for the pasta."},
+          {"number": 2, "step": "In a saucepan, combine canned tomatoes, olive oil, and garlic powder. Simmer 10 minutes, breaking up tomatoes with a spoon."},
+          {"number": 3, "step": "Cook pasta until al dente and drain."},
+          {"number": 4, "step": "Toss pasta with the tomato sauce, season with salt and pepper, and serve."}
+        ]
+      }
+    ]
+  },
+  {
+    "id": "staple_rice_beans",
+    "meal_type": "dinner",
+    "required_bases": ["white rice", "canned black beans"],
+    "title": "Rice and Black Beans",
+    "readyInMinutes": 25,
+    "servings": 4,
+    "summary": "Fluffy rice topped with seasoned canned black beans for an easy pantry dinner.",
+    "image": "/staples/staple_rice_beans.webp",
+    "extendedIngredients": [
+      {"name": "white rice", "original": "1 cup white rice", "amount": 1, "unit": "cup"},
+      {"name": "canned black beans", "original": "1 can black beans, drained", "amount": 15, "unit": "oz"},
+      {"name": "olive oil", "original": "1 tablespoon olive oil", "amount": 1, "unit": "Tbsp"},
+      {"name": "cumin", "original": "1/2 teaspoon cumin", "amount": 0.5, "unit": "tsp"},
+      {"name": "garlic powder", "original": "1/2 teaspoon garlic powder", "amount": 0.5, "unit": "tsp"},
+      {"name": "salt", "original": "salt to taste", "amount": 0.5, "unit": "tsp"}
+    ],
+    "instructions": "Cook rice according to package directions.\nWarm olive oil in a pan, add drained beans, cumin, and garlic powder.\nCook beans 5 minutes, season with salt.\nServe beans over rice.",
+    "analyzedInstructions": [
+      {
+        "name": "",
+        "steps": [
+          {"number": 1, "step": "Cook white rice using your usual method (about 18 minutes covered)."},
+          {"number": 2, "step": "Drain and rinse the black beans."},
+          {"number": 3, "step": "Heat olive oil in a skillet over medium heat. Add beans, cumin, and garlic powder."},
+          {"number": 4, "step": "Stir and cook 5 minutes until heated through. Season with salt."},
+          {"number": 5, "step": "Spoon beans over rice and serve."}
+        ]
+      }
+    ]
+  }
+]
