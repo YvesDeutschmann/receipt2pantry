@@ -2,7 +2,12 @@ import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen } from '@testing-library/react'
 import { MemoryRouter, Routes, Route, Navigate } from 'react-router-dom'
 
-const mockFeatures = vi.hoisted(() => ({ mealPlanner: false, emailAuth: false }))
+const mockFeatures = vi.hoisted(() => ({
+  mealPlanner: false,
+  emailAuth: false,
+  emailSignIn: false,
+  emailSignUp: false,
+}))
 const mockAuthUser = vi.hoisted(() => ({
   current: {
     id: 'user-1',
@@ -39,6 +44,7 @@ vi.mock('../contexts/AuthContext', () => ({
 vi.mock('@capacitor/core', () => ({
   Capacitor: {
     getPlatform: () => 'web',
+    isNativePlatform: () => false,
   },
 }))
 
@@ -165,11 +171,14 @@ describe('meal planner feature flag', () => {
 describe('email auth feature flag', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    mockFeatures.mealPlanner = false
     mockFeatures.emailAuth = false
+    mockFeatures.emailSignIn = false
+    mockFeatures.emailSignUp = false
     mockAuthUser.current = null
   })
 
-  it('AUTH_HIDES_EMAIL_PATH_WHEN_FLAG_OFF', () => {
+  it('AUTH_HIDES_EMAIL_PATH_WHEN_FLAGS_OFF', () => {
     render(
       <MemoryRouter>
         <Auth />
@@ -182,7 +191,19 @@ describe('email auth feature flag', () => {
     expect(screen.queryByRole('button', { name: /dev: sign in as test user/i })).not.toBeInTheDocument()
   })
 
-  it('AUTH_SHOWS_EMAIL_ENTRY_WHEN_FLAG_ON', () => {
+  it('AUTH_SHOWS_EMAIL_SIGN_IN_ONLY_WHEN_SIGNIN_ON', () => {
+    mockFeatures.emailSignIn = true
+    render(
+      <MemoryRouter>
+        <Auth />
+      </MemoryRouter>
+    )
+    expect(screen.getByRole('button', { name: /use email instead/i })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /create account/i })).not.toBeInTheDocument()
+  })
+
+  it('AUTH_SHOWS_EMAIL_ENTRY_WHEN_SIGNUP_ON', () => {
+    mockFeatures.emailSignUp = true
     mockFeatures.emailAuth = true
     render(
       <MemoryRouter>

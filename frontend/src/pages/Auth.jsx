@@ -15,8 +15,11 @@ function Auth() {
     return <Navigate to="/recipes" replace />
   }
 
+  const emailFormEnabled = FEATURES.emailSignIn || FEATURES.emailSignUp
   const [showEmailForm, setShowEmailForm] = useState(false)
-  const [emailFormMode, setEmailFormMode] = useState('signUp') // 'signUp' | 'signIn'
+  const [emailFormMode, setEmailFormMode] = useState(
+    FEATURES.emailSignUp ? 'signUp' : 'signIn'
+  )
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -35,7 +38,9 @@ function Auth() {
     } catch (err) {
       const msg = err.message || 'Something went wrong'
       const providerLabel = provider === 'apple' ? 'Apple' : 'Google'
-      const unavailableSuffix = FEATURES.emailAuth ? ' Try again or use email.' : ' Try again.'
+      const unavailableSuffix = emailFormEnabled
+        ? ' Try again or use email.'
+        : ' Try again.'
       setError(
         msg.includes('unavailable') || msg.includes('provider')
           ? `Sign in with ${providerLabel} is unavailable.${unavailableSuffix}`
@@ -67,6 +72,11 @@ function Auth() {
       }
 
       if (emailFormMode === 'signUp') {
+        if (!FEATURES.emailSignUp) {
+          setError('Sign up is not available. Use the demo account or Apple/Google.')
+          setLoading(false)
+          return
+        }
         try {
           await signUp(email, password)
         } catch (signUpErr) {
@@ -99,7 +109,8 @@ function Auth() {
 
   const testUserEmail = import.meta.env.VITE_TEST_USER_EMAIL
   const testUserPassword = import.meta.env.VITE_TEST_USER_PASSWORD
-  const canUseTestUser = testUserEmail && testUserPassword
+  const canUseTestUser =
+    FEATURES.emailSignUp && testUserEmail && testUserPassword
 
   const fillTestUser = () => {
     if (canUseTestUser) {
@@ -109,7 +120,13 @@ function Auth() {
     }
   }
 
-  const showEmailFormUi = FEATURES.emailAuth && showEmailForm
+  const showEmailFormUi = emailFormEnabled && showEmailForm
+
+  const openEmailForm = () => {
+    setShowEmailForm(true)
+    setEmailFormMode(FEATURES.emailSignUp ? 'signUp' : 'signIn')
+    setError('')
+  }
 
   return (
     <div className="min-h-screen bg-forest flex flex-col items-center justify-center px-4 py-8">
@@ -147,13 +164,10 @@ function Auth() {
 
             <LegalAgreementNotice />
 
-            {FEATURES.emailAuth && (
+            {emailFormEnabled && (
               <button
                 type="button"
-                onClick={() => {
-                  setShowEmailForm(true)
-                  setError('')
-                }}
+                onClick={openEmailForm}
                 className="w-full text-sm text-sage-light hover:text-terra-light transition-colors py-2"
               >
                 Use email instead
@@ -203,19 +217,23 @@ function Auth() {
             {error && (
               <div className="rounded-meald-md border border-[var(--color-error)] px-3 py-2 text-sm text-[var(--color-error)] bg-[var(--color-error)]/10">
                 {error === 'exists' ? (
-                  <>
-                    An account with this email exists.{' '}
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setError('')
-                        setEmailFormMode('signIn')
-                      }}
-                      className="underline font-medium"
-                    >
-                      Sign in instead
-                    </button>
-                  </>
+                  FEATURES.emailSignUp ? (
+                    <>
+                      An account with this email exists.{' '}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError('')
+                          setEmailFormMode('signIn')
+                        }}
+                        className="underline font-medium"
+                      >
+                        Sign in instead
+                      </button>
+                    </>
+                  ) : (
+                    'Check your email and password, then try again.'
+                  )
                 ) : (
                   error
                 )}
@@ -239,12 +257,25 @@ function Auth() {
               )}
             </button>
 
+            {FEATURES.emailSignUp && emailFormMode === 'signIn' && (
+              <button
+                type="button"
+                onClick={() => {
+                  setEmailFormMode('signUp')
+                  setError('')
+                }}
+                className="w-full text-sm text-sage-light hover:text-terra-light transition-colors"
+              >
+                Create an account
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => {
                 setShowEmailForm(false)
                 setError('')
-                setEmailFormMode('signUp')
+                setEmailFormMode(FEATURES.emailSignUp ? 'signUp' : 'signIn')
               }}
               className="w-full text-sm text-sage-light hover:text-terra-light transition-colors"
             >
@@ -261,7 +292,7 @@ function Auth() {
           </div>
         )}
 
-        {FEATURES.emailAuth && canUseTestUser && (
+        {canUseTestUser && (
           <div className="mt-6 pt-6 border-t border-forest-light">
             <button
               type="button"

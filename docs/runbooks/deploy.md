@@ -92,6 +92,23 @@ Wait for certificate issuance (`fly certs check api.meald.app`). Then verify:
 curl https://api.meald.app/api/health
 ```
 
+## Domain email (`@meald.app`)
+
+Inbound mail uses **Namecheap → Advanced DNS → Mail Settings: Email Forwarding** (MX `eforward*.registrar-servers.com`). Forwarders live on the domain **Domain** tab under **Redirect Email** — **Alias** is the local part only (e.g. `privacy` → `privacy@meald.app`), not a nickname.
+
+| Alias | Purpose |
+|---|---|
+| `privacy` | Privacy contact on store listings and policy |
+| `review` | App Review / Play demo account inbox (forwards to operator; sign-in uses Supabase on PROD) |
+
+**Verified 2026-09-29:** inbound test to `privacy@meald.app` and `review@meald.app` delivered to the forward destination (external sender; do not test from the same Gmail that receives forwards).
+
+**Review demo cook loop (PROD):** signed Android + iOS, email sign-in — server rows confirmed same day; see [`app-store-review.md`](app-store-review.md#signed-build-cook-loop-prod--verified-2026-09-29).
+
+**Account deletion listing URL:** `https://api.meald.app/delete-account` — served from [`backend/routes/legal.py`](../../backend/routes/legal.py); deploy with `fly deploy` before pasting into Play Console.
+
+To re-test without a throwaway account: [sendtestemail.com](https://sendtestemail.com/) or [sendtestmail.com](https://sendtestmail.com/).
+
 ## Redeploy
 
 ```bash
@@ -167,11 +184,19 @@ curl http://localhost:8080/api/health
 
 Use `FLASK_ENV=development` for local container smoke; production validation requires all prod secrets.
 
+## DEV vs PROD Supabase
+
+Local development uses the **DEV** project (`zydabsxcbetbhrgpiaxb`). Fly secrets and store builds use **PROD** (`pvmezsxdqotxaqfymmzd`). See [`supabase-environments.md`](supabase-environments.md).
+
+Before `supabase db push` against PROD: take a backup and confirm you are on the intended `--project-ref`. Never run destructive scripts (`populate_test_pantry`, live pytest flags) against PROD without `--prod`.
+
 ## Spoonacular spend cap
 
 Before or immediately after pointing testers at production, set a vendor-side hard cap on the production Spoonacular API key (launch-readiness finding 3.7 — five-minute must-do):
 
 1. Log into the [Spoonacular API console](https://spoonacular.com/food-api/console) for the production key.
 2. Confirm the plan’s daily point allotment and set the tightest available hard cap or billing alert.
-3. Record the chosen daily point cap and the key’s last-four in this runbook (not the key itself): **(operator: fill last-four and daily point cap)**.
-4. The in-app `SPOONACULAR_CALL_BUDGET` is per Flask worker and does not replace the vendor cap; HTTP 402 from Spoonacular remains the hard stop.
+3. Record the chosen **daily point cap** here: **(operator: daily point cap = ___ )** — do not record API keys or key fragments.
+4. Set an **OpenAI** monthly budget and hard limit in the [OpenAI usage dashboard](https://platform.openai.com/settings/organization/limits).
+5. Confirm **Supabase PROD** is on a paid tier with backups; confirm `privacy@meald.app` forwarding still works (see [Domain email](#domain-email-mealdapp)).
+6. The in-app `SPOONACULAR_CALL_BUDGET` is per Flask worker and does not replace the vendor cap; HTTP 402 from Spoonacular remains the hard stop.

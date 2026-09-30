@@ -530,7 +530,7 @@ button for the beta build so it doesn't look broken.
 
 Public HTML at **`https://api.meald.app/privacy`** and **`https://api.meald.app/terms`** (Flask blueprint, no auth, security headers). Auth and Settings open these compile-time URLs in the system browser (`App.openUrl` on native). Use the privacy URL in App Store Connect and Play Console.
 
-**Ops follow-up:** Confirm `privacy@meald.app` inbox receives mail before external beta submission.
+**Ops follow-up:** ~~Confirm `privacy@meald.app` inbox receives mail~~ **DONE** (2026-09-29; `privacy@` and `review@` forwarding verified — [`deploy.md` runbook](../../runbooks/deploy.md#domain-email-mealdapp)).
 
 #### 3.6 There is no CI — **PARTIAL**
 
