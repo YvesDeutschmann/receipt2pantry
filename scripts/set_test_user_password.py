@@ -15,6 +15,10 @@ sys.path.insert(0, project_root)
 from dotenv import load_dotenv
 load_dotenv(os.path.join(project_root, '.env'))
 
+from scripts._env_guard import assert_not_prod
+
+assert_not_prod(context="set_test_user_password.py")
+
 from supabase import create_client
 
 TEST_USER_ID = "00000000-0000-0000-0000-000000000001"
@@ -22,7 +26,7 @@ TEST_PASSWORD = "test123"
 
 def main():
     url = os.getenv("SUPABASE_URL")
-    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+    service_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY") or os.getenv("SUPABASE_SECRET_KEY")
     if not url or not service_key:
         print("❌ Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in .env")
         sys.exit(1)
