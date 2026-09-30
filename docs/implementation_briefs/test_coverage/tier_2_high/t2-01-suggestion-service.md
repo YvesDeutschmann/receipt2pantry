@@ -9,7 +9,7 @@
 
 - **File:** `backend/services/suggestion_service.py`
 - **Key helpers:** `get_tier(min_required_confidence)`, `get_status_label(confidence, is_use_soon)`, `find_best_match(pantry_list, ingredient_name)`.
-- **Constants:** `ASPIRATIONAL_DISMISS_THRESHOLD = 3`, `ASPIRATIONAL_CONFIDENCE_PENALTY = 0.15`, `SUGGESTION_CACHE_TTL_SECONDS = 1800`, `CANDIDATE_NUMBER = 50`.
+- **Constants:** `ASPIRATIONAL_DISMISS_THRESHOLD = 3`, `ASPIRATIONAL_CONFIDENCE_PENALTY = 0.15`, `SUGGESTION_CACHE_TTL_SECONDS = 1800`, `CANDIDATE_NUMBER = 15`.
 - **Default prefs:** `{"depletion_multiplier": 1.0}`.
 - **Dependencies:** `PantryService`, `RecipeService`, `SupabaseService`, `Config`, and confidence-engine internals.
 

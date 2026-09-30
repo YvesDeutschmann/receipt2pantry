@@ -21,7 +21,13 @@ RECIPE_USER_CAP_MESSAGE = (
 )
 RECIPE_LEDGER_UNAVAILABLE_MESSAGE = "Recipe service temporarily unavailable."
 
+SPOONACULAR_BUDGET_ERROR_MARKER = "Spoonacular call budget exceeded for this period"
+
 logger = get_logger(__name__)
+
+
+def is_recipe_budget_error(message: str) -> bool:
+    return SPOONACULAR_BUDGET_ERROR_MARKER in message
 
 
 def _recipe_ai_service_response(e: AIServiceException):
@@ -35,6 +41,10 @@ def _recipe_ai_service_response(e: AIServiceException):
         return jsonify({"error": RECIPE_USER_CAP_MESSAGE, "code": "recipe_user_cap"}), 429
     if is_ledger_unavailable_error(msg):
         return jsonify({"error": RECIPE_LEDGER_UNAVAILABLE_MESSAGE}), 503
+    if is_recipe_budget_error(msg):
+        return jsonify(
+            {"error": RECIPE_BUDGET_MESSAGE, "code": "recipe_budget"}
+        ), 429
     logger.error(f"API service error: {e}")
     return jsonify({"error": str(e)}), 500
 

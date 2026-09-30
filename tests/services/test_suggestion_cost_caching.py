@@ -742,7 +742,7 @@ def test_suggestion_details_budget_exhaustion_returns_partial(monkeypatch):
                 "title": "A",
                 "extendedIngredients": [{"name": "chicken breast", "aisle": "Meat"}],
             }
-        raise AIServiceException("budget")
+        raise AIServiceException("Spoonacular call budget exceeded for this period")
 
     recipe_service.get_recipe_details.side_effect = details_side_effect
     svc = SuggestionService(supabase, pantry_service, recipe_service, MagicMock())
