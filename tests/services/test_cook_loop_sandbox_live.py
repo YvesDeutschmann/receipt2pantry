@@ -45,6 +45,10 @@ def _live_skip_reason() -> str | None:
         return "COOK_LOOP_LIVE_USER_ID required"
     if not os.getenv("COOK_LOOP_LIVE_HOUSEHOLD_ID", "").strip():
         return "COOK_LOOP_LIVE_HOUSEHOLD_ID required"
+    from scripts._env_guard import is_prod_supabase_url
+
+    if is_prod_supabase_url():
+        return "COOK_LOOP_LIVE must not run against production Supabase"
     return None
 
 

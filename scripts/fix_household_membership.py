@@ -10,6 +10,10 @@ import sys
 project_root = os.path.join(os.path.dirname(__file__), '..')
 sys.path.insert(0, project_root)
 
+from scripts._env_guard import assert_not_prod
+
+assert_not_prod(context="fix_household_membership.py")
+
 from backend.services.supabase_service import SupabaseService
 from backend.config import Config
 

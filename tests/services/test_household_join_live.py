@@ -45,6 +45,10 @@ def _live_skip_reason() -> str | None:
     cook_loop_hh = os.getenv("COOK_LOOP_LIVE_HOUSEHOLD_ID", "").strip()
     if cook_loop_hh and cook_loop_hh in (QA_OWNER_HOUSEHOLD_ID, QA_JOINER_HOUSEHOLD_ID):
         return "QA household IDs must not match COOK_LOOP_LIVE_HOUSEHOLD_ID"
+    from scripts._env_guard import is_prod_supabase_url
+
+    if is_prod_supabase_url():
+        return "HOUSEHOLD_JOIN_LIVE must not run against production Supabase"
     return None
 
 
