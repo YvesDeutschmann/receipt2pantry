@@ -408,6 +408,7 @@ fi
 
 log "npm run build (production API)"
 (cd "$FRONTEND" && production_env npm run build)
+(cd "$FRONTEND" && node scripts/assert-bundle-target.js)
 strip_js_maps
 
 log "npx cap sync ios"

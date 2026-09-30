@@ -302,6 +302,7 @@ console.log(
   `Forcing VITE_API_BASE_URL=${productionApiBase} and empty VITE_ENABLE_DEV_SETTINGS`
 );
 run('npx', ['vite', 'build'], { env: viteEnv });
+run('node', ['scripts/assert-bundle-target.js']);
 // Intentionally skip apply-android-lan-env.js — Play builds must not inject LAN cleartext.
 run('npx', ['cap', 'sync']);
 
