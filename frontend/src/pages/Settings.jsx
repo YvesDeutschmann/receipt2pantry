@@ -18,7 +18,7 @@ import {
   clearStoredTokens as clearCostcoStoredTokens,
 } from '../services/costcoWebViewBridge'
 import { clearStoredTokens as clearSafewayStoredTokens } from '../services/safewayWebViewBridge'
-import { PRIVACY_URL, TERMS_URL } from '../config/legal'
+import { PRIVACY_URL, TERMS_URL, DELETE_ACCOUNT_URL } from '../config/legal'
 import { openLegalPage } from '../utils/openLegalPage'
 
 function Settings() {
@@ -166,6 +166,11 @@ function Settings() {
         <SettingsRow
           title="Terms of Service"
           onClick={() => void openLegalPage(TERMS_URL)}
+        />
+        <SettingsRow
+          title="Delete account (web)"
+          subtitle="Steps and email if you cannot use the app"
+          onClick={() => void openLegalPage(DELETE_ACCOUNT_URL)}
         />
       </SettingsGroup>
 

@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Delete your Meald account</title>
+  <style>
+    body { font-family: system-ui, -apple-system, sans-serif; line-height: 1.6; max-width: 42rem; margin: 2rem auto; padding: 0 1.25rem; color: #1a1a2e; background: #f5f0e8; }
+    h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.125rem; margin-top: 1.75rem; }
+    p, li { font-size: 1rem; }
+    a { color: #c45c3e; }
+    .meta { color: #5a6b5c; font-size: 0.875rem; margin-bottom: 1.5rem; }
+    nav { margin-bottom: 1.5rem; font-size: 0.875rem; }
+    ol { padding-left: 1.25rem; }
+    ol li { margin-bottom: 0.75rem; }
+  </style>
+</head>
+<body>
+  <nav>
+    <a href="https://api.meald.app/privacy">Privacy Policy</a>
+    ·
+    <a href="https://api.meald.app/terms">Terms of Service</a>
+  </nav>
+  <h1>Delete your Meald account</h1>
+  <p class="meta">Last updated: September 30, 2026</p>
+
+  <p>This page explains how to request deletion of your <strong>Meald</strong> account and associated data. This is operator-drafted beta copy, not legal advice.</p>
+
+  <h2>How to request account deletion</h2>
+  <ol>
+    <li><strong>In the Meald app (recommended):</strong> Open <strong>Settings</strong> → <strong>Delete account</strong> → confirm <strong>Delete permanently</strong>. You must be signed in. Deletion takes effect when the request succeeds.</li>
+    <li><strong>Without the app:</strong> Email <a href="mailto:privacy@meald.app?subject=Delete%20my%20Meald%20account">privacy@meald.app</a> from the email address on your Meald account (or the address tied to your Apple or Google sign-in). Use the subject line <strong>Delete my Meald account</strong> and tell us which sign-in method you use. We will verify ownership and process the request, usually within a few business days.</li>
+  </ol>
+
+  <h2>What we delete</h2>
+  <p>When your account is deleted, we remove:</p>
+  <ul>
+    <li>Your Meald login and profile (authentication account)</li>
+    <li>Grocery store connection secrets stored in our encrypted vault (Safeway / Costco session tokens)</li>
+    <li>Your pantry items, digital receipts, and cooking history tied to your account</li>
+    <li>Your household membership. If you are the <strong>only</strong> member, the household and its shared data are deleted. If others remain in the household, they keep the shared pantry, receipts, and cooking history; your personal contribution is removed or reassigned so the household can continue</li>
+    <li>Product telemetry and error reports associated with your user identifier, as stored in our systems</li>
+  </ul>
+
+  <h2>What we keep</h2>
+  <ul>
+    <li><strong>Shared households:</strong> If other people are in your household, their accounts and the shared pantry/receipt data they still use remain.</li>
+    <li><strong>Apple and Google:</strong> Deleting Meald does not delete your Apple ID or Google account.</li>
+    <li><strong>Service providers:</strong> Our hosts and processors (for example Fly.io, Supabase, GlitchTip, OpenAI, Spoonacular) may retain limited logs or backups under their own retention policies until those periods expire. We do not control third-party retention schedules.</li>
+    <li><strong>Database backups:</strong> Encrypted backups may contain a snapshot of deleted data until the next backup rotation cycle. We do not automatically restore deleted accounts from backups.</li>
+  </ul>
+
+  <h2>Timing</h2>
+  <p>In-app deletion is <strong>immediate</strong> when the delete request completes successfully. Email requests are processed manually after we confirm you own the account. We do not automatically delete inactive accounts on a fixed schedule (for example, we do not promise that all data disappears within 90 days without a request).</p>
+
+  <h2>Delete some data without closing your account</h2>
+  <p>You can remove or limit data without deleting your Meald account:</p>
+  <ul>
+    <li><strong>Disconnect a grocery store:</strong> Settings → connected stores — disconnect Safeway or Costco. This removes stored session tokens and stops new receipt sync for that store.</li>
+    <li><strong>Pantry corrections:</strong> Update or remove items in the Pantry tab inside the app.</li>
+    <li><strong>Access or correction:</strong> Email <a href="mailto:privacy@meald.app">privacy@meald.app</a> to ask for a copy of your data or to correct inaccurate information.</li>
+  </ul>
+
+  <h2>Contact</h2>
+  <p>Questions about deletion: <a href="mailto:privacy@meald.app">privacy@meald.app</a></p>
+</body>
+</html>

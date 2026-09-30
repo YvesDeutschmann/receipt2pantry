@@ -1,6 +1,6 @@
 import { InAppBrowser } from '@capgo/inappbrowser'
 import { Capacitor } from '@capacitor/core'
-import { PRIVACY_URL, TERMS_URL } from '../config/legal'
+import { LEGAL_PAGE_URLS } from '../config/legal'
 
 const COPY_LINK_PROMPT = 'Copy this link:'
 
@@ -10,10 +10,10 @@ function promptCopyLink(url) {
 
 /**
  * Open a legal page in the system browser on native; web uses default link behavior.
- * Only PRIVACY_URL and TERMS_URL are supported — no arbitrary URL helper.
+ * Only compile-time legal URLs from config/legal.js are supported.
  */
 export async function openLegalPage(url) {
-  if (url !== PRIVACY_URL && url !== TERMS_URL) {
+  if (!LEGAL_PAGE_URLS.includes(url)) {
     return
   }
   if (!Capacitor.isNativePlatform()) {

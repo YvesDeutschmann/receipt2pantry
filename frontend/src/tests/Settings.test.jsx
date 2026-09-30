@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { render, screen, fireEvent, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
-import { PRIVACY_URL, TERMS_URL } from '../config/legal'
+import { PRIVACY_URL, TERMS_URL, DELETE_ACCOUNT_URL } from '../config/legal'
 import Settings from '../pages/Settings'
 
 function renderSettings() {
@@ -175,7 +175,9 @@ describe('Settings grouped IA', () => {
   it('SHOWS_EMAIL_AND_DELETE_ROW', async () => {
     renderSettings()
     expect(await screen.findByText('t@example.com')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: /delete account/i })).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: /Permanently remove your account/i })
+    ).toBeInTheDocument()
     expect(screen.queryByText('Not available yet')).not.toBeInTheDocument()
   })
 
@@ -205,6 +207,7 @@ describe('Settings grouped IA', () => {
     expect(await screen.findByRole('heading', { name: /^legal$/i })).toBeInTheDocument()
     expect(screen.getAllByRole('button', { name: /privacy policy/i })).toHaveLength(1)
     expect(screen.getAllByRole('button', { name: /terms of service/i })).toHaveLength(1)
+    expect(screen.getAllByRole('button', { name: /delete account \(web\)/i })).toHaveLength(1)
   })
 
   it('LEGAL_ROWS_OPEN_HOSTED_PAGES', async () => {
@@ -216,6 +219,10 @@ describe('Settings grouped IA', () => {
     fireEvent.click(screen.getByRole('button', { name: /terms of service/i }))
     expect(openLegalPage).toHaveBeenCalledTimes(2)
     expect(openLegalPage).toHaveBeenLastCalledWith(TERMS_URL)
+
+    fireEvent.click(screen.getByRole('button', { name: /delete account \(web\)/i }))
+    expect(openLegalPage).toHaveBeenCalledTimes(3)
+    expect(openLegalPage).toHaveBeenLastCalledWith(DELETE_ACCOUNT_URL)
   })
 })
 
@@ -369,7 +376,7 @@ describe('Settings delete account', () => {
 
   it('DELETE_ACCOUNT_MODAL_CANCEL_DOES_NOT_CALL_API', async () => {
     renderSettings()
-    fireEvent.click(await screen.findByRole('button', { name: /delete account/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /Permanently remove your account/i }))
     expect(screen.getByTestId('adaptive-modal')).toBeInTheDocument()
     fireEvent.click(screen.getByRole('button', { name: /Cancel/i }))
     expect(deleteAccount).not.toHaveBeenCalled()
@@ -377,7 +384,7 @@ describe('Settings delete account', () => {
 
   it('DELETE_ACCOUNT_CONFIRM_CALLS_API_AND_SIGN_OUT', async () => {
     renderSettings()
-    fireEvent.click(await screen.findByRole('button', { name: /delete account/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /Permanently remove your account/i }))
     fireEvent.click(screen.getByRole('button', { name: /Delete permanently/i }))
     await waitFor(() => {
       expect(deleteAccount).toHaveBeenCalled()
@@ -391,7 +398,7 @@ describe('Settings delete account', () => {
       response: { data: { error: 'Server blew up' } },
     })
     renderSettings()
-    fireEvent.click(await screen.findByRole('button', { name: /delete account/i }))
+    fireEvent.click(await screen.findByRole('button', { name: /Permanently remove your account/i }))
     fireEvent.click(screen.getByRole('button', { name: /Delete permanently/i }))
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent('Server blew up')

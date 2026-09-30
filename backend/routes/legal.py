@@ -1,20 +1,22 @@
-"""Public legal pages (privacy policy, terms of service)."""
+"""Public legal pages (privacy, terms, account deletion instructions)."""
 
 from pathlib import Path
 
-from flask import Blueprint, Response, abort
+from flask import Blueprint, Response
 
 LEGAL_DIR = Path(__file__).resolve().parent.parent / "legal"
 
 PRIVACY_FILE = LEGAL_DIR / "privacy.html"
 TERMS_FILE = LEGAL_DIR / "terms.html"
+DELETE_ACCOUNT_FILE = LEGAL_DIR / "delete-account.html"
 
-for _path in (PRIVACY_FILE, TERMS_FILE):
+for _path in (PRIVACY_FILE, TERMS_FILE, DELETE_ACCOUNT_FILE):
     if not _path.is_file():
         raise FileNotFoundError(f"Legal page missing at startup: {_path}")
 
 PRIVACY_HTML = PRIVACY_FILE.read_text(encoding="utf-8")
 TERMS_HTML = TERMS_FILE.read_text(encoding="utf-8")
+DELETE_ACCOUNT_HTML = DELETE_ACCOUNT_FILE.read_text(encoding="utf-8")
 
 LEGAL_HEADERS = {
     "Cache-Control": "no-cache",
@@ -46,3 +48,9 @@ def privacy_page():
 def terms_page():
     """Public terms of service."""
     return _html_response(TERMS_HTML)
+
+
+@legal_bp.route("/delete-account", methods=["GET"])
+def delete_account_page():
+    """Public account deletion instructions (Play / App Store listing URL)."""
+    return _html_response(DELETE_ACCOUNT_HTML)

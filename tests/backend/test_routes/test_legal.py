@@ -1,6 +1,8 @@
-"""Tests for public legal pages (/privacy, /terms)."""
+"""Tests for public legal pages (/privacy, /terms, /delete-account)."""
 
 import json
+
+LEGAL_PATHS = ("/privacy", "/terms", "/delete-account")
 
 
 def _assert_legal_response(response, expected_h1: str):
@@ -29,14 +31,25 @@ def test_terms_page(client):
     _assert_legal_response(response, "Terms of Service")
 
 
+def test_delete_account_page(client):
+    response = client.get("/delete-account")
+    _assert_legal_response(response, "Delete your Meald account")
+    body = response.get_data(as_text=True)
+    assert "Meald" in body
+    assert "privacy@meald.app" in body
+    assert "Settings" in body
+    assert "What we delete" in body
+    assert "What we keep" in body
+
+
 def test_legal_pages_do_not_require_auth(client):
-    for path in ("/privacy", "/terms"):
+    for path in LEGAL_PATHS:
         response = client.get(path, headers={"Authorization": "Bearer invalid"})
         assert response.status_code == 200
 
 
 def test_legal_pages_head(client):
-    for path in ("/privacy", "/terms"):
+    for path in LEGAL_PATHS:
         response = client.head(path)
         assert response.status_code == 200
         assert response.content_type.startswith("text/html")
