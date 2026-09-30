@@ -9,7 +9,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 const FAKE_ACCESS_TOKEN_ABC123 = 'FAKE_ACCESS_TOKEN_ABC123'
 const FAKE_ID_TOKEN_XYZ789 = 'FAKE_ID_TOKEN_XYZ789'
 
-const { ibState, InAppBrowser } = vi.hoisted(() => {
+const { ibState, InAppBrowser, capacitorPlatform } = vi.hoisted(() => {
+  const capacitorPlatform = { value: 'ios' }
   let nextWebViewId = 1
   const state = {
     messageListeners: [],
@@ -46,10 +47,21 @@ const { ibState, InAppBrowser } = vi.hoisted(() => {
     executeScript: vi.fn(() => Promise.resolve()),
     getCookies: vi.fn(() => Promise.resolve({})),
     clearAllCookies: vi.fn(() => Promise.resolve()),
+    clearCookies: vi.fn(() => Promise.resolve()),
     clearCache: vi.fn(() => Promise.resolve()),
   }
-  return { ibState: state, InAppBrowser }
+  return { ibState: state, InAppBrowser, capacitorPlatform }
 })
+
+const { ScopedCookiesMock } = vi.hoisted(() => ({
+  ScopedCookiesMock: {
+    clearForUrls: vi.fn(() => Promise.resolve({ remainingCookieNames: [] })),
+  },
+}))
+
+vi.mock('../native/scopedCookies.js', () => ({
+  ScopedCookies: ScopedCookiesMock,
+}))
 
 vi.mock('@capgo/inappbrowser', () => ({
   InAppBrowser,
@@ -58,7 +70,7 @@ vi.mock('@capgo/inappbrowser', () => ({
 
 vi.mock('@capacitor/core', () => ({
   Capacitor: {
-    getPlatform: () => 'ios',
+    getPlatform: () => capacitorPlatform.value,
     isNativePlatform: () => true,
   },
 }))
@@ -277,6 +289,7 @@ function assertNoRawTokensInConsoleLog(logSpy, forbidden) {
 describe('webViewBridge contract', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    capacitorPlatform.value = 'ios'
     ibState.messageListeners = []
     ibState.closeListeners = []
     ibState.urlListeners = []
@@ -304,20 +317,50 @@ describe('webViewBridge contract', () => {
   })
 
   describe('group A — Costco bridge message shape', () => {
-    it('test_costco_startLogin_pre_clears_cookies_and_cache', async () => {
-      const { startLogin } = await import('../services/costcoWebViewBridge.js')
+    it('test_costco_startLogin_ios_pre_clears_scoped_cookies_and_cache', async () => {
+      const { startLogin, COSTCO_SCOPED_COOKIE_URLS } = await import('../services/costcoWebViewBridge.js')
       const p = startLogin()
       await flushUntilListenersReady()
-      expect(InAppBrowser.clearAllCookies).toHaveBeenCalledWith({})
+      expect(InAppBrowser.clearAllCookies).not.toHaveBeenCalled()
+      for (const url of COSTCO_SCOPED_COOKIE_URLS) {
+        expect(InAppBrowser.clearCookies).toHaveBeenCalledWith({ url })
+      }
       expect(InAppBrowser.clearCache).toHaveBeenCalledWith({})
+      expect(ScopedCookiesMock.clearForUrls).not.toHaveBeenCalled()
       await completeBridgeFlow(p)
     })
 
-    it('test_clearCostcoInAppBrowserSession_calls_clearAllCookies_and_clearCache', async () => {
-      const { clearCostcoInAppBrowserSession } = await import('../services/costcoWebViewBridge.js')
+    it('test_costco_startLogin_android_uses_scoped_plugin_not_clearCache', async () => {
+      capacitorPlatform.value = 'android'
+      const { startLogin, COSTCO_SCOPED_COOKIE_URLS } = await import('../services/costcoWebViewBridge.js')
+      const p = startLogin()
+      await flushUntilListenersReady()
+      expect(InAppBrowser.clearAllCookies).not.toHaveBeenCalled()
+      expect(InAppBrowser.clearCookies).not.toHaveBeenCalled()
+      expect(InAppBrowser.clearCache).not.toHaveBeenCalled()
+      expect(ScopedCookiesMock.clearForUrls).toHaveBeenCalledWith({ urls: COSTCO_SCOPED_COOKIE_URLS })
+      await completeBridgeFlow(p)
+    })
+
+    it('test_clearCostcoInAppBrowserSession_ios_scoped_clear_not_global', async () => {
+      const { clearCostcoInAppBrowserSession, COSTCO_SCOPED_COOKIE_URLS } = await import(
+        '../services/costcoWebViewBridge.js'
+      )
       await clearCostcoInAppBrowserSession()
-      expect(InAppBrowser.clearAllCookies).toHaveBeenCalled()
+      expect(InAppBrowser.clearAllCookies).not.toHaveBeenCalled()
+      expect(InAppBrowser.clearCookies).toHaveBeenCalledTimes(COSTCO_SCOPED_COOKIE_URLS.length)
       expect(InAppBrowser.clearCache).toHaveBeenCalled()
+    })
+
+    it('test_clearCostcoInAppBrowserSession_android_scoped_plugin_no_clearCache', async () => {
+      capacitorPlatform.value = 'android'
+      const { clearCostcoInAppBrowserSession, COSTCO_SCOPED_COOKIE_URLS } = await import(
+        '../services/costcoWebViewBridge.js'
+      )
+      await clearCostcoInAppBrowserSession()
+      expect(InAppBrowser.clearAllCookies).not.toHaveBeenCalled()
+      expect(InAppBrowser.clearCache).not.toHaveBeenCalled()
+      expect(ScopedCookiesMock.clearForUrls).toHaveBeenCalledWith({ urls: COSTCO_SCOPED_COOKIE_URLS })
     })
 
     it('test_costco_startLogin_returns_object_with_required_token_keys', async () => {
@@ -434,7 +477,9 @@ describe('webViewBridge contract', () => {
       const p = startLogin()
       await flushUntilListenersReady()
       expect(InAppBrowser.clearAllCookies).not.toHaveBeenCalled()
+      expect(InAppBrowser.clearCookies).not.toHaveBeenCalled()
       expect(InAppBrowser.clearCache).not.toHaveBeenCalled()
+      expect(ScopedCookiesMock.clearForUrls).not.toHaveBeenCalled()
       fireMessage({
         type: 'safeway-tokens',
         accessToken: FAKE_ACCESS_TOKEN_ABC123,

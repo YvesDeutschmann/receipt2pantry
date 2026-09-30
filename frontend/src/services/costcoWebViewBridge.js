@@ -38,13 +38,58 @@ import {
   recordCostcoDiagnosticEvent,
   resetCostcoDiagnosticStore,
 } from './costcoDiagnosticStore';
+import { Capacitor } from '@capacitor/core';
 import { InAppBrowser } from '@capgo/inappbrowser';
+import { ScopedCookies } from '../native/scopedCookies';
 import {
   refreshCostcoTokensAppSide,
   isTerminalRefreshError,
 } from './costcoTokenRefresh';
 
 const COSTCO_GRAPHQL_URL = 'https://ecom-api.costco.com/ebusiness/order/v1/orders/graphql';
+
+/** Origins cleared before Costco login and on session cleanup (Safeway jar untouched). */
+export const COSTCO_SCOPED_COOKIE_URLS = [
+  'https://costco.com',
+  'https://www.costco.com',
+  'https://signin.costco.com',
+  'https://ecom-api.costco.com',
+  'https://login.microsoftonline.com',
+  'https://b2clogin.com',
+];
+
+/** Costco/B2C-only cookie + cache cleanup; does not call clearAllCookies (shared jar). */
+export async function clearCostcoCookieJar() {
+  if (!Capacitor.isNativePlatform()) return;
+
+  const platform = Capacitor.getPlatform();
+  const urls = COSTCO_SCOPED_COOKIE_URLS;
+
+  if (platform === 'ios') {
+    for (const url of urls) {
+      await InAppBrowser.clearCookies({ url }).catch((e) =>
+        console.warn('[costcoWebViewBridge] clearCookies:', url, e?.message ?? e)
+      );
+    }
+    await InAppBrowser.clearCache({}).catch((e) =>
+      console.warn('[costcoWebViewBridge] clearCache:', e?.message ?? e)
+    );
+    postDevLog('costcoCookieClear', `ios scoped clear hosts=${urls.length} cache=1`);
+    return;
+  }
+
+  if (platform === 'android') {
+    const result = await ScopedCookies.clearForUrls({ urls }).catch((e) => {
+      console.warn('[costcoWebViewBridge] ScopedCookies.clearForUrls:', e?.message ?? e);
+      return null;
+    });
+    const remaining = result?.remainingCookieNames ?? [];
+    postDevLog(
+      'costcoCookieClear',
+      `android scoped clear remaining=${Array.isArray(remaining) ? remaining.join(',') : ''}`
+    );
+  }
+}
 
 /** True after S3 smash flag consumed for the current silent session inject loop. */
 let s3SmashConsumedThisSession = false;
@@ -172,7 +217,7 @@ const bridge = createWebViewBridge({
     'b2clogin.com',
     'login.microsoftonline.com',
   ],
-  clearSessionBeforeLogin: true,
+  clearSessionBeforeLogin: clearCostcoCookieJar,
   loginTimeoutMs: getCostcoLoginTimeoutMs(),
   ...(isCostcoDevDiagnosticsEnabled()
     ? {
@@ -321,7 +366,7 @@ export async function isCostcoReconnectCooldownActive() {
   return Date.now() < until;
 }
 
-/** Clears InAppBrowser cookie jar + disk cache (reduces stale B2C / Akamai state after failures). Safe to call from error handlers. */
+/** Closes Costco WebViews and clears Costco-scoped cookies/cache (Safeway jar untouched). */
 export async function clearCostcoInAppBrowserSession() {
   forceReleaseWebViewSession();
   await reapKnownUnowned('manual_clear', 'costco', 'login');
@@ -329,8 +374,7 @@ export async function clearCostcoInAppBrowserSession() {
     await InAppBrowser.close().catch(() => {});
   }
   await closeAllKnownInstances();
-  await InAppBrowser.clearAllCookies({}).catch((e) => console.warn('[costcoWebViewBridge] clearAllCookies:', e?.message ?? e));
-  await InAppBrowser.clearCache({}).catch((e) => console.warn('[costcoWebViewBridge] clearCache:', e?.message ?? e));
+  await clearCostcoCookieJar();
 }
 
 if (isCostcoDevDiagnosticsEnabled() && typeof window !== 'undefined') {

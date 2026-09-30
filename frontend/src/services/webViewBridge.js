@@ -595,6 +595,7 @@ export function getActiveWebViewSession() {
  * @param {string} [config.diagnosticInjectScript] - Read-only JS snippet injected once per host on urlChange (bypasses skipInjection)
  * @param {object} [config.diagnosticProbe] - Automated checkpoint census + /token capture (Costco Run A/B)
  * @param {{ urlPatterns: string[], cookieUrls: string[] }} [config.cookieProbe] - Native getCookies probe at matching URLs (logs key names only)
+ * @param {() => Promise<void>} [config.clearSessionBeforeLogin] - Provider hook run before login (e.g. scoped cookie clear)
  * @param {() => Promise<{ idToken: string, refreshToken?: string, refreshTokenClientId?: string } | null>} [config.silentAppRefresh] - App-side B2C grant when page requests refresh (CORS / no page RT)
  * @param {(err: Error) => boolean} [config.isTerminalAppRefreshError] - When silentAppRefresh fails, only finish needs_reconnect if this returns true
  */
@@ -881,8 +882,7 @@ export function createWebViewBridge(config) {
 
       await prepareWebViewSessionStart(provider, loginMode);
       if (clearSessionBeforeLogin) {
-        await InAppBrowser.clearAllCookies({}).catch(() => {});
-        await InAppBrowser.clearCache({}).catch(() => {});
+        await clearSessionBeforeLogin().catch(() => {});
         bridgeDevLog(`${provider}Login`, 'pre-login session cleared');
       }
 
