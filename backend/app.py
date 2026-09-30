@@ -305,6 +305,15 @@ def register_error_handlers(app):
     @app.errorhandler(GrocerySyncException)
     def handle_grocerysync_exception(e):
         """Handle custom Meald exceptions"""
+        from backend.routes.recipes import RECIPE_BUDGET_MESSAGE, is_recipe_budget_error
+
+        msg = str(e)
+        if is_recipe_budget_error(msg):
+            body = {"error": RECIPE_BUDGET_MESSAGE, "code": "recipe_budget"}
+            request_id = get_request_id()
+            if request_id:
+                body["request_id"] = request_id
+            return jsonify(body), 429
         logger.error(f"Meald exception: {e}")
         capture_exception(e)
         return _error_body(str(e), 500)

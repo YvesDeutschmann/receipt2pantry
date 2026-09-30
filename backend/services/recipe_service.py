@@ -20,6 +20,8 @@ from backend.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+SPOONACULAR_BUDGET_EXCEEDED_MSG = "Spoonacular call budget exceeded for this period"
+
 
 def _raise_for_spoonacular_http(e: requests.exceptions.HTTPError, context: str) -> None:
     status = e.response.status_code if e.response is not None else None
@@ -128,6 +130,8 @@ class RecipeService:
         endpoint: str,
     ) -> None:
         if not self._ledger:
+            return
+        if reservation_id is None and response is None:
             return
         if reservation_id:
             self._ledger.reconcile_after_call(reservation_id, estimate, response)
@@ -339,13 +343,11 @@ class RecipeService:
             estimate = 1.0
             response: Optional[requests.Response] = None
             try:
+                if self.is_budget_exceeded():
+                    raise AIServiceException(SPOONACULAR_BUDGET_EXCEEDED_MSG)
                 reservation_id, estimate = self._begin_external_call(
                     user_id, caller, "findByIngredients", number
                 )
-                if self.is_budget_exceeded():
-                    raise AIServiceException(
-                        "Spoonacular call budget exceeded for this period"
-                    )
                 self._record_external_call("findByIngredients")
 
                 ingredients_str = ",".join(ingredients)
@@ -392,6 +394,8 @@ class RecipeService:
             logger.error(f"Spoonacular API HTTP error: {e}")
             _raise_for_spoonacular_http(e, "findByIngredients")
         except RecipeQuotaException:
+            raise
+        except AIServiceException:
             raise
         except requests.exceptions.RequestException as e:
             logger.error(f"Spoonacular API request error: {e}")
@@ -441,13 +445,11 @@ class RecipeService:
         response: Optional[requests.Response] = None
         try:
             try:
+                if self.is_budget_exceeded():
+                    raise AIServiceException(SPOONACULAR_BUDGET_EXCEEDED_MSG)
                 reservation_id, estimate = self._begin_external_call(
                     user_id, caller, "complexSearch", number
                 )
-                if self.is_budget_exceeded():
-                    raise AIServiceException(
-                        "Spoonacular call budget exceeded for this period"
-                    )
                 self._record_external_call("complexSearch")
 
                 url = f"{self.base_url}/recipes/complexSearch"
@@ -492,6 +494,8 @@ class RecipeService:
             _raise_for_spoonacular_http(e, "complexSearch")
         except RecipeQuotaException:
             raise
+        except AIServiceException:
+            raise
         except requests.exceptions.RequestException as e:
             logger.error(f"Spoonacular complexSearch request error: {e}")
             raise AIServiceException(f"Failed to call Spoonacular API: {e}")
@@ -531,13 +535,11 @@ class RecipeService:
         response: Optional[requests.Response] = None
         try:
             try:
+                if self.is_budget_exceeded():
+                    raise AIServiceException(SPOONACULAR_BUDGET_EXCEEDED_MSG)
                 reservation_id, estimate = self._begin_external_call(
                     user_id, caller, "recipeInformation", 1
                 )
-                if self.is_budget_exceeded():
-                    raise AIServiceException(
-                        "Spoonacular call budget exceeded for this period"
-                    )
                 self._record_external_call("recipeInformation")
 
                 url = f"{self.base_url}/recipes/{recipe_id}/information"
@@ -586,6 +588,8 @@ class RecipeService:
                 raise ValidationException(f"Recipe {recipe_id} not found") from e
             _raise_for_spoonacular_http(e, "get_recipe_details")
         except RecipeQuotaException:
+            raise
+        except AIServiceException:
             raise
         except requests.exceptions.RequestException as e:
             logger.error(f"Spoonacular API request error: {e}")

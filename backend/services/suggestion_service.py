@@ -28,6 +28,7 @@ from backend.services.spoonacular_ledger import (
     is_ledger_unavailable_error,
     is_user_cap_error,
 )
+from backend.routes.recipes import is_recipe_budget_error
 from backend.services.supabase_service import SupabaseService
 from backend.utils.exceptions import AIServiceException, RecipeQuotaException, ValidationException
 from backend.utils.logger import get_logger
@@ -40,7 +41,7 @@ logger = get_logger(__name__)
 ASPIRATIONAL_DISMISS_THRESHOLD = 3
 ASPIRATIONAL_CONFIDENCE_PENALTY = 0.15
 SUGGESTION_CACHE_TTL_SECONDS = 30 * 60
-CANDIDATE_NUMBER = 50
+CANDIDATE_NUMBER = 15
 
 DEFAULT_USER_PREFS: Dict[str, Any] = {"depletion_multiplier": 1.0}
 
@@ -819,6 +820,7 @@ class SuggestionService:
             "check_first": [],
         }
 
+        budget_exc: Optional[AIServiceException] = None
         for summary in candidates:
             rid = summary.get("id")
             if rid is None:
@@ -830,7 +832,12 @@ class SuggestionService:
             except AIServiceException as e:
                 if is_user_cap_error(str(e)) or is_ledger_unavailable_error(str(e)):
                     raise
-                break
+                if isinstance(e, RecipeQuotaException):
+                    break
+                if is_recipe_budget_error(str(e)):
+                    budget_exc = e
+                    break
+                raise
             except Exception as e:
                 logger.warning("Skipping recipe %s: %s", rid, e)
                 continue
@@ -863,6 +870,9 @@ class SuggestionService:
             results[key].sort(key=lambda r: float(r.get("score") or 0.0), reverse=True)
 
         tier_keys = ("use_soon_shelf", "cook_tonight", "probably_have", "check_first")
+        if budget_exc is not None and all(len(results[k]) == 0 for k in tier_keys):
+            raise budget_exc
+
         if all(len(results[k]) == 0 for k in tier_keys) and len(pantry) > 0:
             logger.warning(
                 json.dumps(

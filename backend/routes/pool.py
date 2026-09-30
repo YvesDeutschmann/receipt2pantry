@@ -9,6 +9,7 @@ from backend.routes.recipes import (
     RECIPE_LEDGER_UNAVAILABLE_MESSAGE,
     RECIPE_QUOTA_MESSAGE,
     RECIPE_USER_CAP_MESSAGE,
+    is_recipe_budget_error,
 )
 from backend.services.spoonacular_ledger import (
     SPOONACULAR_LEDGER_UNAVAILABLE_MSG,
@@ -23,7 +24,6 @@ logger = get_logger(__name__)
 
 pool_bp = Blueprint("pool", __name__)
 
-_BUDGET_ERROR_MARKER = "Spoonacular call budget exceeded for this period"
 _VENDOR_QUOTA_ERROR_MARKERS = (
     "Spoonacular API daily quota exceeded",
     "Spoonacular API rate limit exceeded",
@@ -31,7 +31,7 @@ _VENDOR_QUOTA_ERROR_MARKERS = (
 
 
 def _is_budget_error(error: Optional[str]) -> bool:
-    return bool(error and _BUDGET_ERROR_MARKER in error)
+    return is_recipe_budget_error(error or "")
 
 
 def _is_vendor_quota_error(error: Optional[str]) -> bool:

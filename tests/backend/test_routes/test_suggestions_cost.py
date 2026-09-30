@@ -70,7 +70,7 @@ def test_route_suggestions_429_when_quota_reraised(client_suggestions, suggestio
     assert data["code"] == "recipe_quota"
 
 
-def test_route_suggestions_500_when_ai_reraised(client_suggestions, suggestion_service):
+def test_route_suggestions_429_when_budget_reraised(client_suggestions, suggestion_service):
     suggestion_service.get_recipe_suggestions.side_effect = AIServiceException(
         "Spoonacular call budget exceeded for this period"
     )
@@ -78,7 +78,9 @@ def test_route_suggestions_500_when_ai_reraised(client_suggestions, suggestion_s
         "/api/suggestions",
         headers={"X-User-Id": "user-1"},
     )
-    assert res.status_code == 500
+    assert res.status_code == 429
+    data = res.get_json()
+    assert data["code"] == "recipe_budget"
 
 
 def test_route_suggestions_503_when_service_missing(app):

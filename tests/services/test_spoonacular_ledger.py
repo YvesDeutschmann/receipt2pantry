@@ -4,6 +4,7 @@ from unittest.mock import MagicMock, Mock, patch
 
 import pytest
 import requests
+import time
 
 from backend.routes.recipes import _recipe_ai_service_response
 from backend.services.recipe_service import RecipeService
@@ -145,3 +146,29 @@ def test_recipe_route_maps_ledger_unavailable_to_503():
             AIServiceException(SPOONACULAR_LEDGER_UNAVAILABLE_MSG)
         )
     assert code == 503
+
+
+def test_recipe_route_maps_budget_to_429():
+    from backend.app import create_app
+
+    app = create_app()
+    with app.app_context():
+        resp, code = _recipe_ai_service_response(
+            AIServiceException("Spoonacular call budget exceeded for this period")
+        )
+        data = resp.get_json()
+    assert code == 429
+    assert data["code"] == "recipe_budget"
+
+
+@patch("backend.services.recipe_service.requests.get")
+def test_budget_exceeded_before_get_does_not_reserve_ledger(mock_get):
+    admin = _admin_mock(sum_points=0.0)
+    pantry = MagicMock()
+    svc = RecipeService(pantry, _config(cap=150, budget=30), admin_client=admin)
+    svc._period_call_count = 30
+    svc._period_start = time.time()
+    with pytest.raises(AIServiceException, match="budget exceeded"):
+        svc.get_recipe_details(1, user_id="u1", caller="suggestion_score")
+    mock_get.assert_not_called()
+    admin.table.return_value.insert.assert_not_called()
