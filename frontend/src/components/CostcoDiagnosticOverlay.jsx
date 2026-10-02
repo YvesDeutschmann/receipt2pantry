@@ -34,7 +34,7 @@ export default function CostcoDiagnosticOverlay() {
     <div
       data-testid="costco-diagnostic-overlay"
       className="fixed left-3 z-[80] max-w-[min(100%-1.5rem,22rem)] rounded-meald-md border border-amber-400/40 bg-forest/95 text-cream shadow-lg"
-      style={{ bottom: 'calc(var(--safe-area-inset-bottom) + 4.5rem)' }}
+      style={{ bottom: 'var(--app-tab-bar-offset)' }}
     >
       <button
         type="button"

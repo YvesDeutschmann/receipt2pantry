@@ -4,6 +4,7 @@ import '@testing-library/jest-dom'
 
 // jsdom does not implement matchMedia - mock for desktop (min-width: 1024px) so tests see full nav
 beforeAll(() => {
+  if (typeof window === 'undefined') return
   Object.defineProperty(window, 'matchMedia', {
     writable: true,
     value: (query) => ({

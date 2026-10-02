@@ -402,6 +402,7 @@ describe('PantryView', () => {
     await screen.findByText('Salt')
     const fabButtons = screen.getAllByRole('button', { name: 'Add item' })
     expect(fabButtons).toHaveLength(1)
+    expect(fabButtons[0].className).toContain('bottom-above-tab-bar')
     fireEvent.click(fabButtons[0])
     expect(screen.getByRole('dialog', { name: 'Add to pantry' })).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /search/i })).toBeInTheDocument()
