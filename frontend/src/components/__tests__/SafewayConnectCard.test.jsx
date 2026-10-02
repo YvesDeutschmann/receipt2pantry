@@ -20,6 +20,18 @@ vi.mock('../../services/syncHealthStore', () => ({
   subscribeHealth: (...args) => subscribeHealthMock(...args),
 }));
 
+const { subscribeAttentionMock } = vi.hoisted(() => ({
+  subscribeAttentionMock: vi.fn((listener) => {
+    listener({});
+    return () => {};
+  }),
+}));
+
+vi.mock('../../services/providerAttentionStore', () => ({
+  PROVIDER_LABELS: { safeway: 'Safeway', costco: 'Costco' },
+  subscribe: (...args) => subscribeAttentionMock(...args),
+}));
+
 vi.mock('../../hooks/useSafewaySync', () => ({
   useSafewaySync: vi.fn(),
   STATUS: {
@@ -54,6 +66,10 @@ describe('SafewayConnectCard', () => {
     vi.clearAllMocks();
     vi.mocked(useSafewaySync).mockReturnValue({ ...defaultHookReturn });
     subscribeHealthMock.mockImplementation((listener) => {
+      listener({});
+      return () => {};
+    });
+    subscribeAttentionMock.mockImplementation((listener) => {
       listener({});
       return () => {};
     });

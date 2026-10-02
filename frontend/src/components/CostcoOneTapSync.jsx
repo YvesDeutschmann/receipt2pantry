@@ -10,6 +10,7 @@ import { currentSlotMealTypes } from '../utils/dinnerPickerRank';
 import SyncSuccessAlert from './SyncSuccessAlert';
 import ReconnectBanner from './ReconnectBanner';
 import SyncHealthRow from './SyncHealthRow';
+import StoreConnectorCard from './StoreConnectorCard';
 import { COSTCO_RECONNECT_MESSAGE } from '../services/costcoSilentSyncOutcome';
 
 function DevMockCostcoBlock({ userId, onSyncSuccess, className = '' }) {
@@ -124,7 +125,7 @@ export default function CostcoOneTapSync({ userId, className = '', onSyncSuccess
       return (
         <div className={`alert alert-warning ${className}`}>
           <p className="text-sm">
-            One-Tap Sync runs only on native iOS/Android. Build and run the app on a device or
+            Costco sync runs only on native iOS/Android. Build and run the app on a device or
             emulator.
           </p>
         </div>
@@ -134,7 +135,7 @@ export default function CostcoOneTapSync({ userId, className = '', onSyncSuccess
       <div className={`space-y-4 ${className}`}>
         <div className="alert alert-warning">
           <p className="text-sm">
-            One-Tap Sync runs only on native iOS/Android. In dev you can still load mock receipts
+            Costco sync runs only on native iOS/Android. In dev you can still load mock receipts
             below.
           </p>
         </div>
@@ -143,31 +144,37 @@ export default function CostcoOneTapSync({ userId, className = '', onSyncSuccess
     );
   }
 
+  const primaryIdleLabel = hasStoredTokens ? 'Sync Costco receipts' : 'Connect Costco';
+
   return (
-    <div className={`space-y-4 ${className}`}>
+    <StoreConnectorCard
+      provider="costco"
+      hasStoredTokens={hasStoredTokens}
+      className={className}
+    >
       <ReconnectBanner provider="costco" storeName="Costco" onReconnect={startSync} />
-      <div className="flex flex-wrap gap-3 items-center">
+      <div className="flex flex-col gap-2 w-full">
         <button
           type="button"
           onClick={startSync}
           disabled={isBusy}
-          className="btn btn-primary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="btn btn-primary w-full px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {status === STATUS.AUTHENTICATING && 'Sign in to Costco…'}
           {status === STATUS.FETCHING && 'Fetching receipts…'}
           {status === STATUS.SUBMITTING && 'Saving to pantry…'}
-          {!isBusy && 'Sync Costco Receipts'}
+          {!isBusy && primaryIdleLabel}
         </button>
-        {hasStoredTokens && (
+        {hasStoredTokens ? (
           <button
             type="button"
             onClick={startSilent}
             disabled={isBusy}
-            className="btn btn-ghost px-4 py-2 disabled:opacity-50"
+            className="btn btn-ghost w-full px-4 py-2 disabled:opacity-50"
           >
             Silent Sync
           </button>
-        )}
+        ) : null}
       </div>
 
       <SyncHealthRow
@@ -204,6 +211,6 @@ export default function CostcoOneTapSync({ userId, className = '', onSyncSuccess
       )}
 
       {isDev && <DevMockCostcoBlock userId={userId} onSyncSuccess={onSyncSuccess} />}
-    </div>
+    </StoreConnectorCard>
   );
 }

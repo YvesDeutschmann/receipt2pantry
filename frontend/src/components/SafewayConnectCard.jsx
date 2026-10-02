@@ -11,6 +11,7 @@ import { currentSlotMealTypes } from '../utils/dinnerPickerRank';
 import SyncSuccessAlert from './SyncSuccessAlert';
 import ReconnectBanner from './ReconnectBanner';
 import SyncHealthRow from './SyncHealthRow';
+import StoreConnectorCard from './StoreConnectorCard';
 
 function DevMockSafewayBlock({ userId, className = '' }) {
   const [mockStatus, setMockStatus] = useState('idle');
@@ -129,31 +130,37 @@ export default function SafewayConnectCard({ userId, className = '' }) {
     );
   }
 
+  const primaryIdleLabel = hasStoredTokens ? 'Sync Safeway receipts' : 'Connect Safeway';
+
   return (
-    <div className={`space-y-4 ${className}`}>
+    <StoreConnectorCard
+      provider="safeway"
+      hasStoredTokens={hasStoredTokens}
+      className={className}
+    >
       <ReconnectBanner provider="safeway" storeName="Safeway" onReconnect={startSync} />
-      <div className="flex flex-wrap gap-3 items-center">
+      <div className="flex flex-col gap-2 w-full">
         <button
           type="button"
           onClick={startSync}
           disabled={isBusy}
-          className="btn btn-primary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="btn btn-primary w-full px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {status === STATUS.AUTHENTICATING && 'Sign in to Safeway…'}
           {status === STATUS.FETCHING && 'Fetching receipts…'}
           {status === STATUS.SUBMITTING && 'Saving to pantry…'}
-          {!isBusy && (hasStoredTokens ? 'Sync Safeway Receipts' : 'Connect Safeway')}
+          {!isBusy && primaryIdleLabel}
         </button>
-        {hasStoredTokens && (
+        {hasStoredTokens ? (
           <button
             type="button"
             onClick={startSilent}
             disabled={isBusy}
-            className="btn btn-ghost px-4 py-2 disabled:opacity-50"
+            className="btn btn-ghost w-full px-4 py-2 disabled:opacity-50"
           >
             Silent Sync
           </button>
-        )}
+        ) : null}
       </div>
 
       <SyncHealthRow
@@ -215,6 +222,6 @@ export default function SafewayConnectCard({ userId, className = '' }) {
       )}
 
       {isDev && <DevMockSafewayBlock userId={userId} />}
-    </div>
+    </StoreConnectorCard>
   );
 }

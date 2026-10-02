@@ -20,6 +20,18 @@ vi.mock('../services/syncHealthStore', () => ({
   subscribeHealth: (...args) => subscribeHealthMock(...args),
 }))
 
+const { subscribeAttentionMock } = vi.hoisted(() => ({
+  subscribeAttentionMock: vi.fn((listener) => {
+    listener({})
+    return () => {}
+  }),
+}))
+
+vi.mock('../services/providerAttentionStore', () => ({
+  PROVIDER_LABELS: { safeway: 'Safeway', costco: 'Costco' },
+  subscribe: (...args) => subscribeAttentionMock(...args),
+}))
+
 vi.mock('../hooks/useCostcoSync', () => ({
   useCostcoSync: vi.fn(),
   STATUS: {
@@ -54,6 +66,10 @@ describe('CostcoOneTapSync', () => {
       listener({})
       return () => {}
     })
+    subscribeAttentionMock.mockImplementation((listener) => {
+      listener({})
+      return () => {}
+    })
   })
 
   afterEach(() => {
@@ -63,14 +79,26 @@ describe('CostcoOneTapSync', () => {
   it('renders non-native fallback message when not on native platform', () => {
     vi.mocked(useCostcoSync).mockReturnValue({ ...defaultHookReturn, isNative: false })
     render(<CostcoOneTapSync userId="test-user-id" />)
-    expect(screen.getByText(/One-Tap Sync runs only on native iOS\/Android/)).toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /Sync Costco Receipts/ })).not.toBeInTheDocument()
+    expect(screen.getByText(/Costco sync runs only on native iOS\/Android/)).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Connect Costco/ })).not.toBeInTheDocument()
   })
 
-  it('renders sync button when on native platform', () => {
+  it('renders Connect Costco when on native without tokens', () => {
     vi.mocked(useCostcoSync).mockReturnValue({ ...defaultHookReturn, isNative: true })
     render(<CostcoOneTapSync userId="test-user-id" />)
-    expect(screen.getByRole('button', { name: /Sync Costco Receipts/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Connect Costco/ })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /Silent Sync/ })).not.toBeInTheDocument()
+  })
+
+  it('renders Sync Costco receipts and Silent Sync when tokens present', () => {
+    vi.mocked(useCostcoSync).mockReturnValue({
+      ...defaultHookReturn,
+      isNative: true,
+      hasStoredTokens: true,
+    })
+    render(<CostcoOneTapSync userId="test-user-id" />)
+    expect(screen.getByRole('button', { name: /Sync Costco receipts/ })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /Silent Sync/ })).toBeInTheDocument()
   })
 
   it('disables sync button during authenticating state', () => {

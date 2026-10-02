@@ -52,8 +52,8 @@ describe('Providers MVP allowlist', () => {
     })
     renderProviders()
     await waitFor(() => {
-      expect(screen.getByText('safeway')).toBeInTheDocument()
-      expect(screen.getByText('costco')).toBeInTheDocument()
+      expect(screen.getByTestId('safeway-card')).toBeInTheDocument()
+      expect(screen.getByTestId('costco-sync')).toBeInTheDocument()
     })
     expect(screen.queryByText('qfc')).not.toBeInTheDocument()
     expect(screen.queryByText('Test Connection')).not.toBeInTheDocument()
@@ -65,12 +65,29 @@ describe('Providers MVP allowlist', () => {
     })
     renderProviders()
     await waitFor(() => {
-      expect(screen.getByText('safeway')).toBeInTheDocument()
-      expect(screen.getByText('costco')).toBeInTheDocument()
+      expect(screen.getByTestId('safeway-card')).toBeInTheDocument()
+      expect(screen.getByTestId('costco-sync')).toBeInTheDocument()
     })
-    expect(screen.getByTestId('safeway-card')).toBeInTheDocument()
-    expect(screen.getByTestId('costco-sync')).toBeInTheDocument()
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument()
+  })
+
+  it('PROVIDERS_PAGE_DOES_NOT_CALL_STATUS_API', async () => {
+    vi.mocked(api.listProviders).mockResolvedValue({
+      providers: ['safeway', 'costco'],
+    })
+    renderProviders()
+    await waitFor(() => {
+      expect(screen.getByTestId('safeway-card')).toBeInTheDocument()
+    })
+    expect(api.getProviderStatus).not.toHaveBeenCalled()
+  })
+
+  it('PROVIDERS_PAGE_TITLE_STORES', async () => {
+    vi.mocked(api.listProviders).mockResolvedValue({ providers: ['safeway'] })
+    renderProviders()
+    await waitFor(() => {
+      expect(screen.getByRole('heading', { name: 'Stores' })).toBeInTheDocument()
+    })
   })
 
   it('PROVIDERS_PAGE_DOES_NOT_RENDER_CREDENTIALS_OR_MFA_UI', async () => {
@@ -79,7 +96,7 @@ describe('Providers MVP allowlist', () => {
     })
     const { container } = renderProviders()
     await waitFor(() => {
-      expect(screen.getByText('safeway')).toBeInTheDocument()
+      expect(screen.getByTestId('safeway-card')).toBeInTheDocument()
     })
     expect(container.innerHTML).not.toMatch(/CredentialsModal/)
     expect(container.innerHTML).not.toMatch(/MfaDialog/)
@@ -92,9 +109,7 @@ describe('Providers MVP allowlist', () => {
     })
     renderProviders()
     await waitFor(() => {
-      expect(
-        screen.getByText('No providers available yet.')
-      ).toBeInTheDocument()
+      expect(screen.getByText('No stores available yet.')).toBeInTheDocument()
     })
     expect(screen.queryByText('qfc')).not.toBeInTheDocument()
     expect(screen.queryByText('walmart')).not.toBeInTheDocument()
