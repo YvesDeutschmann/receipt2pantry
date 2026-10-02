@@ -8,6 +8,12 @@
 :root {
   --safe-area-inset-top: env(safe-area-inset-top, 0px);
   --safe-area-inset-bottom: env(safe-area-inset-bottom, 0px);
+  --app-tab-bar-content-height: 4.5rem;
+  --app-fab-gap: 1rem;
+  --app-tab-bar-offset: calc(
+    var(--app-tab-bar-content-height) + env(safe-area-inset-bottom, 0px)
+  );
+  --app-fab-bottom: calc(var(--app-tab-bar-offset) + var(--app-fab-gap));
 }
 
 @layer base {

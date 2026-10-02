@@ -211,7 +211,7 @@ function Pantry() {
                 type="button"
                 aria-label="Add item"
                 onClick={() => setAddMenuOpen(true)}
-                className="btn btn-primary fixed right-4 z-40 min-h-touch min-w-touch rounded-full flex items-center justify-center bottom-[calc(4rem+env(safe-area-inset-bottom,0px)+1rem)] lg:bottom-6"
+                className="btn btn-primary fixed right-4 z-40 min-h-touch min-w-touch rounded-full flex items-center justify-center bottom-above-tab-bar lg:bottom-6"
               >
                 <Plus className="w-5 h-5" />
               </button>,

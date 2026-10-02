@@ -13,7 +13,12 @@ export default {
       padding: {
         'safe-top': 'env(safe-area-inset-top)',
         'safe-bottom': 'env(safe-area-inset-bottom)',
-        'tab-bar': 'calc(64px + env(safe-area-inset-bottom, 0px))',
+        /* Keep in sync with --app-tab-bar-offset in index.css */
+        'tab-bar': 'var(--app-tab-bar-offset)',
+      },
+      inset: {
+        /* Keep in sync with --app-fab-bottom in index.css */
+        'above-tab-bar': 'var(--app-fab-bottom)',
       },
       minHeight: {
         touch: '44px',

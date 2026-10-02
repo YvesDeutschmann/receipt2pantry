@@ -138,6 +138,20 @@ describe('meal planner feature flag', () => {
     expect(links[0]).toHaveAttribute('href', '/recipes')
   })
 
+  it('BOTTOM_TAB_ROW_STRETCHES_TABS_FOR_TOP_INDICATOR', () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={['/pantry']}>
+        <BottomTabBar />
+      </MemoryRouter>
+    )
+    const row = container.querySelector('[class*="--app-tab-bar-content-height"]')
+    expect(row).toBeTruthy()
+    expect(row.className).not.toContain('items-center')
+
+    const pantryLink = screen.getByRole('link', { name: /^pantry$/i })
+    expect(pantryLink.className).toContain('border-t-terra')
+  })
+
   it('BOTTOM_TAB_SHOWS_MEAL_PLAN_WHEN_FLAG_ON', () => {
     mockFeatures.mealPlanner = true
     render(
